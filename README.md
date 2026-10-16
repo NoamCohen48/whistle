@@ -2,7 +2,7 @@
 
 A terminal-first phone remote for **existing Herdr panes**. No replacement agent harness or additional model calls from the app itself.
 
-React + Vite + TypeScript frontend, an isolated xterm.js terminal engine, and a Bun host. Styling is deliberately baseline. Pairing is durable and revocable; daemon installation is the next increment. See [host authentication](.docs/host.md).
+React + Vite + TypeScript frontend, an isolated xterm.js terminal engine, and a Bun host. Styling is deliberately baseline. Pairing is durable and revocable; a Linux user-service CLI handles login startup and restarts. See [host authentication and installation](.docs/host.md).
 
 Product decisions: [`.docs/product.md`](.docs/product.md). Production direction: [`.docs/architecture.md`](.docs/architecture.md). Frontend boundaries and development: [`.docs/frontend.md`](.docs/frontend.md). Original PoC verification and remaining limitations: [`.docs/poc.md`](.docs/poc.md).
 
@@ -29,9 +29,32 @@ With the server running, open another PC terminal in this folder:
 bun run pair
 ```
 
-Scan the QR with your phone's camera (Tailscale enabled). It opens Whistle and pairs automatically, with no token to copy. The QR is also saved as `.runtime/pair.png`. It expires in five minutes, works once, and creating another QR invalidates the previous one. Treat the displayed QR as a temporary shell-access credential; do not share it.
+Scan the QR with your phone's camera (Tailscale enabled). It opens Whistle and pairs automatically, with no token to copy. The QR is also saved as `pair.png` in Whistle’s private state directory (default `~/.local/state/whistle/`). It expires in five minutes, works once, and creating another QR invalidates the previous one. Treat the displayed QR as a temporary shell-access credential; do not share it.
 
 This does not reconfigure Tailscale, Collie, or any gateway. Do not expose the app publicly: a paired browser has your user's shell access.
+
+## Background service
+
+The personal host has been cut over to the enabled user daemon; see [deployment verification](.docs/deployment.md). The instructions below describe a fresh installation—do not start a second foreground listener on the occupied port.
+
+Build first, then install the user service without interrupting an existing server:
+
+```sh
+bun run build
+bun run whistle install --host "$(tailscale ip -4)" --port 8790
+```
+
+Installation enables startup at login but does **not** start immediately. After intentionally stopping the old Whistle process (not Herdr), run:
+
+```sh
+~/.local/bin/whistle start
+~/.local/bin/whistle pair
+~/.local/bin/whistle status
+```
+
+The first upgrade from the memory-only PoC needs one new pairing. Subsequent restarts preserve it. `whistle devices` lists paired devices; `whistle revoke <id>` revokes one and releases its live streams. `whistle stop`, `restart` and `uninstall` manage only Whistle. Uninstall preserves configuration and devices. No firewall rules or lingering are changed.
+
+This is a **checkout-based installation**, not a standalone binary yet: keep the checkout and Bun in place. See [lifecycle, paths, updates and cutover](.docs/host.md). No service is installed merely by building or testing this project.
 
 ## Use
 
@@ -67,4 +90,4 @@ POC_TEST_PANE='<disposable-pane-id>' bun test
 # Set POC_TEST_URL=http://<tailnet-ip>:8790 when not running on loopback.
 ```
 
-No system service is installed. Stop the server with Ctrl+C when running in the foreground. `.runtime/`, tokens, logs, browser artifacts, dependencies, and builds are Git-ignored.
+Stop a foreground server with Ctrl+C; stop an installed daemon with `whistle stop`. Configuration defaults to `~/.config/whistle/config.json`; credentials/devices default to `~/.local/state/whistle/`, independent of checkout updates. The original `.runtime/` is retained only for legacy-host pairing fallback. Tokens, QR images, SQLite files, logs, browser artifacts, dependencies and builds are Git-ignored.

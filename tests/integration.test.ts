@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import WebSocket from 'ws';
-import { readFile } from 'node:fs/promises';
+import { hostConnection } from '../src/credentials.ts';
 import { rpc } from '../src/herdr.ts';
 
 // Explicit opt-in: this test types commands into a disposable shell pane.
@@ -12,7 +12,7 @@ const integration = paneId ? test : test.skip;
 integration('real Herdr: auth, watch, ordered edits + Enter, resize, release, watch write rejection', async () => {
   const unauth = await fetch(`${base}/api/panes`);
   expect(unauth.status).toBe(401);
-  const token = (await readFile('.runtime/access-token', 'utf8')).trim();
+  const { token } = await hostConnection();
   const badOrigin = await fetch(`${base}/api/login`, { method: 'POST', headers: { Origin: 'https://untrusted.invalid', 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
   expect(badOrigin.status).toBe(403);
   const login = await fetch(`${base}/api/login`, { method: 'POST', headers: { Origin: base, 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });

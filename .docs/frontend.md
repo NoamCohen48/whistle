@@ -2,7 +2,7 @@
 
 ## Status
 
-The production frontend stack is React + Vite + TypeScript. The vanilla `web/app.ts` entry point has been replaced; the Bun host's HTTP/WebSocket API is unchanged. The host now persists/revokes browser pairings; see [host authentication](host.md). This does not yet install a daemon, implement multi-session discovery, or add an installable/offline PWA.
+The production frontend stack is React + Vite + TypeScript. The vanilla `web/app.ts` entry point has been replaced; the Bun host's HTTP/WebSocket API is unchanged. The host now persists/revokes browser pairings; see [host authentication](host.md). The host also includes an explicitly installed, checkout-based user-service CLI. Building/testing does not install it. Multi-session discovery and an installable/offline PWA are still separate work.
 
 The existing terminal controls and CSS remain the functional baseline. Visual refinement belongs to the separate UI/UX pass.
 

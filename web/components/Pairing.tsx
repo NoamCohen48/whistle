@@ -20,7 +20,7 @@ export function Pairing({ hidden, loading, error, onPair, onRetry }: {
       <details><summary>Use an access token instead</summary>
         <label htmlFor="token">PC access token</label>
         <input id="token" ref={token} type="password" required autoComplete="off" spellCheck={false} disabled={loading || submitting} />
-        <p className="hint">Stored on the PC in <code>.runtime/access-token</code></p>
+        <p className="hint">Stored in Whistle’s private state directory on the PC.</p>
         <button className="primary" type="submit" disabled={loading || submitting}>{submitting ? 'Pairing…' : 'Pair browser'}</button>
       </details>
       {loading ? <p role="status">Connecting to your PC…</p> : null}
