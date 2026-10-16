@@ -11,6 +11,8 @@
     "start": "bun run build && bun run src/server.ts",
     "test": "bun test",
     "test:e2e": "bun run build && playwright test",
+    "test:vm:unit": "python3 -m unittest discover -s vm_tests/tests -t . -v",
+    "test:vm": "python3 -m vm_tests.run",
     "typecheck": "tsc --noEmit",
     "pair": "bun run src/pair.ts",
     "whistle": "bun run src/cli.ts"
