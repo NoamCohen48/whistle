@@ -29,12 +29,16 @@ Stopping, restarting, updating, or uninstalling the Whistle service must not sto
 
 Use a systemd user service, running as the operator rather than root. Start after login and restart on crashes. Do not silently enable user lingering/running after logout. Do not install a service or change system settings until implementing the agreed lifecycle explicitly.
 
-Proposed CLI commands (not implemented):
+The checkout-based CLI is implemented (installation remains explicit; see [host lifecycle](host.md)):
 
 ```text
 whistle install
+whistle start
+whistle stop
 whistle status
 whistle pair
+whistle devices
+whistle revoke DEVICE_ID
 whistle restart
 whistle uninstall
 ```
@@ -49,8 +53,8 @@ The migration is implemented. See [frontend boundaries and checks](frontend.md).
 
 ## Host direction and remaining proposals
 
-- Retain the existing Bun + TypeScript host while implementing the companion-service lifecycle.
-- SQLite is implemented for durable, revocable device pairings with hashed credentials. No Herdr transcripts are duplicated; settings persistence is separate.
+- Bun + TypeScript host with a systemd user-service CLI, XDG config/state paths and graceful stream release is implemented. Packaging is currently checkout-based.
+- SQLite is implemented for durable, revocable device pairings with hashed credentials. No Herdr transcripts are duplicated; host settings live in an owner-only config JSON outside the checkout.
 - HTTP for setup/settings and a versioned WebSocket protocol for terminal/control traffic.
 - Shared protocol schemas/types at browser/host boundaries.
 - Keep the existing CSS variables and baseline CSS for now. A CSS framework or component library is not selected; that can be decided during the UI/UX pass.
@@ -71,8 +75,8 @@ No need for Next.js/SSR, native mobile packaging, cloud relay infrastructure, a 
 ## Next architecture questions
 
 - Packaging/install mechanism (a single executable with bundled frontend is the preferred direction, not yet implemented).
-- Host lifecycle, configuration/state directories and updates.
+- Standalone executable/embedded assets and managed release updates beyond the current checkout-based install.
 - Multi-session discovery and stable session-scoped identity.
 - Control lease revocation guarantees across the Herdr adapter.
 - Live inventory subscriptions, reconnection and resource bounds.
-- Service packaging and cutover from the old memory-only PoC (one re-pair is required at that first cutover).
+- First deployment/login validation and cutover from the old memory-only PoC (one re-pair is required at that first cutover).

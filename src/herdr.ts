@@ -1,10 +1,11 @@
 import { createConnection } from 'node:net';
-import { homedir } from 'node:os';
+import { loadHostConfig } from './config.ts';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
 
-export const socketPath = process.env.HERDR_SOCKET_PATH || `${homedir()}/.config/herdr/herdr.sock`;
+const hostConfig = loadHostConfig();
+export const socketPath = hostConfig.herdrSocketPath;
 
 export interface Pane {
   pane_id: string;
@@ -87,10 +88,11 @@ export function terminalStream(
   paneId: string, mode: 'observe' | 'control', cols: number, rows: number,
   onFrame: (frame: Frame) => void, onClose: (reason: string) => void,
 ) {
-  const child = spawn('herdr', ['terminal', 'session', mode, paneId, '--cols', String(cols), '--rows', String(rows)], {
+  const child = spawn(hostConfig.herdrBinary, ['terminal', 'session', mode, paneId, '--cols', String(cols), '--rows', String(rows)], {
     env: { ...process.env, HERDR_SOCKET_PATH: socketPath },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+  const closed = new Promise<void>(resolve => child.once('close', () => resolve()));
   let stopped = false;
   let stderr = '';
   let firstFrame = false;
@@ -117,7 +119,7 @@ export function terminalStream(
     if (!stopped) onClose(stderr || 'Terminal stream ended');
   });
   function stop() {
-    if (stopped) return;
+    if (stopped) return closed;
     stopped = true;
     clearTimeout(deadline);
     lines.close();
@@ -125,9 +127,11 @@ export function terminalStream(
     else child.kill('SIGTERM');
     const timer = setTimeout(() => child.kill('SIGTERM'), 750);
     timer.unref();
+    void closed.then(() => clearTimeout(timer));
+    return closed;
   }
   return {
-    stop,
+    stop, closed,
     get controlled() { return !stopped && mode === 'control' && firstFrame && child.stdin.writable; },
     async send(command: Record<string, unknown>) {
       if (stopped || mode !== 'control' || !firstFrame || !child.stdin.writable) throw new Error('Terminal is not controlled');

@@ -10,7 +10,8 @@
     "test": "bun test",
     "test:e2e": "bun run build && playwright test",
     "typecheck": "tsc --noEmit",
-    "pair": "bun run src/pair.ts"
+    "pair": "bun run src/pair.ts",
+    "whistle": "bun run src/cli.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

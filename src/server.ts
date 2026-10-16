@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import type { ServerWebSocket } from 'bun';
 import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts';
@@ -6,20 +7,14 @@ import { dimensions, parseCommand } from './protocol.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
 
-await mkdir('.runtime', { recursive: true, mode: 0o700 });
-const tokenPath = '.runtime/access-token';
-let token = process.env.WHISTLE_TOKEN;
-if (!token) {
-  try { token = (await readFile(tokenPath, 'utf8')).trim(); }
-  catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    token = crypto.randomUUID() + crypto.randomUUID();
-    await writeFile(tokenPath, token, { mode: 0o600, flag: 'wx' });
-  }
-}
-if (token.length < 24) throw new Error('WHISTLE_TOKEN must be at least 24 characters');
-const accessToken = token;
-const devices = new DeviceStore('.runtime/devices.sqlite');
+import { loadHostConfig, projectRoot, resolvePaths } from './config.ts';
+import { ensureToken } from './credentials.ts';
+
+const paths = resolvePaths();
+const config = loadHostConfig(paths);
+const tokenPath = join(paths.stateDir, 'access-token');
+const accessToken = await ensureToken(paths);
+const devices = new DeviceStore(join(paths.stateDir, 'devices.sqlite'));
 const pairingTickets = new PairingTickets();
 const failures = new Map<string, { count: number; until: number }>();
 const controllers = new Map<string, ServerWebSocket<Peer>>();
@@ -81,8 +76,8 @@ function pairedResponse(url: URL, name: string) {
   } });
 }
 const server = Bun.serve<Peer>({
-  hostname: process.env.HOST || '127.0.0.1',
-  port: Number(process.env.PORT || 8790),
+  hostname: config.host,
+  port: config.port,
   maxRequestBodySize: 4096,
   async fetch(request, server) {
     try {
@@ -168,7 +163,7 @@ const server = Bun.serve<Peer>({
       }
       const asset = assets[url.pathname];
       if (!asset || request.method !== 'GET') return new Response('Not found', { status: 404 });
-      return new Response(Bun.file(asset.file), { headers: { ...headers, 'Content-Type': asset.type } });
+      return new Response(Bun.file(join(projectRoot, asset.file)), { headers: { ...headers, 'Content-Type': asset.type } });
     } catch (error) {
       return new Response((error as Error).message, { status: 400, headers });
     }
@@ -245,17 +240,30 @@ const sweeper = setInterval(() => {
   for (const [ip, failure] of failures) if (failure.until < Date.now()) failures.delete(ip);
 }, 60_000);
 sweeper.unref();
-function shutdown() {
-  for (const peer of peers) { cleanup(peer); peer.close(1001, 'Server stopping'); }
+let stopping = false;
+async function shutdown() {
+  if (stopping) return;
+  stopping = true;
+  const closing = [...peers].map(peer => {
+    const closed = peer.data.stream?.closed;
+    cleanup(peer); peer.close(1001, 'Server stopping');
+    return closed;
+  });
   clearInterval(sweeper);
-  server.stop(true);
+  await server.stop(true);
+  // Let controller CLI children flush terminal.release before the host exits.
+  // These are Whistle streams, never the Herdr daemon or agent processes.
+  await Promise.race([Promise.all(closing), Bun.sleep(1500)]);
   devices.close();
   process.exit(0);
 }
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
-const serverUrl = `http://${server.hostname}:${server.port}`;
-await writeFile('.runtime/server-url', serverUrl, { mode: 0o600 });
-console.log(`Whistle PoC: ${serverUrl}`);
+const stop = () => { void shutdown().catch(cause => { console.error(`Whistle shutdown: ${(cause as Error).message}`); process.exit(1); }); };
+process.on('SIGTERM', stop);
+process.on('SIGINT', stop);
+const boundHost = server.hostname || config.host;
+const hostname = boundHost.includes(':') ? `[${boundHost}]` : boundHost;
+const serverUrl = `http://${hostname}:${server.port}`;
+await writeFile(join(paths.stateDir, 'server-url'), serverUrl, { mode: 0o600 });
+console.log(`Whistle: ${serverUrl}`);
 console.log('Pair your phone: bun run pair (single-use QR, valid for 5 minutes)');
 console.log(`Access token: ${process.env.WHISTLE_TOKEN ? 'provided by WHISTLE_TOKEN' : tokenPath} (not included in URLs or logs)`);

@@ -13,7 +13,7 @@ const firstFrame = (ws: WebSocket) => new Promise<void>((resolve, reject) => {
   ws.once('message', () => { clearTimeout(timer); resolve(); });
 });
 
-test('revocation immediately closes an active control stream and releases its fake Herdr controller', async () => {
+test('revocation and host shutdown release fake Herdr controllers without stopping its daemon', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'whistle-revoke-'));
   const socketPath = join(directory, 'herdr.sock');
   const released = join(directory, 'released');
@@ -57,6 +57,11 @@ test('revocation immediately closes an active control stream and releases its fa
       try { release = await readFile(released, 'utf8'); } catch { await Bun.sleep(20); }
     }
     expect(release).toBe('released\n');
+    ws = new WebSocket(`${host.url.replace('http', 'ws')}/terminal?pane=fixture:p1&mode=control&cols=45&rows=64`, { headers: { Cookie: otherCookie, Origin: host.url } });
+    await firstFrame(ws);
+    await host.stop(); host = undefined;
+    expect(await readFile(released, 'utf8')).toBe('released\nreleased\n');
+    expect(rpcServer.listening).toBe(true);
   } finally {
     ws?.terminate(); await host?.stop();
     await new Promise<void>(resolve => rpcServer.close(() => resolve()));

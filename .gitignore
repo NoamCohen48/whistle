@@ -6,3 +6,8 @@ playwright-report/
 test-results/
 .env
 *.log
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+access-token
+pair.png

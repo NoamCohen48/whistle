@@ -7,7 +7,8 @@ test('QR API: protected creation, origin check, cookie issuance and single use',
   const cwd = await mkdtemp(`${tmpdir()}/whistle-pair-test-`);
   const token = crypto.randomUUID();
   const child = Bun.spawn([process.execPath, resolve('src/server.ts')], {
-    cwd, env: { ...process.env, PORT: '0', HOST: '127.0.0.1', WHISTLE_TOKEN: token },
+    cwd, env: { ...process.env, PORT: '0', HOST: '127.0.0.1', WHISTLE_TOKEN: token,
+      WHISTLE_STATE_DIR: resolve(cwd, 'state'), WHISTLE_CONFIG_DIR: resolve(cwd, 'config') },
     stdout: 'pipe', stderr: 'pipe',
   });
   const reader = child.stdout.getReader();
@@ -19,7 +20,7 @@ test('QR API: protected creation, origin check, cookie issuance and single use',
           const next = await reader.read();
           if (next.done) throw new Error('Test server exited before starting');
           output += new TextDecoder().decode(next.value);
-          const match = output.match(/Whistle PoC: (http:\/\/127\.0\.0\.1:\d+)/);
+          const match = output.match(/Whistle: (http:\/\/127\.0\.0\.1:\d+)/);
           if (match) return match[1];
         }
       })(),
