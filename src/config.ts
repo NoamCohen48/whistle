@@ -7,7 +7,18 @@ import { fileURLToPath } from 'node:url';
 export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 type Environment = Record<string, string | undefined>;
 export interface Paths { configDir: string; configFile: string; stateDir: string; dataDir: string; unitFile: string; launcher: string }
-export interface HostConfig { host: string; port: number; herdrSocketPath: string; herdrBinary: string }
+export interface HostConfig { host: string; port: number; herdrSocketPath: string; herdrBinary: string; publicOrigin?: string }
+export function parsePublicOrigin(value: unknown): string | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (typeof value !== 'string') throw new Error('publicOrigin must be an HTTPS origin');
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || url.origin !== value) throw new Error('Invalid origin');
+    return url.origin;
+  } catch {
+    throw new Error('publicOrigin must be a canonical HTTPS origin without path, credentials, query or fragment');
+  }
+}
 const absolute = (value: string, label: string) => {
   if (!isAbsolute(value) || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`${label} must be an absolute path without control characters`);
   return resolve(value);
@@ -38,12 +49,14 @@ export function loadHostConfig(paths = resolvePaths(), env: Environment = proces
   const port = env.PORT !== undefined ? Number(env.PORT) : saved.port ?? 8790;
   const herdrSocketPath = env.HERDR_SOCKET_PATH ?? saved.herdrSocketPath ?? join(env.HOME || homedir(), '.config', 'herdr', 'herdr.sock');
   const herdrBinary = env.WHISTLE_HERDR_BIN ?? saved.herdrBinary ?? Bun.which('herdr') ?? 'herdr';
+  const publicOrigin = parsePublicOrigin(env.WHISTLE_PUBLIC_ORIGIN ?? saved.publicOrigin);
   if (typeof host !== 'string' || (!isIP(host) && host !== 'localhost') || ['0.0.0.0', '::'].includes(host)) {
     throw new Error('HOST must be a specific IP address or localhost, not a wildcard listener');
   }
+  if (publicOrigin && !['127.0.0.1', '::1', 'localhost'].includes(host)) throw new Error('HTTPS proxy mode requires a loopback backend listener');
   if (typeof port !== 'number' || !Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT must be an integer between 0 and 65535');
   if (typeof herdrSocketPath !== 'string') throw new Error('herdrSocketPath must be an absolute path');
   if (typeof herdrBinary !== 'string' || (herdrBinary !== 'herdr' && !isAbsolute(herdrBinary))) throw new Error('herdrBinary must be an absolute path');
-  return { host, port, herdrSocketPath: absolute(herdrSocketPath, 'HERDR_SOCKET_PATH'),
+  return { host, port, ...(publicOrigin ? { publicOrigin } : {}), herdrSocketPath: absolute(herdrSocketPath, 'HERDR_SOCKET_PATH'),
     herdrBinary: herdrBinary === 'herdr' ? herdrBinary : absolute(herdrBinary, 'WHISTLE_HERDR_BIN') };
 }

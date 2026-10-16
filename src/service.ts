@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { loadHostConfig, projectRoot, resolvePaths, type Paths } from './config.ts';
 import { standalone } from './build-info.ts';
 import { installExecutable } from './releases.ts';
+import { assetSpecs } from './assets.ts';
 
 const marker = '# Managed by Whistle.';
 export function unitQuote(value: string, command = false) {
@@ -61,17 +62,18 @@ function requireLinuxUser() {
   if (process.platform !== 'linux') throw new Error('User-service installation currently supports Linux/systemd only');
   if (process.getuid?.() === 0) throw new Error('Run Whistle as your regular user, not with sudo');
 }
-export async function installService(options: { host?: string; port?: string; herdrSocket?: string; now?: boolean } = {}) {
+export async function installService(options: { host?: string; port?: string; herdrSocket?: string; publicOrigin?: string; now?: boolean } = {}) {
   requireLinuxUser();
   const paths = resolvePaths();
   const config = loadHostConfig(paths, { ...process.env,
     ...(options.host !== undefined ? { HOST: options.host } : {}),
     ...(options.port !== undefined ? { PORT: options.port } : {}),
+    ...(options.publicOrigin !== undefined ? { WHISTLE_PUBLIC_ORIGIN: options.publicOrigin } : {}),
     ...(options.herdrSocket !== undefined ? { HERDR_SOCKET_PATH: options.herdrSocket } : {}),
   });
   if (config.port === 0) throw new Error('An installed service needs a fixed nonzero port');
   await ownedFile(paths.unitFile); await ownedFile(paths.launcher);
-  for (const asset of standalone ? [] : ['index.html', 'app.js', 'app.css']) {
+  for (const asset of standalone ? [] : Object.values(assetSpecs).map(asset => asset.file)) {
     if (!await Bun.file(join(projectRoot, 'dist', asset)).exists()) throw new Error('Build the frontend first: bun run build');
   }
   await access(config.herdrBinary, constants.X_OK);

@@ -59,7 +59,7 @@ test('detached host embeds exact frontend bytes, refuses cwd autoload, and prese
       const response = await host.request(path); expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toBe(asset.type);
       expect(response.headers.get('cache-control')).toBe('no-store');
-      expect(hash(await response.text())).toBe(hash(await readFile(join(projectRoot, 'dist', asset.file), 'utf8')));
+      expect(hash(new Uint8Array(await response.arrayBuffer()))).toBe(hash(await readFile(join(projectRoot, 'dist', asset.file))));
     }
     expect((await host.request('/api/devices')).status).toBe(401);
     expect((await host.request('/constructor')).status).toBe(404);

@@ -71,6 +71,10 @@ To update an existing user daemon: verify the new binary, run `./dist/whistle in
 
 The temporary `whistle-poc-test` pane was closed after testing. The requested Spark model returned an account/provider unsupported-model error; see `.docs/poc.md`. Android IME behavior still needs physical-device testing.
 
+## Installable web app
+
+The production build includes an online-only PWA manifest, icons and install support. Phone installation requires private HTTPS; the existing HTTP/IP URL is not installable. See [PWA safety, explicit proxy origins and cutover notes](.docs/pwa.md). HTTPS deployment and real-phone installation are not yet verified; existing Tailscale Serve routing is unchanged.
+
 ## Checks
 
 ```sh

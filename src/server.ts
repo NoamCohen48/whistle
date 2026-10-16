@@ -35,7 +35,7 @@ interface Peer {
 
 function sameOrigin(request: Request) {
   const origin = request.headers.get('origin');
-  try { return origin !== null && origin === new URL(request.url).origin; }
+  try { return origin !== null && origin === (config.publicOrigin || new URL(request.url).origin); }
   catch { return false; }
 }
 function authenticated(request: Request) {
@@ -63,11 +63,11 @@ const headers = {
   'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
 };
-function pairedResponse(url: URL, name: string) {
+function pairedResponse(secure: boolean, name: string) {
   const { credential } = devices.issue(name);
   return new Response('Paired', { headers: {
     ...headers,
-    'Set-Cookie': `whistle_session=${credential}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_LIFETIME_MS / 1000}${url.protocol === 'https:' ? '; Secure' : ''}`,
+    'Set-Cookie': `whistle_session=${credential}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_LIFETIME_MS / 1000}${secure ? '; Secure' : ''}`,
   } });
 }
 const server = Bun.serve<Peer>({
@@ -77,6 +77,9 @@ const server = Bun.serve<Peer>({
   async fetch(request, server) {
     try {
       const url = new URL(request.url);
+      // Explicit operator configuration, never client-supplied Forwarded headers.
+      const publicOrigin = config.publicOrigin || url.origin;
+      const secure = publicOrigin.startsWith('https:');
       if (url.pathname === '/api/pairing-ticket' && request.method === 'POST') {
         if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
         if (!equalToken(request.headers.get('authorization')?.replace(/^Bearer /, ''))) {
@@ -84,7 +87,7 @@ const server = Bun.serve<Peer>({
         }
         const { ticket, expiresAt } = pairingTickets.create();
         // A fragment is not sent in HTTP requests; the phone removes it immediately.
-        return Response.json({ url: `${url.origin}/#pair=${ticket}`, expiresAt }, { headers });
+        return Response.json({ url: `${publicOrigin}/#pair=${ticket}`, expiresAt }, { headers });
       }
       if (url.pathname === '/api/redeem-pairing' && request.method === 'POST') {
         if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
@@ -93,7 +96,7 @@ const server = Bun.serve<Peer>({
         if (!pairingTickets.redeem(body?.ticket)) {
           return new Response('QR expired or already used. Run bun run pair on the PC for a new one.', { status: 401, headers });
         }
-        return pairedResponse(url, name);
+        return pairedResponse(secure, name);
       }
       if (url.pathname === '/api/login' && request.method === 'POST') {
         if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403 });
@@ -108,7 +111,7 @@ const server = Bun.serve<Peer>({
           return new Response('Incorrect access token', { status: 401 });
         }
         failures.delete(ip);
-        return pairedResponse(url, name);
+        return pairedResponse(secure, name);
       }
       const deviceRoute = url.pathname === '/api/devices' || /^\/api\/devices\/[0-9a-f-]{36}$/.test(url.pathname);
       if (deviceRoute) {
@@ -127,7 +130,7 @@ const server = Bun.serve<Peer>({
             cleanup(peer); peer.close(1008, 'Device revoked');
           }
           return new Response('Revoked', { headers: { ...headers, ...(id === current?.id ? {
-            'Set-Cookie': `whistle_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${url.protocol === 'https:' ? '; Secure' : ''}`,
+            'Set-Cookie': `whistle_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure ? '; Secure' : ''}`,
           } : {}) } });
         }
         return new Response('Method not allowed', { status: 405, headers });
