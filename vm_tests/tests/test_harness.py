@@ -77,6 +77,42 @@ class IsolationTests(unittest.TestCase):
         disk = core.parse_json(unusual[unusual.index('-blockdev') + 1])
         self.assertEqual(disk['file']['filename'], '/folder,with spaces/disk.qcow2')
 
+    def test_https_uses_a_test_local_ca_and_requires_hostname_verification(self):
+        machine = runner.VM({}, Path('/binary'), 1024, False, https=True)
+        machine.directory, machine.http_port = Path('/disposable'), 12345
+        context = runner.ssl.create_default_context()
+        with patch.object(runner.ssl, 'create_default_context', return_value=context) as trust, patch.object(runner.http.client, 'HTTPSConnection') as connection:
+            response = connection.return_value.getresponse.return_value
+            response.status, response.read.return_value, response.getheaders.return_value = 200, b'ok', []
+            machine.request()
+            trust.assert_called_once_with(cafile='/disposable/tls.crt')
+            self.assertTrue(context.check_hostname)
+            self.assertEqual(context.verify_mode, runner.ssl.CERT_REQUIRED)
+            self.assertEqual(connection.call_args.kwargs['context'], context)
+            self.assertEqual(connection.return_value.request.call_args.args[3]['Origin'], 'https://127.0.0.1:12345')
+            connection.return_value.close.assert_called_once()
+
+    def test_wss_verification_failure_closes_owned_socket(self):
+        machine = runner.VM({}, Path('/binary'), 1024, False, https=True)
+        raw = Mock()
+        context = Mock(wrap_socket=Mock(side_effect=runner.ssl.SSLCertVerificationError('synthetic test failure')))
+        with patch.object(runner.socket, 'create_connection', return_value=raw), patch.object(machine, 'tls_context', return_value=context), self.assertRaises(runner.ssl.SSLCertVerificationError):
+            machine.connect()
+        raw.close.assert_called_once()
+
+    def test_tls_provisioning_cannot_bypass_guest_guard(self):
+        with patch.object(guest.sys, 'argv', ['guest.py','provision-https']), patch.object(guest, 'guard', side_effect=RuntimeError('not guest')), patch.object(guest, 'provision_https') as provision:
+            with self.assertRaises(RuntimeError):
+                guest.main()
+            provision.assert_not_called()
+
+    def test_plain_http_remains_the_default_vm_transport(self):
+        machine = runner.VM({}, Path('/binary'), 1024, False)
+        machine.http_port = 12345
+        self.assertEqual(machine.origin, 'http://127.0.0.1:12345')
+        self.assertFalse(machine.https)
+        self.assertFalse(machine.browser)
+
     def test_http_headers_are_case_insensitive_and_connections_are_closed(self):
         machine = runner.VM({}, Path('/binary'), 1024, False)
         machine.http_port = 12345

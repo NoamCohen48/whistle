@@ -35,7 +35,7 @@ This does not reconfigure Tailscale, Collie, or any gateway. Do not expose the a
 
 ## Background service
 
-The personal host has been cut over to the enabled user daemon; see [deployment verification](.docs/deployment.md). The instructions below describe a fresh installation—do not start a second foreground listener on the occupied port.
+The personal host runs the verified native daemon at **https://noam-pc.tailf888b6.ts.net:8443**, with a loopback-only backend; see [deployment verification](.docs/deployment.md). The examples below describe a fresh **direct-HTTP** installation, not reconfiguration of the existing HTTPS daemon—do not start a second listener or replace its saved proxy settings.
 
 Build first, then install the user service without interrupting an existing server:
 
@@ -52,7 +52,7 @@ Installation enables startup at login but does **not** start immediately. After 
 ~/.local/bin/whistle status
 ```
 
-Durable pairings survive source-to-binary upgrades and subsequent restarts. Only the original memory-only PoC needs one fresh pairing. `whistle devices` lists paired devices; `whistle revoke <id>` revokes one and releases its live streams. `whistle stop`, `restart` and `uninstall` manage only Whistle. Uninstall preserves configuration and devices. No firewall rules or lingering are changed.
+Durable pairings survive source-to-binary upgrades and subsequent restarts. Changing from HTTP/IP to HTTPS/DNS requires fresh browser pairing; existing authorization rows are preserved. `whistle devices` lists paired devices; `whistle revoke <id>` revokes one and releases its live streams. `whistle stop`, `restart` and `uninstall` manage only Whistle. Uninstall preserves configuration and devices. No firewall rules or lingering are changed.
 
 The standalone executable embeds Bun and the React app. Installation copies it into private, content-addressed releases; the service no longer needs this checkout, `node_modules` or `dist/`. Herdr remains external. See [packaging and artifact checks](.docs/packaging.md) and [lifecycle, paths and upgrades](.docs/host.md). Building/testing installs no real service.
 
@@ -73,7 +73,7 @@ The temporary `whistle-poc-test` pane was closed after testing. The requested Sp
 
 ## Installable web app
 
-The production build includes an online-only PWA manifest, icons and install support. Phone installation requires private HTTPS; the existing HTTP/IP URL is not installable. See [PWA safety, explicit proxy origins and cutover notes](.docs/pwa.md). HTTPS deployment and real-phone installation are not yet verified; existing Tailscale Serve routing is unchanged.
+The production build includes an online-only PWA manifest, icons and install support, deployed at **https://noam-pc.tailf888b6.ts.net:8443**. On the PC, run `~/.local/bin/whistle pair`, scan its QR with your Tailscale-connected phone, then choose **Install app** in Chrome. QR pairing is single-use, expires after five minutes, and needs no token copying. The existing HTTPS :443 site is preserved. See [PWA safety and cutover notes](.docs/pwa.md). Trusted HTTPS/QR/WSS and installability are browser-verified; physical Android installation and lifecycle checks remain pending.
 
 ## Checks
 

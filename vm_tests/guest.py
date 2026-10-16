@@ -110,14 +110,47 @@ WantedBy=multi-user.target
     call(['systemctl', 'restart', f'user@{uid}.service'])
 
 
+def provision_https():
+    source = Path(__file__).parent
+    directory = Path('/etc/whistle-vm-https')
+    directory.mkdir(mode=0o700)
+    user = pwd.getpwnam('whistle')
+    for name, source_name in [('cert.pem','tls.crt'),('key.pem','tls.key')]:
+        target = directory / name
+        shutil.copyfile(source / source_name, target)
+        target.chmod(0o600)
+        os.chown(target, user.pw_uid, user.pw_gid)
+    os.chown(directory, user.pw_uid, user.pw_gid)
+    target = Path('/usr/local/libexec/whistle-vm-tls')
+    shutil.copyfile(source / 'tls_proxy.py', target)
+    target.chmod(0o755)
+    Path('/etc/systemd/system/whistle-vm-tls.service').write_text('''[Unit]
+Description=Disposable Whistle VM TLS fixture
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=whistle
+ExecStart=/usr/bin/python3 /usr/local/libexec/whistle-vm-tls
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target
+''')
+    call(['systemctl','daemon-reload'])
+    call(['systemctl','enable','--now','whistle-vm-tls.service'])
+
+
 def main():
     kind = guard()
     if sys.argv[1:] == ['provision']:
         provision(kind)
+    elif sys.argv[1:] == ['provision-https']:
+        provision_https()
     elif sys.argv[1:] in [['allow'], ['deny']]:
         firewall(kind, sys.argv[1] == 'allow')
     else:
-        raise ValueError('Use provision, allow or deny')
+        raise ValueError('Use provision, provision-https, allow or deny')
 
 
 if __name__ == '__main__':
