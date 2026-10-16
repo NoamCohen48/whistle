@@ -7,6 +7,26 @@ import { startHost, testToken } from './helpers/host.ts';
 
 const publicOrigin = 'https://whistle.example.test:8443';
 
+test('authentication, malformed requests and missing routes are explicitly non-cacheable', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'whistle-no-store-'));
+  const host = await startHost(directory);
+  try {
+    const cases: [string, RequestInit, number][] = [
+      ['/api/login', { method: 'POST', body: JSON.stringify({ token: 'incorrect' }) }, 401],
+      ['/api/login', { method: 'POST', headers: { Origin: 'https://wrong.invalid' } }, 403],
+      ['/api/login', { method: 'POST', body: '{' }, 400],
+      ['/api/panes', {}, 401], ['/terminal', {}, 401], ['/missing', {}, 404], ['/constructor', {}, 404],
+      ['/', { method: 'DELETE' }, 404],
+    ];
+    for (const [path, options, status] of cases) {
+      const response = await host.request(path, options);
+      expect(response.status).toBe(status);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  } finally { await host.stop(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('proxy origin is explicit canonical HTTPS and requires a loopback backend', () => {
   expect(parsePublicOrigin(publicOrigin)).toBe(publicOrigin);
   for (const value of ['http://host', 'https://host/', 'https://USER:password@host', 'https://host/a', 'https://host?x', 'https://host/#ticket', 'https://HOST', 'bad', null]) {
