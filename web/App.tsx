@@ -1,0 +1,97 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Pane, Snapshot } from '../src/herdr.ts';
+import { loadPanes, pairBrowser, PairingRequired, type Startup } from './api.ts';
+import { AgentSwitcher, Inventory } from './components/Inventory.tsx';
+import { Pairing } from './components/Pairing.tsx';
+import { TerminalPanel } from './components/TerminalPanel.tsx';
+import { INITIAL_SESSION, TerminalSession, type SessionState } from './terminal/session.ts';
+
+const phaseLabels: Record<SessionState['phase'], string> = {
+  idle: 'Connected', connecting: 'Connecting', 'requesting-control': 'Connecting',
+  watching: 'Watching', controlling: 'Controlling', disconnected: 'Disconnected', paused: 'Paused',
+};
+const paneKey = (pane: Pane) => `${pane.pane_id}:${pane.terminal_id}`;
+
+export function App({ startup }: { startup: Promise<Startup> }) {
+  const [paired, setPaired] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState<Snapshot>();
+  const [selection, setSelection] = useState<Pane>();
+  const [error, setError] = useState('');
+  const [engine, setEngine] = useState<TerminalSession>();
+  const [session, setSession] = useState(INITIAL_SESSION);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const inFlight = useRef<AbortController | null>(null);
+  const selected = paired && selection ? snapshot?.panes.find(pane =>
+    pane.pane_id === selection.pane_id && pane.terminal_id === selection.terminal_id) : undefined;
+
+  useEffect(() => {
+    let active = true;
+    void startup.then(result => {
+      if (!active) return;
+      setSnapshot(result.snapshot); setPaired(Boolean(result.snapshot)); setError(result.error); setLoading(false);
+      const previous = sessionStorage.getItem('whistle-pane');
+      if (previous && result.snapshot) setSelection(result.snapshot.panes.find(pane => pane.pane_id === previous));
+    });
+    return () => { active = false; };
+  }, [startup]);
+
+  const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    const controller = new AbortController(); inFlight.current = controller;
+    try { setSnapshot(await loadPanes(controller.signal)); setPaired(true); }
+    catch (cause) {
+      if (controller.signal.aborted) return;
+      if (cause instanceof PairingRequired) setPaired(false);
+      else setError((cause as Error).message);
+    } finally { if (inFlight.current === controller) inFlight.current = null; }
+  }, []);
+  useEffect(() => {
+    if (!paired) return;
+    const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 5000);
+    const visible = () => { if (!document.hidden) void refresh(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      clearInterval(timer); document.removeEventListener('visibilitychange', visible);
+      inFlight.current?.abort(); inFlight.current = null;
+    };
+  }, [paired, refresh]);
+  useEffect(() => {
+    if (paired && selection && snapshot && !selected) {
+      setSelection(undefined); sessionStorage.removeItem('whistle-pane');
+      setError('This pane was closed or replaced. Choose another agent.');
+    }
+  }, [paired, selection, snapshot, selected]);
+
+  const clearError = () => { setError(''); engine?.clearError(); };
+  const select = (pane: Pane) => {
+    if (selection && paneKey(selection) === paneKey(pane)) return;
+    clearError(); engine?.close(); setSelection(pane); sessionStorage.setItem('whistle-pane', pane.pane_id);
+  };
+  const pair = async (token: string) => {
+    setError('');
+    try {
+      await pairBrowser('/api/login', { token });
+      setSnapshot(await loadPanes()); setPaired(true);
+    } catch (cause) { setError((cause as Error).message); }
+  };
+  const draftKey = selected ? paneKey(selected) : '';
+  return <>
+    <Pairing hidden={paired} loading={loading} error={error} onPair={pair} onRetry={() => { setError(''); void refresh(); }} />
+    <div id="app" hidden={!paired}>
+      <header>
+        <button type="button" id="back" hidden={!selected} onClick={() => {
+          engine?.close(); setSelection(undefined); sessionStorage.removeItem('whistle-pane'); void refresh();
+        }}>‹ Panes</button>
+        <strong id="heading">{selected ? selected.agent || 'Terminal' : 'whistle'}</strong>
+        <span id="connection" role="status">{selected ? phaseLabels[session.phase] : 'Connected'}</span>
+        <button type="button" id="refresh" onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}>Refresh</button>
+      </header>
+      <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} />
+      <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select} />
+      <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
+        draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) setDrafts(previous => ({ ...previous, [draftKey]: value })); }} />
+      <div id="error" role="alert" hidden={!error && !session.error}>{error || session.error}</div>
+    </div>
+  </>;
+}
