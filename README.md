@@ -82,6 +82,8 @@ bun run test:e2e
 bun run test:package
 ```
 
+For real systemd and firewall testing, see the [reproducible QEMU VM matrix](vm_tests/README.md): Debian/nftables, Ubuntu/UFW and Fedora/firewalld. It runs disposable guests serially, with fake Herdr and loopback-only forwarding; it never installs a host service or changes the host firewall. VM runs require explicit opt-in (`bun run test:vm --all`); fast harness checks use `bun run test:vm:unit`.
+
 The browser suite uses an isolated fake backend, not your Herdr panes. It covers built desktop/Android-emulated Chromium and Vite development with React Strict Mode. Physical-phone IME and lifecycle testing is still needed.
 
 For frontend development, keep the Bun host running and use `bun run dev` in another terminal. If the host is tailnet-bound, set `WHISTLE_API_URL=http://<pc-tailnet-ip>:8790 bun run dev`. The development server binds only to loopback; phone use still goes through the Bun host.
