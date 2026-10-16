@@ -2,7 +2,7 @@
 
 ## Status
 
-The production frontend stack is React + Vite + TypeScript. The vanilla `web/app.ts` entry point has been replaced; the Bun host's HTTP/WebSocket API is unchanged. This increment does not install a daemon, persist browser pairings, implement multi-session discovery, or add an installable/offline PWA.
+The production frontend stack is React + Vite + TypeScript. The vanilla `web/app.ts` entry point has been replaced; the Bun host's HTTP/WebSocket API is unchanged. The host now persists/revokes browser pairings; see [host authentication](host.md). This does not yet install a daemon, implement multi-session discovery, or add an installable/offline PWA.
 
 The existing terminal controls and CSS remain the functional baseline. Visual refinement belongs to the separate UI/UX pass.
 
@@ -44,7 +44,7 @@ bun run dev
 WHISTLE_API_URL=http://<pc-tailnet-ip>:8790 bun run dev
 ```
 
-Vite is local development tooling, not the phone-facing production server. `bun start` builds the UI and serves it through Bun, just as before. The existing running host reads the rebuilt assets from `dist/`, so refreshing the phone loads the new UI without restarting the host or losing its in-memory pairing.
+Vite is local development tooling, not the phone-facing production server. `bun start` builds the UI and serves it through Bun, just as before. The existing running host reads the rebuilt assets from `dist/`, so refreshing the phone loads the new UI without restarting the host. New-host pairings also survive normal host restarts.
 
 The initial production JavaScript bundle is approximately 576 kB minified (160 kB gzipped as a size estimate; the host does not yet compress responses). Vite reports its default size advisory. It contains React and xterm in one file to preserve the existing fixed asset allowlist. Splitting/lazy-loading xterm and compression can be considered alongside production asset packaging; the warning is not a build error.
 

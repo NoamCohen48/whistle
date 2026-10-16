@@ -2,7 +2,7 @@
 
 A terminal-first phone remote for **existing Herdr panes**. No replacement agent harness or additional model calls from the app itself.
 
-React + Vite + TypeScript frontend, an isolated xterm.js terminal engine, and a Bun host. Styling is deliberately baseline; daemon installation and persistent pairing are the next milestone.
+React + Vite + TypeScript frontend, an isolated xterm.js terminal engine, and a Bun host. Styling is deliberately baseline. Pairing is durable and revocable; daemon installation is the next increment. See [host authentication](.docs/host.md).
 
 Product decisions: [`.docs/product.md`](.docs/product.md). Production direction: [`.docs/architecture.md`](.docs/architecture.md). Frontend boundaries and development: [`.docs/frontend.md`](.docs/frontend.md). Original PoC verification and remaining limitations: [`.docs/poc.md`](.docs/poc.md).
 

@@ -4,6 +4,7 @@ import type { ServerWebSocket } from 'bun';
 import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts';
 import { dimensions, parseCommand } from './protocol.ts';
 import { PairingTickets } from './pairing.ts';
+import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
 
 await mkdir('.runtime', { recursive: true, mode: 0o700 });
 const tokenPath = '.runtime/access-token';
@@ -18,12 +19,13 @@ if (!token) {
 }
 if (token.length < 24) throw new Error('WHISTLE_TOKEN must be at least 24 characters');
 const accessToken = token;
-const sessions = new Map<string, number>();
+const devices = new DeviceStore('.runtime/devices.sqlite');
 const pairingTickets = new PairingTickets();
 const failures = new Map<string, { count: number; until: number }>();
 const controllers = new Map<string, ServerWebSocket<Peer>>();
 const peers = new Set<ServerWebSocket<Peer>>();
 interface Peer {
+  deviceId: string;
   paneId: string;
   mode: 'observe' | 'control';
   cols: number;
@@ -42,7 +44,7 @@ function sameOrigin(request: Request) {
 }
 function authenticated(request: Request) {
   const cookie = request.headers.get('cookie')?.split(';').map(c => c.trim()).find(c => c.startsWith('whistle_session='))?.slice(16);
-  return Boolean(cookie && (sessions.get(cookie) ?? 0) > Date.now());
+  return devices.authenticate(cookie);
 }
 function equalToken(candidate: unknown) {
   if (typeof candidate !== 'string') return false;
@@ -71,12 +73,11 @@ const headers = {
   'Referrer-Policy': 'no-referrer',
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
 };
-function pairedResponse(url: URL) {
-  const id = crypto.randomUUID();
-  sessions.set(id, Date.now() + 7 * 86400_000);
+function pairedResponse(url: URL, name: string) {
+  const { credential } = devices.issue(name);
   return new Response('Paired', { headers: {
     ...headers,
-    'Set-Cookie': `whistle_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${url.protocol === 'https:' ? '; Secure' : ''}`,
+    'Set-Cookie': `whistle_session=${credential}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_LIFETIME_MS / 1000}${url.protocol === 'https:' ? '; Secure' : ''}`,
   } });
 }
 const server = Bun.serve<Peer>({
@@ -98,10 +99,11 @@ const server = Bun.serve<Peer>({
       if (url.pathname === '/api/redeem-pairing' && request.method === 'POST') {
         if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
         const body = await request.json();
+        const name = deviceName(body?.deviceName, request.headers.get('user-agent') || '');
         if (!pairingTickets.redeem(body?.ticket)) {
           return new Response('QR expired or already used. Run bun run pair on the PC for a new one.', { status: 401, headers });
         }
-        return pairedResponse(url);
+        return pairedResponse(url, name);
       }
       if (url.pathname === '/api/login' && request.method === 'POST') {
         if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403 });
@@ -109,16 +111,40 @@ const server = Bun.serve<Peer>({
         const failure = failures.get(ip);
         if (failure && failure.until > Date.now() && failure.count >= 10) return new Response('Too many attempts; wait one minute', { status: 429 });
         const body = await request.json();
-        if (!equalToken(body.token)) {
+        const name = deviceName(body?.deviceName, request.headers.get('user-agent') || '');
+        if (!equalToken(body?.token)) {
           const count = failure && failure.until > Date.now() ? failure.count + 1 : 1;
           failures.set(ip, { count, until: Date.now() + 60_000 });
           return new Response('Incorrect access token', { status: 401 });
         }
         failures.delete(ip);
-        return pairedResponse(url);
+        return pairedResponse(url, name);
+      }
+      const deviceRoute = url.pathname === '/api/devices' || /^\/api\/devices\/[0-9a-f-]{36}$/.test(url.pathname);
+      if (deviceRoute) {
+        const current = authenticated(request);
+        const pcAdmin = equalToken(request.headers.get('authorization')?.replace(/^Bearer /, ''));
+        if (!current && !pcAdmin) return new Response('Pair this browser first', { status: 401, headers });
+        if (url.pathname === '/api/devices' && request.method === 'GET') {
+          return Response.json({ devices: devices.list().map(device => ({ ...device, current: device.id === current?.id })) }, { headers });
+        }
+        if (url.pathname !== '/api/devices' && request.method === 'DELETE') {
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
+          const id = url.pathname.slice('/api/devices/'.length);
+          if (!devices.revoke(id)) return new Response('Device not found', { status: 404, headers });
+          for (const peer of peers) if (peer.data.deviceId === id) {
+            message(peer, { type: 'error', message: 'This device was revoked. Pair again to reconnect.' });
+            cleanup(peer); peer.close(1008, 'Device revoked');
+          }
+          return new Response('Revoked', { headers: { ...headers, ...(id === current?.id ? {
+            'Set-Cookie': `whistle_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${url.protocol === 'https:' ? '; Secure' : ''}`,
+          } : {}) } });
+        }
+        return new Response('Method not allowed', { status: 405, headers });
       }
       if (url.pathname.startsWith('/api/') || url.pathname === '/terminal') {
-        if (!authenticated(request)) return new Response('Pair this browser first', { status: 401, headers });
+        const current = authenticated(request);
+        if (!current) return new Response('Pair this browser first', { status: 401, headers });
         if (url.pathname === '/api/panes' && request.method === 'GET') {
           return Response.json(await snapshot(), { headers });
         }
@@ -134,7 +160,7 @@ const server = Bun.serve<Peer>({
             ? dimensions(Number(url.searchParams.get('cols')), Number(url.searchParams.get('rows')))
             : await watchSize(pane);
           const upgraded = server.upgrade(request, { data: {
-            paneId, mode, ...size, queue: Promise.resolve(), pending: 0, lastId: 0, closed: false,
+            deviceId: current.id, paneId, mode, ...size, queue: Promise.resolve(), pending: 0, lastId: 0, closed: false,
           } });
           return upgraded ? undefined : new Response('WebSocket upgrade required', { status: 400 });
         }
@@ -154,6 +180,7 @@ const server = Bun.serve<Peer>({
     closeOnBackpressureLimit: true,
     open(ws) {
       const peer = ws.data;
+      if (!devices.isActive(peer.deviceId)) { cleanup(ws); ws.close(1008, 'Device expired or revoked'); return; }
       if (peer.mode === 'control') {
         if (controllers.has(peer.paneId)) { ws.close(1008, 'Pane already controlled'); return; }
         controllers.set(peer.paneId, ws);
@@ -167,6 +194,7 @@ const server = Bun.serve<Peer>({
     message(ws, raw) {
       const peer = ws.data;
       try {
+        if (!devices.isActive(peer.deviceId)) throw new Error('Device expired or revoked');
         const command = parseCommand(typeof raw === 'string' ? raw : raw.toString());
         if (command.type === 'ping') { message(ws, { type: 'pong' }); return; }
         if (peer.mode !== 'control') throw new Error('Take control before sending input');
@@ -174,6 +202,7 @@ const server = Bun.serve<Peer>({
         peer.pending++;
         peer.queue = peer.queue.then(async () => {
           if (peer.closed) return;
+          if (!devices.isActive(peer.deviceId)) throw new Error('Device expired or revoked');
           const stream = peer.stream;
           if (!stream) throw new Error('Terminal stream is not open');
           if (command.type === 'input' || command.type === 'key') {
@@ -209,13 +238,18 @@ const server = Bun.serve<Peer>({
   },
 });
 const sweeper = setInterval(() => {
-  for (const [id, until] of sessions) if (until < Date.now()) sessions.delete(id);
+  devices.sweep();
+  for (const peer of peers) if (!devices.isActive(peer.data.deviceId)) {
+    cleanup(peer); peer.close(1008, 'Device expired or revoked');
+  }
   for (const [ip, failure] of failures) if (failure.until < Date.now()) failures.delete(ip);
 }, 60_000);
 sweeper.unref();
 function shutdown() {
   for (const peer of peers) { cleanup(peer); peer.close(1001, 'Server stopping'); }
+  clearInterval(sweeper);
   server.stop(true);
+  devices.close();
   process.exit(0);
 }
 process.on('SIGTERM', shutdown);
