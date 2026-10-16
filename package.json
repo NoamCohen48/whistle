@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "package": "bun run build && bun run scripts/package.ts",
+    "test:package": "bun run package && bun test ./tests/packaging.check.ts",
     "dev": "vite",
     "start": "bun run build && bun run src/server.ts",
     "test": "bun test",

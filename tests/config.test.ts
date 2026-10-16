@@ -6,8 +6,11 @@ import { loadHostConfig, resolvePaths } from '../src/config.ts';
 import { serviceUnit, unitQuote } from '../src/service.ts';
 
 test('state/config/unit paths follow XDG and never depend on the working directory', () => {
-  const paths = resolvePaths({ HOME: '/tmp/person', XDG_STATE_HOME: '/tmp/state', XDG_CONFIG_HOME: '/tmp/config' });
+  const paths = resolvePaths({ HOME: '/tmp/person', XDG_STATE_HOME: '/tmp/state', XDG_CONFIG_HOME: '/tmp/config', XDG_DATA_HOME: '/tmp/data' });
   expect(paths.stateDir).toBe('/tmp/state/whistle');
+  expect(paths.dataDir).toBe('/tmp/data/whistle');
+  expect(resolvePaths({ HOME: '/tmp/person' }).dataDir).toBe('/tmp/person/.local/share/whistle');
+  expect(() => resolvePaths({ HOME: '/tmp/person', XDG_DATA_HOME: 'relative' })).toThrow();
   expect(paths.configFile).toBe('/tmp/config/whistle/config.json');
   expect(paths.unitFile).toBe('/tmp/config/systemd/user/whistle.service');
   expect(paths.launcher).toBe('/tmp/person/.local/bin/whistle');
@@ -41,11 +44,13 @@ test.skipIf(process.platform !== 'linux' || !Bun.which('systemd-analyze'))('gene
 
 test('user unit quotes paths and manages only its own companion process tree', () => {
   const paths = resolvePaths({ HOME: '/tmp/person %u $user' });
-  const unit = serviceUnit(paths, '/tmp/Bun %v $bun', '/tmp/Whistle %u $root');
-  expect(unit).toContain('%%u'); expect(unit).toContain('$$root');
+  const unit = serviceUnit(paths);
+  expect(unit).toContain('%%u'); expect(unit).toContain('$$user');
   expect(unit).toContain('WHISTLE_STATE_DIR=/tmp/person %%u $user');
   expect(unit).toContain('WantedBy=default.target');
   expect(unit).toContain('KillMode=control-group');
+  expect(unit).toContain('ExecStart="/bin/sh" "/tmp/person %%u $$user/.local/bin/whistle" "serve"');
+  expect(unit).not.toContain('src/server.ts');
   expect(unit).not.toContain('sudo'); expect(unit).not.toContain('linger');
   expect(unit).not.toContain('PartOf='); expect(unit).not.toContain('ExecStop=herdr');
   expect(unitQuote('a"b\\c')).toBe('"a\\"b\\\\c"');

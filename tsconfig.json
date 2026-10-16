@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx"
   },
-  "include": ["src/**/*.ts", "web/**/*.ts", "web/**/*.tsx", "tests/**/*.ts", "e2e/**/*.ts", "vite.config.ts", "playwright.config.ts"]
+  "include": ["src/**/*.ts", "web/**/*.ts", "web/**/*.tsx", "tests/**/*.ts", "scripts/**/*.ts", "e2e/**/*.ts", "vite.config.ts", "playwright.config.ts"]
 }

@@ -2,11 +2,12 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 export const testToken = 'whistle-test-token-not-a-production-secret';
-export async function startHost(directory: string, extra: Record<string, string> = {}) {
+export async function startHost(directory: string, extra: Record<string, string | undefined> = {},
+  command = [process.execPath, resolve('src/server.ts')]) {
   const stateDir = join(directory, '.runtime');
   await mkdir(stateDir, { recursive: true });
   await rm(join(stateDir, 'server-url'), { force: true });
-  const child = Bun.spawn([process.execPath, resolve('src/server.ts')], {
+  const child = Bun.spawn(command, {
     cwd: directory,
     env: { ...process.env, WHISTLE_STATE_DIR: stateDir, WHISTLE_CONFIG_DIR: join(directory, 'config'),
       WHISTLE_TOKEN: testToken, PORT: '0', HOST: '127.0.0.1', ...extra },

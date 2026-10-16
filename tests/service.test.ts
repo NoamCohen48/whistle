@@ -27,7 +27,7 @@ test('install/start/restart/stop/uninstall use only systemctl --user and preserv
     await writeFile(join(home, 'bin/herdr'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
     const installed = await cli(home, ['install', '--host', '100.68.36.94', '--port', '8799']);
     expect(installed.stderr).toBe(''); expect(installed.code).toBe(0);
-    expect(installed.stdout).toContain('not started yet');
+    expect(installed.stdout).toContain('no start/restart requested');
     const { paths } = installed;
     const config = JSON.parse(await readFile(paths.configFile, 'utf8'));
     expect(config.host).toBe('100.68.36.94'); expect(config.port).toBe(8799);
@@ -37,7 +37,7 @@ test('install/start/restart/stop/uninstall use only systemctl --user and preserv
     expect(await readFile(join(home, 'systemctl.log'), 'utf8')).toBe('--user show-environment\n--user daemon-reload\n--user enable whistle.service\n');
     const launcher = Bun.spawn([paths.launcher, 'status'], { cwd: home, env: installed.env, stdout: 'ignore', stderr: 'pipe' });
     expect(await launcher.exited).toBe(0);
-    expect((await cli(home, ['install', '--now'])).stdout).toContain('and started it');
+    expect((await cli(home, ['install', '--now'])).stdout).toContain('start requested');
     for (const command of ['start', 'restart', 'stop', 'status']) expect((await cli(home, [command])).code).toBe(0);
     await mkdir(paths.stateDir, { recursive: true }); await writeFile(join(paths.stateDir, 'keep'), 'paired devices');
     expect((await cli(home, ['uninstall'])).code).toBe(0);
