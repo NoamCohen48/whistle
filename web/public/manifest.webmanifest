@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Whistle · Herdr remote",
+  "short_name": "Whistle",
+  "description": "A private remote for your existing Herdr terminals. Online connection required.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#141819",
+  "theme_color": "#141819",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

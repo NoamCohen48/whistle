@@ -4,9 +4,9 @@ import QRCode from 'qrcode';
 import { hostConnection } from './credentials.ts';
 
 export async function showPairing() {
-  const { origin, token, directory } = await hostConnection();
+  const { origin, requestOrigin, token, directory } = await hostConnection();
   const response = await fetch(`${origin}/api/pairing-ticket`, {
-    method: 'POST', headers: { Origin: origin, Authorization: `Bearer ${token}` },
+    method: 'POST', headers: { Origin: requestOrigin, Authorization: `Bearer ${token}` },
     redirect: 'error', signal: AbortSignal.timeout(5000),
   });
   if (!response.ok) throw new Error(await response.text());
@@ -19,7 +19,7 @@ export async function showPairing() {
   console.log('Scan with your phone camera to pair. Valid for 5 minutes, one use only.');
   console.log(`Image: ${image}`);
   console.log(`Expires: ${new Date(pairing.expiresAt).toLocaleTimeString()}. Creating a new QR invalidates the previous one.`);
-  if (/^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(origin)) {
+  if (requestOrigin === origin && /^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(origin)) {
     console.log('Loopback-only host. For phone access, bind explicitly to your existing Tailscale IP.');
   }
 }

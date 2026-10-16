@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { projectRoot, resolvePaths, type Paths } from './config.ts';
+import { loadHostConfig, projectRoot, resolvePaths, type Paths } from './config.ts';
 import { standalone } from './build-info.ts';
 
 function validateToken(token: string) {
@@ -43,14 +43,14 @@ export async function hostConnection(paths = resolvePaths()) {
       throw new Error('Use an HTTP(S) server origin without credentials, path, query or fragment');
     }
     const token = validateToken(process.env.WHISTLE_TOKEN || (await readFile(join(directory, 'access-token'), 'utf8')).trim());
-    return { origin: url.origin, token, directory };
+    return { origin: url.origin, requestOrigin: loadHostConfig(paths).publicOrigin || url.origin, token, directory };
   } catch (cause) { throw new Error('Cannot read Whistle host connection. Start the host or check WHISTLE_URL and its state directory.', { cause }); }
 }
 
 export async function adminRequest(path: string, method = 'GET') {
-  const { origin, token } = await hostConnection();
+  const { origin, requestOrigin, token } = await hostConnection();
   const response = await fetch(origin + path, {
-    method, headers: { Origin: origin, Authorization: `Bearer ${token}` },
+    method, headers: { Origin: requestOrigin, Authorization: `Bearer ${token}` },
     redirect: 'error', signal: AbortSignal.timeout(5000),
   });
   if (!response.ok) throw new Error(await response.text());

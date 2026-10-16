@@ -1,6 +1,7 @@
 // Isolated browser fixture. Never imports the Herdr adapter or opens a real pane.
 import type { ServerWebSocket } from 'bun';
 import type { Snapshot } from '../src/herdr.ts';
+import { assetResponse } from '../src/assets.ts';
 
 const initial: Snapshot = {
   workspaces: [
@@ -18,6 +19,7 @@ let inventory = structuredClone(initial);
 let messages: Record<string, unknown>[] = [];
 let pairings = 0;
 let acknowledge = true;
+let workerRevision = 1;
 const peers = new Set<ServerWebSocket<Peer>>();
 function frame(ws: ServerWebSocket<Peer>) {
   const { width, height, pane } = ws.data;
@@ -35,9 +37,10 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pairings = 0; acknowledge = true;
+      inventory = structuredClone(initial); messages = []; pairings = 0; acknowledge = true; workerRevision = 1;
       return new Response('reset');
     }
+    if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
     if (path === '/__test/messages') return Response.json(messages);
     if (path === '/__test/pairings') return Response.json(pairings);
@@ -65,9 +68,9 @@ const server = Bun.serve<Peer>({
       messages.push({ type: 'connect', pane, control, width, height });
       return server.upgrade(request, { data: { pane, control, width, height } }) ? undefined : new Response('Upgrade required', { status: 400 });
     }
-    const assets: Record<string, string> = { '/': 'dist/index.html', '/app.js': 'dist/app.js', '/app.css': 'dist/app.css' };
-    const file = assets[path];
-    return file ? new Response(Bun.file(file)) : new Response('Not found', { status: 404 });
+    const asset = assetResponse(path, { 'Cache-Control': 'no-store' });
+    if (path === '/sw.js' && asset) return new Response(await asset.text() + `\n// Fixture revision ${workerRevision}\n`, { headers: asset.headers });
+    return asset || new Response('Not found', { status: 404 });
     } catch { return new Response('Invalid fixture request', { status: 400 }); }
   },
   websocket: {

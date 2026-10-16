@@ -7,7 +7,7 @@ import { standalone, versionDescription } from './build-info.ts';
 
 const help = `Whistle — personal Herdr terminal remote
 
-  whistle install [--host IP] [--port PORT] [--herdr-socket PATH] [--now]
+  whistle install [--host IP] [--port PORT] [--herdr-socket PATH] [--public-origin HTTPS_ORIGIN] [--now]
   whistle start | stop | restart | status | uninstall
   whistle serve
   whistle pair
@@ -23,19 +23,19 @@ ${standalone ? 'Standalone build: Bun and web assets are embedded; Herdr remains
 
 export async function main(args = process.argv.slice(2)) {
   const { positionals, values } = parseArgs({ args, allowPositionals: true, options: {
-    host: { type: 'string' }, port: { type: 'string' }, 'herdr-socket': { type: 'string' },
+    host: { type: 'string' }, port: { type: 'string' }, 'herdr-socket': { type: 'string' }, 'public-origin': { type: 'string' },
     now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
   } });
   const command = positionals[0] || 'help';
   if (values.version || command === 'version') { console.log(versionDescription()); return; }
   if (values.help || command === 'help') { console.log(help); return; }
-  if (command !== 'install' && [values.host, values.port, values['herdr-socket'], values.now].some(value => value !== undefined)) {
+  if (command !== 'install' && [values.host, values.port, values['herdr-socket'], values['public-origin'], values.now].some(value => value !== undefined)) {
     throw new Error('Installation flags apply only to whistle install');
   }
   if (positionals.length !== (command === 'revoke' ? 2 : 1)) throw new Error('Unexpected or missing arguments; use whistle --help');
   switch (command) {
     case 'install': {
-      const { paths, config, executable } = await installService({ host: values.host, port: values.port, herdrSocket: values['herdr-socket'], now: values.now });
+      const { paths, config, executable } = await installService({ host: values.host, port: values.port, herdrSocket: values['herdr-socket'], publicOrigin: values['public-origin'], now: values.now });
       console.log(`Installed ${paths.launcher}\nEnabled whistle.service at login${values.now ? '; start requested' : '; no start/restart requested'}.`);
       console.log(`Bind: ${config.host}:${config.port}\nConfig: ${paths.configFile}\nState: ${paths.stateDir}`);
       console.log(standalone ? `Executable: ${executable}\nNo checkout or Bun required. Restart an existing service explicitly to apply this release.` : 'Source installation: keep this checkout and Bun in place.');

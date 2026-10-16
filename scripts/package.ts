@@ -20,7 +20,7 @@ await mkdir(join(projectRoot, '.runtime'), { recursive: true, mode: 0o700 });
 const staging = await mkdtemp(join(projectRoot, '.runtime', 'package-'));
 try {
   const assets: Record<string, string> = {};
-  for (const [path, asset] of Object.entries(assetSpecs)) assets[path] = await readFile(join(projectRoot, 'dist', asset.file), 'utf8');
+  for (const [path, asset] of Object.entries(assetSpecs)) assets[path] = (await readFile(join(projectRoot, 'dist', asset.file))).toString(asset.encoding || 'utf8');
   if (!assets['/'].includes('src="/app.js"') || !assets['/'].includes('href="/app.css"')) throw new Error('Build the Vite frontend before packaging');
   const pkg = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as { version: string };
   const info: EmbeddedBuild = { version: pkg.version, revision: await revision(), target: `${process.platform}-${process.arch}`, assets };
