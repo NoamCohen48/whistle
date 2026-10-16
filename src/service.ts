@@ -2,6 +2,8 @@ import { access, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/p
 import { constants } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadHostConfig, projectRoot, resolvePaths, type Paths } from './config.ts';
+import { standalone } from './build-info.ts';
+import { installExecutable } from './releases.ts';
 
 const marker = '# Managed by Whistle.';
 export function unitQuote(value: string, command = false) {
@@ -11,7 +13,9 @@ export function unitQuote(value: string, command = false) {
   return `"${escaped}"`;
 }
 const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
-export function serviceUnit(paths: Paths, bun = process.execPath, root = projectRoot) {
+// systemd forbids '$' in its executable token, even escaped. Pass the managed
+// launcher as a literal shell argument; its exec replaces the shell in-place.
+export function serviceUnit(paths: Paths) {
   return `${marker}
 [Unit]
 Description=Whistle personal terminal remote
@@ -19,7 +23,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${unitQuote(bun, true)} ${unitQuote(join(root, 'src/server.ts'), true)}
+ExecStart="/bin/sh" ${unitQuote(paths.launcher, true)} "serve"
 Environment=${unitQuote(`WHISTLE_CONFIG_DIR=${paths.configDir}`)}
 Environment=${unitQuote(`WHISTLE_STATE_DIR=${paths.stateDir}`)}
 Restart=on-failure
@@ -67,19 +71,21 @@ export async function installService(options: { host?: string; port?: string; he
   });
   if (config.port === 0) throw new Error('An installed service needs a fixed nonzero port');
   await ownedFile(paths.unitFile); await ownedFile(paths.launcher);
-  for (const asset of ['index.html', 'app.js', 'app.css']) {
+  for (const asset of standalone ? [] : ['index.html', 'app.js', 'app.css']) {
     if (!await Bun.file(join(projectRoot, 'dist', asset)).exists()) throw new Error('Build the frontend first: bun run build');
   }
   await access(config.herdrBinary, constants.X_OK);
   await systemctl(['show-environment']); // Check the user bus before changing files; never print its values.
+  const executable = standalone ? await installExecutable(process.execPath, paths.dataDir) : process.execPath;
   await atomicWrite(paths.configFile, JSON.stringify(config, null, 2) + '\n');
   await atomicWrite(paths.unitFile, serviceUnit(paths));
-  const launcher = `#!/bin/sh\n${marker}\nexec ${shellQuote(process.execPath)} ${shellQuote(join(projectRoot, 'src/cli.ts'))} "$@"\n`;
+  const command = standalone ? [executable] : [executable, join(projectRoot, 'src/cli.ts')];
+  const launcher = `#!/bin/sh\n${marker}\nexec ${command.map(shellQuote).join(' ')} "$@"\n`;
   await atomicWrite(paths.launcher, launcher, 0o700);
   await systemctl(['daemon-reload']);
   await systemctl(['enable', 'whistle.service']);
   if (options.now) await systemctl(['start', 'whistle.service']);
-  return { paths, config };
+  return { paths, config, executable };
 }
 export async function serviceAction(action: 'start' | 'stop' | 'restart' | 'status') {
   requireLinuxUser();

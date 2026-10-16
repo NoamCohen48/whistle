@@ -7,7 +7,8 @@ import { dimensions, parseCommand } from './protocol.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
 
-import { loadHostConfig, projectRoot, resolvePaths } from './config.ts';
+import { loadHostConfig, resolvePaths } from './config.ts';
+import { assetResponse } from './assets.ts';
 import { ensureToken } from './credentials.ts';
 
 const paths = resolvePaths();
@@ -56,12 +57,6 @@ function cleanup(ws: ServerWebSocket<Peer>) {
   peers.delete(ws);
 }
 
-const assets: Record<string, { file: string; type: string }> = {
-  '/': { file: 'dist/index.html', type: 'text/html; charset=utf-8' },
-  '/app.js': { file: 'dist/app.js', type: 'text/javascript; charset=utf-8' },
-  '/app.css': { file: 'dist/app.css', type: 'text/css' },
-  '/style.css': { file: 'dist/style.css', type: 'text/css' },
-};
 const headers = {
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
@@ -161,9 +156,8 @@ const server = Bun.serve<Peer>({
         }
         return new Response('Not found', { status: 404 });
       }
-      const asset = assets[url.pathname];
-      if (!asset || request.method !== 'GET') return new Response('Not found', { status: 404 });
-      return new Response(Bun.file(join(projectRoot, asset.file)), { headers: { ...headers, 'Content-Type': asset.type } });
+      if (request.method !== 'GET') return new Response('Not found', { status: 404 });
+      return assetResponse(url.pathname, headers) || new Response('Not found', { status: 404 });
     } catch (error) {
       return new Response((error as Error).message, { status: 400, headers });
     }

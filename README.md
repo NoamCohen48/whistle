@@ -6,7 +6,7 @@ React + Vite + TypeScript frontend, an isolated xterm.js terminal engine, and a 
 
 Product decisions: [`.docs/product.md`](.docs/product.md). Production direction: [`.docs/architecture.md`](.docs/architecture.md). Frontend boundaries and development: [`.docs/frontend.md`](.docs/frontend.md). Original PoC verification and remaining limitations: [`.docs/poc.md`](.docs/poc.md).
 
-## Run
+## Run from source
 
 Requires Bun and Herdr 0.9.3-compatible terminal-session commands. Start from inside the Herdr session you want to access (or explicitly set `HERDR_SOCKET_PATH`).
 
@@ -40,8 +40,8 @@ The personal host has been cut over to the enabled user daemon; see [deployment 
 Build first, then install the user service without interrupting an existing server:
 
 ```sh
-bun run build
-bun run whistle install --host "$(tailscale ip -4)" --port 8790
+bun run package
+./dist/whistle install --host "$(tailscale ip -4)" --port 8790
 ```
 
 Installation enables startup at login but does **not** start immediately. After intentionally stopping the old Whistle process (not Herdr), run:
@@ -52,9 +52,11 @@ Installation enables startup at login but does **not** start immediately. After 
 ~/.local/bin/whistle status
 ```
 
-The first upgrade from the memory-only PoC needs one new pairing. Subsequent restarts preserve it. `whistle devices` lists paired devices; `whistle revoke <id>` revokes one and releases its live streams. `whistle stop`, `restart` and `uninstall` manage only Whistle. Uninstall preserves configuration and devices. No firewall rules or lingering are changed.
+Durable pairings survive source-to-binary upgrades and subsequent restarts. Only the original memory-only PoC needs one fresh pairing. `whistle devices` lists paired devices; `whistle revoke <id>` revokes one and releases its live streams. `whistle stop`, `restart` and `uninstall` manage only Whistle. Uninstall preserves configuration and devices. No firewall rules or lingering are changed.
 
-This is a **checkout-based installation**, not a standalone binary yet: keep the checkout and Bun in place. See [lifecycle, paths, updates and cutover](.docs/host.md). No service is installed merely by building or testing this project.
+The standalone executable embeds Bun and the React app. Installation copies it into private, content-addressed releases; the service no longer needs this checkout, `node_modules` or `dist/`. Herdr remains external. See [packaging and artifact checks](.docs/packaging.md) and [lifecycle, paths and upgrades](.docs/host.md). Building/testing installs no real service.
+
+To update an existing user daemon: verify the new binary, run `./dist/whistle install`, then `~/.local/bin/whistle restart`. Installation alone does not interrupt it; saved settings and devices remain in place.
 
 ## Use
 
@@ -77,6 +79,7 @@ bun test
 bun run build
 bunx playwright install chromium # once
 bun run test:e2e
+bun run test:package
 ```
 
 The browser suite uses an isolated fake backend, not your Herdr panes. It covers built desktop/Android-emulated Chromium and Vite development with React Strict Mode. Physical-phone IME and lifecycle testing is still needed.
@@ -90,4 +93,4 @@ POC_TEST_PANE='<disposable-pane-id>' bun test
 # Set POC_TEST_URL=http://<tailnet-ip>:8790 when not running on loopback.
 ```
 
-Stop a foreground server with Ctrl+C; stop an installed daemon with `whistle stop`. Configuration defaults to `~/.config/whistle/config.json`; credentials/devices default to `~/.local/state/whistle/`, independent of checkout updates. The original `.runtime/` is retained only for legacy-host pairing fallback. Tokens, QR images, SQLite files, logs, browser artifacts, dependencies and builds are Git-ignored.
+Stop a foreground server with Ctrl+C; stop an installed daemon with `whistle stop`. Configuration defaults to `~/.config/whistle/config.json`; credentials/devices default to `~/.local/state/whistle/`, independent of checkout updates. Source mode retains `.runtime/` only for legacy-host pairing fallback; standalone mode never reads it. Tokens, QR images, SQLite files, logs, browser artifacts, dependencies and builds are Git-ignored.

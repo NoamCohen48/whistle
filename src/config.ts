@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 export const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 type Environment = Record<string, string | undefined>;
-export interface Paths { configDir: string; configFile: string; stateDir: string; unitFile: string; launcher: string }
+export interface Paths { configDir: string; configFile: string; stateDir: string; dataDir: string; unitFile: string; launcher: string }
 export interface HostConfig { host: string; port: number; herdrSocketPath: string; herdrBinary: string }
 const absolute = (value: string, label: string) => {
   if (!isAbsolute(value) || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`${label} must be an absolute path without control characters`);
@@ -16,9 +16,10 @@ export function resolvePaths(env: Environment = process.env): Paths {
   const home = absolute(env.HOME || homedir(), 'HOME');
   const configHome = absolute(env.XDG_CONFIG_HOME || join(home, '.config'), 'XDG_CONFIG_HOME');
   const stateHome = absolute(env.XDG_STATE_HOME || join(home, '.local', 'state'), 'XDG_STATE_HOME');
+  const dataHome = absolute(env.XDG_DATA_HOME || join(home, '.local', 'share'), 'XDG_DATA_HOME');
   const configDir = absolute(env.WHISTLE_CONFIG_DIR || join(configHome, 'whistle'), 'WHISTLE_CONFIG_DIR');
   return {
-    configDir, configFile: join(configDir, 'config.json'),
+    configDir, configFile: join(configDir, 'config.json'), dataDir: join(dataHome, 'whistle'),
     stateDir: absolute(env.WHISTLE_STATE_DIR || join(stateHome, 'whistle'), 'WHISTLE_STATE_DIR'),
     unitFile: join(configHome, 'systemd', 'user', 'whistle.service'),
     launcher: join(home, '.local', 'bin', 'whistle'),

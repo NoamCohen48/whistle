@@ -29,7 +29,7 @@ Stopping, restarting, updating, or uninstalling the Whistle service must not sto
 
 Use a systemd user service, running as the operator rather than root. Start after login and restart on crashes. Do not silently enable user lingering/running after logout. Do not install a service or change system settings until implementing the agreed lifecycle explicitly.
 
-The checkout-based CLI is implemented (installation remains explicit; see [host lifecycle](host.md)):
+The companion CLI and standalone native packaging are implemented (installation remains explicit; see [host lifecycle](host.md) and [packaging](packaging.md)):
 
 ```text
 whistle install
@@ -41,6 +41,7 @@ whistle devices
 whistle revoke DEVICE_ID
 whistle restart
 whistle uninstall
+whistle version
 ```
 
 The service should discover multiple running Herdr sessions rather than depend permanently on the inherited `HERDR_SOCKET_PATH` of the pane that launched it. Session discovery, selection and compatibility checks still need detailed design. Identifiers must be scoped by session; two sessions may contain identical public pane IDs.
@@ -53,7 +54,7 @@ The migration is implemented. See [frontend boundaries and checks](frontend.md).
 
 ## Host direction and remaining proposals
 
-- Bun + TypeScript host with a systemd user-service CLI, XDG config/state paths and graceful stream release is implemented. Packaging is currently checkout-based.
+- Bun + TypeScript host with a systemd user-service CLI, XDG config/state/data paths and graceful stream release is implemented. A standalone executable embeds Bun and the frontend, installs private immutable releases, and preserves durable pairings across source-to-binary upgrades.
 - SQLite is implemented for durable, revocable device pairings with hashed credentials. No Herdr transcripts are duplicated; host settings live in an owner-only config JSON outside the checkout.
 - HTTP for setup/settings and a versioned WebSocket protocol for terminal/control traffic.
 - Shared protocol schemas/types at browser/host boundaries.
@@ -74,9 +75,8 @@ No need for Next.js/SSR, native mobile packaging, cloud relay infrastructure, a 
 
 ## Next architecture questions
 
-- Packaging/install mechanism (a single executable with bundled frontend is the preferred direction, not yet implemented).
-- Standalone executable/embedded assets and managed release updates beyond the current checkout-based install.
+- Broader binary distribution: target matrix, trusted release delivery, release garbage collection and future schema-compatible rollback policy.
 - Multi-session discovery and stable session-scoped identity.
 - Control lease revocation guarantees across the Herdr adapter.
 - Live inventory subscriptions, reconnection and resource bounds.
-- First deployment/login validation and cutover from the old memory-only PoC (one re-pair is required at that first cutover).
+- Physical-phone and actual logout/login startup validation. The first memory-only-to-durable cutover is complete; see [deployment](deployment.md).
