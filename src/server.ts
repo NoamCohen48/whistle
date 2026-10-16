@@ -99,16 +99,16 @@ const server = Bun.serve<Peer>({
         return pairedResponse(secure, name);
       }
       if (url.pathname === '/api/login' && request.method === 'POST') {
-        if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403 });
+        if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
         const ip = server.requestIP(request)?.address || 'unknown';
         const failure = failures.get(ip);
-        if (failure && failure.until > Date.now() && failure.count >= 10) return new Response('Too many attempts; wait one minute', { status: 429 });
+        if (failure && failure.until > Date.now() && failure.count >= 10) return new Response('Too many attempts; wait one minute', { status: 429, headers });
         const body = await request.json();
         const name = deviceName(body?.deviceName, request.headers.get('user-agent') || '');
         if (!equalToken(body?.token)) {
           const count = failure && failure.until > Date.now() ? failure.count + 1 : 1;
           failures.set(ip, { count, until: Date.now() + 60_000 });
-          return new Response('Incorrect access token', { status: 401 });
+          return new Response('Incorrect access token', { status: 401, headers });
         }
         failures.delete(ip);
         return pairedResponse(secure, name);
@@ -142,25 +142,25 @@ const server = Bun.serve<Peer>({
           return Response.json(await snapshot(), { headers });
         }
         if (url.pathname === '/terminal') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403 });
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
           const paneId = url.searchParams.get('pane') || '';
           const mode = url.searchParams.get('mode') === 'control' ? 'control' : 'observe';
           const state = await snapshot();
           const pane = state.panes.find(p => p.pane_id === paneId);
-          if (!pane) return new Response('Pane no longer exists', { status: 404 });
-          if (mode === 'control' && controllers.has(paneId)) return new Response('Already controlled by another Whistle browser', { status: 409 });
+          if (!pane) return new Response('Pane no longer exists', { status: 404, headers });
+          if (mode === 'control' && controllers.has(paneId)) return new Response('Already controlled by another Whistle browser', { status: 409, headers });
           const size = mode === 'control'
             ? dimensions(Number(url.searchParams.get('cols')), Number(url.searchParams.get('rows')))
             : await watchSize(pane);
           const upgraded = server.upgrade(request, { data: {
             deviceId: current.id, paneId, mode, ...size, queue: Promise.resolve(), pending: 0, lastId: 0, closed: false,
           } });
-          return upgraded ? undefined : new Response('WebSocket upgrade required', { status: 400 });
+          return upgraded ? undefined : new Response('WebSocket upgrade required', { status: 400, headers });
         }
-        return new Response('Not found', { status: 404 });
+        return new Response('Not found', { status: 404, headers });
       }
-      if (request.method !== 'GET') return new Response('Not found', { status: 404 });
-      return assetResponse(url.pathname, headers) || new Response('Not found', { status: 404 });
+      if (request.method !== 'GET') return new Response('Not found', { status: 404, headers });
+      return assetResponse(url.pathname, headers) || new Response('Not found', { status: 404, headers });
     } catch (error) {
       return new Response((error as Error).message, { status: 400, headers });
     }
