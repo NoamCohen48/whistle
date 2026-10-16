@@ -50,7 +50,7 @@ The migration is implemented. See [frontend boundaries and checks](frontend.md).
 ## Host direction and remaining proposals
 
 - Retain the existing Bun + TypeScript host while implementing the companion-service lifecycle.
-- SQLite for durable pairing/device records and settings, not duplicated Herdr transcripts.
+- SQLite is implemented for durable, revocable device pairings with hashed credentials. No Herdr transcripts are duplicated; settings persistence is separate.
 - HTTP for setup/settings and a versioned WebSocket protocol for terminal/control traffic.
 - Shared protocol schemas/types at browser/host boundaries.
 - Keep the existing CSS variables and baseline CSS for now. A CSS framework or component library is not selected; that can be decided during the UI/UX pass.
@@ -75,4 +75,4 @@ No need for Next.js/SSR, native mobile packaging, cloud relay infrastructure, a 
 - Multi-session discovery and stable session-scoped identity.
 - Control lease revocation guarantees across the Herdr adapter.
 - Live inventory subscriptions, reconnection and resource bounds.
-- Durable pairing/device revocation design and migration from the PoC.
+- Service packaging and cutover from the old memory-only PoC (one re-pair is required at that first cutover).
