@@ -1,6 +1,33 @@
 # Personal daemon deployment
 
-## Current standalone deployment
+## Current HTTPS/PWA deployment — 2026-10-17
+
+With explicit operator approval, Whistle now uses **https://noam-pc.tailf888b6.ts.net:8443** through tailnet-only Tailscale Serve. The existing HTTPS :443 root still proxies `127.0.0.1:8787`; its configuration was compared before/after and preserved. No Funnel, firewall, DNS, node identity, policy or lingering changes were made. The operator accepted the shared-cookie hostname tradeoff documented in [PWA security notes](pwa.md).
+
+- Build: `Whistle 0.0.1 (033b1c1, linux-x64, standalone)`.
+- SHA-256: `72e48b09cd44b916dc9a0734daef3358d44eb219052011b5726731ffbfc0183f`.
+- Backend: **127.0.0.1:8790 only**, with explicit `publicOrigin` set to the HTTPS :8443 origin. The old HTTP/Tailscale-IP listener is no longer used.
+- Installed immutable executable checksum was verified through `/proc/<main-pid>/exe`. Installation left the previous daemon running until the explicit Whistle-only restart; the new service is enabled/active with zero automatic crash restarts.
+- Private managed-file and consistent SQLite backups were taken before cutover. The PC token, original config fields apart from listener/origin, device identities/creation/expiry, state paths and Herdr socket/binary were preserved. The live database was not replaced/reset. No Herdr or agent lifecycle operations were performed.
+
+### Live HTTPS and QR verification
+
+The clean artifact first passed 42 unit/process checks, six detached-artifact checks, 36 browser checks and 51 real guest HTTPS/PWA scenarios across Debian/nftables, Ubuntu/UFW and Fedora/firewalld. See [the VM harness](../vm_tests/README.md).
+
+Against the actual deployed service, a fresh Android-emulated Chromium browser then verified:
+
+- Normal trusted HTTPS certificate/hostname validation, **without** synthetic CA exceptions or certificate-ignore flags. Every embedded frontend/manifest/icon/worker matched the tested bytes and returned `no-store`.
+- The installed native `whistle pair` CLI generated the private QR PNG. It was decoded in memory, pointed to HTTPS :8443, redeemed automatically once, and immediately lost its fragment from browser history/address state. Reuse was rejected.
+- `Secure; HttpOnly; SameSite=Strict` pairing survived a full reload with the identical cookie/device and no second redemption. Chromium reported no manifest or installability errors; CacheStorage and IndexedDB stayed empty.
+- WSS opened a real terminal **watch-only**. All 14 pane/terminal identities and the watched desktop row count were preserved. No text, keys, control requests, resizes or history-scroll commands were sent; no browser script errors occurred.
+- Only independent preflight/verification devices were revoked. The original Android authorization was retained, and the active authorized-device set returned to its original state. No cookies, QR tickets/URLs, terminal content, screenshots or browser-storage exports were logged or committed.
+- A fresh unused five-minute QR was left at `~/.local/state/whistle/pair.png`; run `~/.local/bin/whistle pair` whenever a new one is needed.
+
+**The phone needs fresh pairing at the HTTPS/DNS origin:** browser cookies do not migrate from the old HTTP/IP address, even though its old authorization remains saved. With Tailscale enabled, scan the PC QR in Chrome, then choose **Install app** from Chrome's menu. Actual camera scanning, physical installation/standalone launch, Android IME, lock/unlock and network handoff remain operator checks; browser emulation does not establish those.
+
+The pre-existing Tailscale client/server version mismatch remains unchanged; this deployment did not update or repair Tailscale.
+
+## Previous standalone deployment — 2026-10-16
 
 The existing user daemon was upgraded from source mode to the verified standalone executable on 2026-10-16 with operator approval. The address, socket, configuration and private state paths below are unchanged.
 
@@ -68,7 +95,7 @@ This proves the deployed browser flow and restart persistence, not physical-came
 
 ## Phone pairing and operation
 
-The first upgrade from the original memory-only process required one new pairing. Existing durable pairings survive the standalone upgrade. For a fresh device, generate a QR with:
+The first upgrade from the original memory-only process required one new pairing. Durable pairings survive binary upgrades, but moving from the old HTTP/IP origin to the current HTTPS/DNS origin requires fresh browser pairing. Generate a QR on the PC with:
 
 ```sh
 ~/.local/bin/whistle pair

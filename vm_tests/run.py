@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import socket
+import ssl
 import struct
 import subprocess
 import sys
@@ -46,13 +47,31 @@ def free_port():
 
 
 class VM:
-    def __init__(self, case, binary, memory, keep):
+    def __init__(self, case, binary, memory, keep, https=False, browser=False):
         self.case, self.binary, self.memory, self.keep = case, binary, memory, keep
+        self.https, self.browser = https, browser
         self.process = self.server = self.login = None
         self.login_pid = None
         self.directory = None
         self.ssh_port = self.http_port = 0
         self.processes = []
+
+    @property
+    def origin(self):
+        return f'{"https" if self.https else "http"}://127.0.0.1:{self.http_port}'
+
+    def tls_context(self):
+        if self.directory is None:
+            raise RuntimeError('Missing guest TLS identity')
+        return ssl.create_default_context(cafile=str(self.directory / 'tls.crt'))
+
+    def connect(self):
+        connection = socket.create_connection(('127.0.0.1', self.http_port), timeout=8)
+        try:
+            return self.tls_context().wrap_socket(connection, server_hostname='127.0.0.1') if self.https else connection
+        except (OSError, RuntimeError):
+            connection.close()
+            raise
 
     def remote(self, user, script, *, check=True, **kwargs):
         result = run(ssh_args(self.directory, self.ssh_port, user) + ['bash -se'], data=script, check=False, **kwargs)
@@ -73,7 +92,8 @@ class VM:
             return
         try:
             result = self.admin('sudo journalctl --no-pager -n 80 _SYSTEMD_USER_UNIT=whistle.service\n'
-                                'sudo systemctl status whistle-vm-herdr --no-pager\n', check=False, timeout=12)
+                                'sudo systemctl status whistle-vm-herdr --no-pager\n'
+                                'sudo journalctl --no-pager -n 30 -u whistle-vm-tls\n', check=False, timeout=12)
             write_private(self.directory / 'guest-diagnostics.log', result.stdout + result.stderr)
         except (RuntimeError, OSError):
             print('Guest diagnostics unavailable; serial/qemu logs retained.', file=sys.stderr)
@@ -123,8 +143,9 @@ class VM:
         self.login = self.login_pid = None
 
     def request(self, path='/', *, method='GET', body=None, cookie=None, token=None, origin=None):
-        connection = http.client.HTTPConnection('127.0.0.1', self.http_port, timeout=3)
-        headers = {'Origin': origin or f'http://127.0.0.1:{self.http_port}', 'Connection': 'close'}
+        connection = (http.client.HTTPSConnection('127.0.0.1', self.http_port, timeout=3, context=self.tls_context())
+                      if self.https else http.client.HTTPConnection('127.0.0.1', self.http_port, timeout=3))
+        headers = {'Origin': origin or self.origin, 'Connection': 'close'}
         if cookie:
             headers['Cookie'] = cookie
         if token:
@@ -153,8 +174,8 @@ class VM:
         raise RuntimeError('Unexpected guest HTTP reachability')
 
     def watch(self, cookie):
-        with socket.create_connection(('127.0.0.1', self.http_port), timeout=8) as sock:
-            origin = f'http://127.0.0.1:{self.http_port}'
+        with self.connect() as sock:
+            origin = self.origin
             request = (f'GET /terminal?pane=vm:p1&mode=observe HTTP/1.1\r\nHost: 127.0.0.1:{self.http_port}\r\n'
                        f'Origin: {origin}\r\nCookie: {cookie}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
                        'Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n')
@@ -186,6 +207,10 @@ class VM:
         runs = RUNTIME / 'runs'
         runs.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.directory = Path(tempfile.mkdtemp(prefix=self.case['id'] + '-', dir=runs))
+        if self.https:
+            run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','2','-subj','/CN=Whistle disposable VM',
+                 '-addext','subjectAltName=IP:127.0.0.1,IP:10.0.2.15,DNS:localhost',
+                 '-keyout',str(self.directory/'tls.key'),'-out',str(self.directory/'tls.crt')])
         run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(self.directory / 'id_ed25519'), '-C', 'whistle-disposable-vm'])
         self.server = seed_server(cloud_seed(self.case, read_text(self.directory / 'id_ed25519.pub'), uuid.uuid4().hex))
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -206,6 +231,10 @@ class VM:
         self.copy(self.binary, 'whistle', 'download-whistle')
         self.start_login()
         self.admin('sudo python3 ~/guest.py provision\n', timeout=180)
+        if self.https:
+            for name in ['tls_proxy.py','tls.crt','tls.key']:
+                self.copy(ROOT/'vm_tests'/name if name.endswith('.py') else self.directory/name, 'vm-admin', name)
+            self.admin('sudo python3 ~/guest.py provision-https\n', timeout=180)
 
     def close(self):
         if self.process and self.process.poll() is None:
@@ -243,27 +272,54 @@ def exercise(vm):
     def session(cookie):
         require(vm.request('/api/devices', cookie=cookie)[0] == 200, 'Paired credential lost')
 
+    install_flags = f'--host 127.0.0.1 --port 8791 --public-origin {vm.origin}' if vm.https else '--host 10.0.2.15 --port 8790'
     vm.user('if command -v bun || command -v node; then exit 1; fi\nchmod 700 ~/download-whistle\n'
             'if sudo ~/download-whistle install >/dev/null 2>&1; then exit 1; fi\n'
             'WHISTLE_HERDR_BIN=/usr/local/libexec/whistle-vm-herdr ~/download-whistle install '
-            '--host 10.0.2.15 --port 8790 --herdr-socket /run/whistle-vm/herdr.sock\n'
+            f'{install_flags} --herdr-socket /run/whistle-vm/herdr.sock\n'
             '~/.local/bin/whistle start\n')
     mark('non-root standalone install/start without Bun or Node; root install rejected')
-    vm.user("python3 - <<'PY'\nimport time, urllib.request\nfor attempt in range(50):\n try:\n  assert urllib.request.urlopen('http://10.0.2.15:8790/', timeout=1).status == 200\n  break\n except OSError:\n  time.sleep(0.2)\nelse:\n raise RuntimeError('Guest-local HTTP startup timeout')\nPY\n")
+    health_url = 'https://10.0.2.15:8790/' if vm.https else 'http://10.0.2.15:8790/'
+    health_context = "ssl.create_default_context(cafile='/etc/whistle-vm-https/cert.pem')" if vm.https else 'None'
+    vm.user(f"python3 - <<'PY'\nimport time, ssl, urllib.request\nfor attempt in range(50):\n try:\n  assert urllib.request.urlopen('{health_url}', context={health_context}, timeout=1).status == 200\n  break\n except OSError:\n  time.sleep(0.2)\nelse:\n raise RuntimeError('Guest-local HTTP startup timeout')\nPY\n")
     vm.wait_http(False)
     mark('firewall blocks host access while guest-local service is healthy')
     vm.admin('sudo python3 ~/guest.py allow\n')
     vm.wait_http()
     mark('guest firewall allow exposes only the localhost-forwarded test service')
+    manifest_status, manifest_headers, manifest_body = vm.request('/manifest.webmanifest')
+    require(manifest_status == 200 and 'application/manifest+json' in manifest_headers.get('content-type',''), 'Manifest missing')
+    manifest = parse_json(manifest_body)
+    require(manifest.get('start_url') == '/' and manifest.get('display') == 'standalone', 'Invalid install manifest')
+    for size in [192,512]:
+        status, image_headers, image = vm.request(f'/icon-{size}.png')
+        require(status == 200 and image_headers.get('content-type') == 'image/png' and image[:8] == b'\x89PNG\r\n\x1a\n' and struct.unpack('!II',image[16:24]) == (size,size), 'Invalid embedded PNG')
+    require(vm.request('/sw.js')[1].get('cache-control') == 'no-store', 'Worker must not be cached')
+    mark('native embedded install manifest, PNG icons and uncached worker')
+    if vm.https:
+        untrusted = http.client.HTTPSConnection('127.0.0.1', vm.http_port, timeout=3, context=ssl.create_default_context())
+        rejected = False
+        try:
+            untrusted.request('GET','/')
+            untrusted.getresponse()
+        except ssl.SSLCertVerificationError:
+            rejected = True
+        finally:
+            untrusted.close()
+        require(rejected, 'Synthetic CA unexpectedly trusted by host')
+        mark('HTTPS certificate verified by test-local CA only; host trust store unchanged')
     require(vm.request('/api/panes')[0] == 401, 'Unauthenticated API accepted')
     require(vm.request('/api/login', method='POST', body={'token': 'wrong'}, origin='https://wrong.invalid')[0] == 403, 'Cross-origin login accepted')
     token = vm.user('cat ~/.local/state/whistle/access-token\n').stdout.strip()
     code, headers, _ = vm.request('/api/login', method='POST', body={'token': token, 'deviceName': 'Disposable VM test'})
     require(code == 200, 'Guest pairing failed')
+    require(('; Secure' in headers['set-cookie']) == vm.https, 'Wrong cookie transport security')
     cookie = headers['set-cookie'].split(';')[0]
     device_id = next(d['id'] for d in parse_json(vm.request('/api/devices', cookie=cookie)[2])['devices'] if d['current'])
     mark('authentication, same-origin enforcement and paired device identity')
-    ticket = parse_json(vm.request('/api/pairing-ticket', method='POST', token=token)[2])['url'].split('#pair=')[1]
+    pairing_url = parse_json(vm.request('/api/pairing-ticket', method='POST', token=token)[2])['url']
+    require(pairing_url.startswith(vm.origin+'/#pair='), 'QR used backend/forged origin')
+    ticket = pairing_url.split('#pair=')[1]
     require(vm.request('/api/redeem-pairing', method='POST', body={'ticket': ticket})[0] == 200, 'QR redemption failed')
     require(vm.request('/api/redeem-pairing', method='POST', body={'ticket': ticket})[0] == 401, 'QR reused')
     mark('single-use QR ticket redemption')
@@ -330,6 +386,9 @@ def exercise(vm):
     session(preserved_cookie)
     vm.user("python3 - <<'PY'\nfrom pathlib import Path\nfor path, mode in [('.local/state/whistle',448),('.local/state/whistle/access-token',384),('.local/state/whistle/devices.sqlite',384),('.config/whistle/config.json',384)]:\n assert (Path.home()/path).stat().st_mode & 511 == mode\nPY\n")
     mark('uninstall preserves config/devices/releases; reinstall restores same cookie and private permissions')
+    if vm.browser:
+        run([shutil.which('bun'), str(ROOT/'vm_tests/browser.ts')], data=json.dumps({'url':vm.origin,'token':token}), timeout=90)
+        mark('Android-emulated real guest HTTPS installability, Secure cookie, WSS watch and offline/no-storage checks')
     return passed
 
 
@@ -340,6 +399,8 @@ def main():
     parser.add_argument('--list', action='store_true')
     parser.add_argument('--binary', type=Path, default=ROOT / 'dist/whistle')
     parser.add_argument('--memory', type=int, default=1024, choices=[768, 1024, 1536, 2048])
+    parser.add_argument('--https', action='store_true', help='TLS fixture with test-local trust, loopback backend and explicit public origin')
+    parser.add_argument('--browser', action='store_true', help='Also verify guest HTTPS from host Playwright Android emulation; requires Bun/Chromium')
     parser.add_argument('--keep', action='store_true', help='Keep stopped guest overlay and private diagnostics (never leaves QEMU running)')
     args = parser.parse_args()
     cases = load_matrix()
@@ -349,6 +410,9 @@ def main():
         return
     require(bool(args.case) != args.all, 'Select --case NAME or --all explicitly')
     require_host()
+    require(not args.browser or args.https, '--browser requires --https')
+    require(not args.https or shutil.which('openssl'), 'HTTPS tests require host openssl; nothing is installed automatically')
+    require(not args.browser or shutil.which('bun'), 'Browser tests require host Bun and installed Playwright Chromium')
     binary = args.binary.resolve(strict=True)
     require('standalone' in run([str(binary), '--version']).stdout, 'Build native artifact first: bun run package')
     os.umask(0o077)
@@ -360,17 +424,17 @@ def main():
             if not args.all and case['id'] != args.case:
                 continue
             available = next(int(line.split()[1]) for line in read_text('/proc/meminfo').splitlines() if line.startswith('MemAvailable:'))
-            require(available > (args.memory + 512) * 1024, 'Insufficient available host RAM; guests are never overcommitted automatically')
+            require(available > (args.memory + (1024 if args.browser else 512)) * 1024, 'Insufficient available host RAM; guests are never overcommitted automatically')
             print('RUN ' + case['id'] + ' (serial guest, no host firewall/service changes)', flush=True)
-            vm = VM(case, binary, args.memory, args.keep)
+            vm = VM(case, binary, args.memory, args.keep, args.https, args.browser)
             success = False
             try:
                 vm.boot()
                 passed = exercise(vm)
-                report = {'case': case, 'binary_sha256': file_hash(binary), 'passed': passed,
+                report = {'case': case, 'transport': 'https' if args.https else 'http', 'browser': args.browser, 'binary_sha256': file_hash(binary), 'passed': passed,
                           'os_release': vm.admin('cat /etc/os-release\n').stdout}
                 reports.append(report)
-                write_private(RUNTIME / (case['id'] + '-report.json'), json.dumps(report, indent=2))
+                write_private(RUNTIME / (case['id'] + ('-https' if args.https else '') + '-report.json'), json.dumps(report, indent=2))
                 success = True
             finally:
                 if not success:

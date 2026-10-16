@@ -38,14 +38,24 @@ Configured public origin controls:
 
 Moving from an IP/HTTP URL to a DNS/HTTPS origin requires **fresh pairing at the new origin**. Browsers do not transfer host-scoped cookies between them. Existing device rows and the PC token are preserved; no old device is automatically revoked. A restart releases active control, and reconnect remains watch-only.
 
-The existing personal machine's Tailscale Serve HTTPS root already proxies another service. It must not be reset or replaced. A separate approved HTTPS port is the intended deployment shape; no live Serve/listener/firewall/DNS/routing changes have been made by this implementation step.
+The existing personal machine's Tailscale Serve HTTPS root proxies another service and was preserved. On 2026-10-17 the operator explicitly selected the simpler shared-hostname deployment: **https://noam-pc.tailf888b6.ts.net:8443** → `http://127.0.0.1:8790`. Only that tailnet-only Serve endpoint and the Whistle listener/origin/release were changed; no Funnel, firewall, DNS, node identity, policy or lingering changes were made.
+
+**Separate ports are reasonable for trusted personal apps, but cookies are not port-isolated** ([RFC 6265 §8.5](https://www.rfc-editor.org/rfc/rfc6265#section-8.5)). Reusing the existing hostname on port 8443 would send Whistle's host-scoped Secure cookie to the existing HTTPS application when that application is visited. HttpOnly/SameSite/Origin checks do not prevent that backend from receiving/replaying it. Only choose this simpler deployment if every HTTPS backend on that hostname is trusted with Whistle's session credential.
+
+A dedicated Tailscale Service hostname avoids this shared-cookie namespace, but [Tailscale Services](https://tailscale.com/docs/features/tailscale-services) requires admin-defined service/host approval and a tag-based host identity. Do not retag the personal PC, alter policy or create service/DNS configuration without separate concrete approval. No dedicated Service or retagging was needed for the approved :8443 deployment.
 
 ## Validation status
 
-- 41 unit/process checks pass; the mutating real-Herdr integration stays skipped.
+- 42 unit/process checks pass; the mutating real-Herdr integration stays skipped.
 - Six detached-native artifact checks pass, including exact bytes for every icon/manifest/worker outside the checkout.
 - 36 browser checks pass across desktop, Android emulation and Vite development (three intentional project-specific skips). Chromium reports no manifest or installability errors for the production fixture.
 - Worker-update tests retain active control without reload, leave CacheStorage/IndexedDB empty, and prove navigation/assets/API requests fail offline.
 - Explicit-origin tests cover invalid configuration, loopback restriction, forwarding-header spoofing, QR origin, Secure cookies/deletion, CSRF rejection, direct-HTTP compatibility and PC CLI administration.
 
-Browser fixture checks use secure-context loopback HTTP, not real TLS. Actual guest HTTPS/WSS, the private Tailscale endpoint and physical Android installation remain separate pending validations. No deployment or physical-phone success is implied by browser emulation.
+The [guest HTTPS/WSS/browser matrix](../vm_tests/README.md) passed **17 scenarios per OS across Debian/nftables, Ubuntu/UFW and Fedora/firewalld (51 results)**, including Android-emulated installability against the actual native app, real reboot/login, Secure cookies, WSS and offline/no-storage behavior. All clients use test-local certificate trust; the browser's synthetic-certificate exception is isolated to its temporary process. All 26 fast harness tests and project Pyright checks pass.
+
+Tested/deployed clean native build: `033b1c1`, SHA-256 `72e48b09cd44b916dc9a0734daef3358d44eb219052011b5726731ffbfc0183f`. All guests shut down. After operator approval, installation preserved the old daemon until an explicit Whistle-only restart; the new native daemon is enabled/active with zero crash restarts.
+
+Live verification used normal trusted HTTPS and a fresh Android-emulated browser, with **no certificate-ignore flags**: the actual CLI-generated QR decoded and redeemed once, its fragment disappeared, its Secure cookie/device survived reload, installability passed, WSS remained watch-only, and persistent cache/storage stayed empty. All 14 original pane/terminal identities, watched desktop rows, PC token and pre-existing authorizations were preserved; only independent test devices were revoked. The existing :443 Serve root was unchanged. A fresh private phone QR is available via `~/.local/bin/whistle pair`.
+
+See [live deployment evidence](deployment.md). Physical Android camera scanning, installation/standalone launch, IME and lifecycle remain operator validations; browser emulation does not establish those.
