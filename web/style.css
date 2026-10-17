@@ -342,7 +342,7 @@ select {
 .menu { margin: 4px -8px 0 }
 .menu button { width: 100%; justify-content: flex-start; gap: 14px; min-height: 52px; padding: 0 12px; border: 0; background: transparent; font-size: 16px }
 .menu .icon { color: var(--muted) }
-.menu li:not(.danger) + .danger { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px }
+.menu li:not(.danger) + .danger, .menu .separated { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px }
 .menu .danger button, .menu .danger .icon { color: var(--alert) }
 .confirm { display: flex; flex-direction: column; gap: 16px; padding-top: 6px }
 .confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }

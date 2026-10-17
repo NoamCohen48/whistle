@@ -12,7 +12,9 @@ export type Action =
   | { type: 'worktree-create'; workspaceId: string; branch: string; base?: string }
   | { type: 'worktree-open'; workspaceId: string; path: string }
   | { type: 'close-pane'; paneId: string }
-  | { type: 'remove-worktree'; workspaceId: string };
+  | { type: 'remove-worktree'; workspaceId: string }
+  | { type: 'rename-pane'; paneId: string; label?: string }
+  | { type: 'rename-workspace'; workspaceId: string; label: string };
 export interface ActionResult { paneId?: string; warning?: string }
 
 const AGENT_START_MS = 30_000;
@@ -77,6 +79,15 @@ export function parseAction(input: unknown, home = homedir()): Action {
     case 'worktree-open': return { type: 'worktree-open', workspaceId: id(body, 'workspaceId'), path: hostPath(field(body, 'path'), home) };
     case 'close-pane': return { type: 'close-pane', paneId: id(body, 'paneId') };
     case 'remove-worktree': return { type: 'remove-worktree', workspaceId: id(body, 'workspaceId') };
+    case 'rename-pane': {
+      const name = label(body);
+      return { type: 'rename-pane', paneId: id(body, 'paneId'), ...(name ? { label: name } : {}) };
+    }
+    case 'rename-workspace': {
+      const name = label(body);
+      if (!name) throw new Error('Name is required');
+      return { type: 'rename-workspace', workspaceId: id(body, 'workspaceId'), label: name };
+    }
     default: throw new Error('Unknown action');
   }
 }
@@ -130,6 +141,13 @@ async function perform(action: Action): Promise<ActionResult> {
     case 'remove-worktree':
       if (!(await workspace(action.workspaceId)).worktree?.is_linked_worktree) throw new Error('Only linked worktrees can be removed');
       await rpc('worktree.remove', { workspace_id: action.workspaceId, force: false }, WORKTREE_MS);
+      return {};
+    case 'rename-pane': // An empty name clears the label, so Herdr falls back to the terminal title.
+      await rpc('pane.rename', { pane_id: action.paneId, label: action.label ?? null });
+      return {};
+    case 'rename-workspace':
+      await workspace(action.workspaceId);
+      await rpc('workspace.rename', { workspace_id: action.workspaceId, label: action.label });
       return {};
   }
 }

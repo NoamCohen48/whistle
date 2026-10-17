@@ -193,44 +193,70 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   </Sheet>;
 }
 
-type Pending = 'close-pane' | 'remove-worktree' | undefined;
-export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone }: {
+type Pending = 'close-pane' | 'remove-worktree' | 'rename-pane' | 'rename-workspace' | undefined;
+export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRename }: {
   open: boolean; pane?: Pane; snapshot?: Snapshot; onClose: () => void;
   onNew: (request: CreateRequest) => void;
   onDone: (action: Action) => Promise<void>;
+  onRename: (action: Action) => Promise<void>;
 }) {
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => { if (open) { setPending(undefined); setError(''); setBusy(false); } }, [open]);
   const workspace = snapshot?.workspaces.find(item => item.workspace_id === pane?.workspace_id);
   const worktree = workspace?.worktree?.is_linked_worktree ? workspace : undefined;
-  const confirm = async () => {
-    if (!pane || busy) return;
+  const run = async (callback: (action: Action) => Promise<void>, action: Action) => {
+    if (busy) return;
     setBusy(true); setError('');
-    try {
-      await onDone(pending === 'remove-worktree' && worktree
-        ? { type: 'remove-worktree', workspaceId: worktree.workspace_id } : { type: 'close-pane', paneId: pane.pane_id });
-    } catch (cause) { setError((cause as Error).message); setBusy(false); }
+    try { await callback(action); } catch (cause) { setError((cause as Error).message); setBusy(false); }
   };
+  const confirm = () => pane && run(onDone, pending === 'remove-worktree' && worktree
+    ? { type: 'remove-worktree', workspaceId: worktree.workspace_id } : { type: 'close-pane', paneId: pane.pane_id });
+  const rename = () => {
+    const value = nameInput.current?.value.trim() || '';
+    if (!pane || !workspace) return;
+    void run(onRename, pending === 'rename-workspace'
+      ? { type: 'rename-workspace', workspaceId: workspace.workspace_id, label: value }
+      : { type: 'rename-pane', paneId: pane.pane_id, label: value || undefined });
+  };
+  const back = () => { setPending(undefined); setError(''); };
   const name = pane ? paneName(pane) : '';
-  return <Sheet id="pane-menu" open={open} title={pending === 'close-pane' ? `Close ${name}?`
-    : pending === 'remove-worktree' ? `Remove ${worktree ? label(worktree) : 'worktree'}?` : name} onClose={() => { if (!busy) onClose(); }}>
+  const renaming = pending === 'rename-pane' || pending === 'rename-workspace';
+  const title = pending === 'close-pane' ? `Close ${name}?`
+    : pending === 'remove-worktree' ? `Remove ${worktree ? label(worktree) : 'worktree'}?`
+      : pending === 'rename-pane' ? 'Rename pane' : pending === 'rename-workspace' ? 'Rename workspace' : name;
+  return <Sheet id="pane-menu" open={open} title={title} onClose={() => { if (!busy) onClose(); }}>
     {!pending ? <ul className="menu">
       <li><button type="button" id="menu-new-agent" onClick={() => onNew({ kind: 'agent', workspaceId: pane?.workspace_id })}>
         <Icon name="agent" />New agent here</button></li>
       <li><button type="button" id="menu-new-terminal" onClick={() => onNew({ kind: 'terminal', workspaceId: pane?.workspace_id })}>
         <Icon name="terminal" />New terminal here</button></li>
+      <li className="separated"><button type="button" id="menu-rename-pane" onClick={() => setPending('rename-pane')}>
+        <Icon name="compose" />Rename pane</button></li>
+      {workspace ? <li><button type="button" id="menu-rename-workspace" onClick={() => setPending('rename-workspace')}>
+        <Icon name="folder" />Rename workspace</button></li> : null}
       <li className="danger"><button type="button" id="menu-close-pane" onClick={() => setPending('close-pane')}>
         <Icon name="close" />Close pane</button></li>
       {worktree ? <li className="danger"><button type="button" id="menu-remove-worktree" onClick={() => setPending('remove-worktree')}>
         <Icon name="trash" />Remove worktree</button></li> : null}
-    </ul> : <div className="confirm">
+    </ul> : renaming ? <form className="sheet-form" onSubmit={event => { event.preventDefault(); rename(); }}>
+      <label className="field">{pending === 'rename-pane' ? <>Name <span className="optional">empty uses the terminal title</span></> : 'Name'}
+        <input id="rename-input" ref={nameInput} key={pending} autoFocus disabled={busy} maxLength={64} autoComplete="off"
+          required={pending === 'rename-workspace'}
+          defaultValue={pending === 'rename-pane' ? pane?.label || '' : workspace ? label(workspace) : ''} /></label>
+      {error ? <p className="sheet-error" role="alert">{error}</p> : null}
+      <div className="confirm-actions">
+        <button type="button" disabled={busy} onClick={back}>Cancel</button>
+        <button type="submit" id="rename-save" className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+      </div>
+    </form> : <div className="confirm">
       <p>{pending === 'close-pane' ? 'Whatever runs in this pane on your PC is ended.'
         : 'Its panes close and the checkout is deleted from disk; the branch is kept. Removal is refused if it has uncommitted or untracked files.'}</p>
       {error ? <p className="sheet-error" role="alert">{error}</p> : null}
       <div className="confirm-actions">
-        <button type="button" disabled={busy} onClick={() => { setPending(undefined); setError(''); }}>Cancel</button>
+        <button type="button" disabled={busy} onClick={back}>Cancel</button>
         <button type="button" id="confirm-destructive" className="danger" disabled={busy} onClick={() => void confirm()}>
           {busy ? 'Working…' : pending === 'close-pane' ? 'Close pane' : 'Remove worktree'}</button>
       </div>

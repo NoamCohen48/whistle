@@ -105,6 +105,8 @@ Paired-cookie only (the PC token is not accepted). `src/actions.ts` reduces each
   - `worktree-create` (`workspaceId`, `branch`, optional `base`; conservative ref names only) / `worktree-open` (`workspaceId`, `path`).
   - `close-pane` (`paneId`) → `pane.close`.
   - `remove-worktree` (`workspaceId`) → `worktree.remove` with `force: false`, refused for anything that is not a linked worktree.
+  - `rename-pane` (`paneId`, optional `label`) → `pane.rename`; an empty label clears it so Herdr shows the terminal title.
+  - `rename-workspace` (`workspaceId`, non-empty `label`) → `workspace.rename`. Herdr itself accepts an empty workspace label, so the host refuses one.
   Every create call passes `focus: false`, so the desktop's focused pane does not change. The response carries the new `paneId`, which the phone opens watch-only.
 - `GET /api/agents`: agent kinds from Herdr's detection manifests whose executable is on the service `PATH` (plus `~/.local/bin`, `~/.bun/bin`); all kinds if none are found.
 - `GET /api/worktrees?workspace=ID`: linked, non-bare, non-prunable worktrees of that repository, with the pane to go to when one is already open.
