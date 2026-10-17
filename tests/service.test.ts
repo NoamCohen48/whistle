@@ -8,7 +8,8 @@ import { startHost, testToken } from './helpers/host.ts';
 async function cli(home: string, args: string[], extra: Record<string, string> = {}) {
   const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, 'xdg-config'), XDG_STATE_HOME: join(home, 'xdg-state'),
     WHISTLE_CONFIG_DIR: join(home, 'config'), WHISTLE_STATE_DIR: join(home, '.runtime'),
-    HERDR_SOCKET_PATH: join(home, 'herdr.sock'), PATH: `${join(home, 'bin')}:${process.env.PATH}`,
+    HERDR_SOCKET_PATH: join(home, 'herdr.sock'), WHISTLE_HERDR_BIN: join(home, 'bin/herdr'),
+    PATH: `${join(home, 'bin')}:${process.env.PATH}`,
     WHISTLE_TEST_SYSTEMCTL_LOG: join(home, 'systemctl.log'), ...extra };
   const child = Bun.spawn([process.execPath, join(projectRoot, 'src/cli.ts'), ...args], { cwd: home, env, stdout: 'pipe', stderr: 'pipe' });
   const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);

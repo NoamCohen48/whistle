@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "build:site": "vite build --config site/vite.config.ts",
+    "dev:site": "vite --config site/vite.config.ts",
+    "test:site": "bun run build:site && playwright test --config site/playwright.config.ts",
     "package": "bun run build && bun run scripts/package.ts",
     "test:package": "bun run package && bun test ./tests/packaging.check.ts",
     "dev": "vite",
