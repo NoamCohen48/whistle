@@ -83,6 +83,10 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     catch (cause) { if (selected) engine?.open(selected); throw cause; }
     setMenuOpen(false); setSelection(undefined); sessionStorage.removeItem('whistle-pane'); void refresh();
   };
+  const rename = async (action: Action) => {
+    await runAction(action);
+    setSnapshot(await loadPanes()); setMenuOpen(false);
+  };
   const pair = async (token: string) => {
     setError('');
     try {
@@ -122,7 +126,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
         <Icon name="plus" />New</button>}
       <CreateSheet request={createRequest} snapshot={snapshot} onClose={() => setCreateRequest(undefined)} onCreated={created} />
       <PaneMenu open={menuOpen} pane={selected} snapshot={snapshot} onClose={() => setMenuOpen(false)}
-        onNew={request => { setMenuOpen(false); setCreateRequest(request); }} onDone={destroy} />
+        onNew={request => { setMenuOpen(false); setCreateRequest(request); }} onDone={destroy} onRename={rename} />
     </div>
   </>;
 }

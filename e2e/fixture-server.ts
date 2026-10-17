@@ -46,6 +46,14 @@ function applyAction(body: Record<string, string>): { paneId?: string; warning?:
     case 'remove-worktree':
       inventory.workspaces = inventory.workspaces.filter(item => item.workspace_id !== body.workspaceId);
       inventory.panes = inventory.panes.filter(pane => pane.workspace_id !== body.workspaceId); return {};
+    case 'rename-pane': {
+      const pane = inventory.panes.find(item => item.pane_id === body.paneId);
+      if (pane) pane.label = body.label || undefined; return {};
+    }
+    case 'rename-workspace': {
+      const workspace = inventory.workspaces.find(item => item.workspace_id === body.workspaceId);
+      if (workspace) workspace.label = body.label; return {};
+    }
     default: throw new Error('Unknown action');
   }
 }

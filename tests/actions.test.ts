@@ -21,6 +21,11 @@ test('actions accept only fixed, validated fields', () => {
   expect(() => parseAction({ type: 'worktree-create', workspaceId: 'w1', branch: '--upload-pack=x' })).toThrow('Invalid branch');
   expect(parseAction({ type: 'remove-worktree', workspaceId: 'w2', force: true })).toEqual({ type: 'remove-worktree', workspaceId: 'w2' });
   expect(() => parseAction({ type: 'close-pane', paneId: 'w1 p1' })).toThrow('Invalid paneId');
+  expect(parseAction({ type: 'rename-pane', paneId: 'w1:p1', label: ' Reviewer ' })).toEqual({ type: 'rename-pane', paneId: 'w1:p1', label: 'Reviewer' });
+  expect(parseAction({ type: 'rename-pane', paneId: 'w1:p1', label: '' })).toEqual({ type: 'rename-pane', paneId: 'w1:p1' });
+  expect(() => parseAction({ type: 'rename-workspace', workspaceId: 'w1', label: ' ' })).toThrow('Invalid label');
+  expect(() => parseAction({ type: 'rename-workspace', workspaceId: 'w1' })).toThrow('Name is required');
+  expect(() => parseAction({ type: 'rename-pane', paneId: 'w1:p1', label: 'x'.repeat(65) })).toThrow('too long');
   expect(() => parseAction({ type: 'shell', command: 'id' })).toThrow('Unknown action');
   expect(() => parseAction([])).toThrow('Invalid action');
 });
@@ -53,6 +58,7 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     ] },
     'server.agent_manifests': { manifests: [{ agent: 'claude' }, { agent: 'pi' }, { agent: 'claude' }] },
     'pane.close': { type: 'ok' }, 'worktree.remove': { type: 'worktree_removed' },
+    'pane.rename': { type: 'ok' }, 'workspace.rename': { type: 'workspace_renamed' },
   };
   const failures: { code: string; message: string }[] = [];
   const rpcServer = createServer(socket => {
@@ -94,6 +100,9 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     expect(dirty.status).toBe(400);
     expect(await dirty.text()).toBe('This worktree has uncommitted or untracked files. Commit or clean them on your PC first.');
     expect(await ok({ type: 'remove-worktree', workspaceId: 'w2', force: true })).toEqual({});
+    expect(await ok({ type: 'rename-pane', paneId: 'w1:p1', label: 'Reviewer' })).toEqual({});
+    expect(await ok({ type: 'rename-pane', paneId: 'w1:p1' })).toEqual({});
+    expect(await ok({ type: 'rename-workspace', workspaceId: 'w2', label: 'Docs' })).toEqual({});
     const refused = await action({ type: 'remove-worktree', workspaceId: 'w1' }, { Cookie: cookie });
     expect(refused.status).toBe(400);
     expect(await refused.text()).toContain('Only linked worktrees');
@@ -107,6 +116,9 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
       { method: 'pane.close', params: { pane_id: 'w1:p1' } },
       { method: 'worktree.remove', params: { workspace_id: 'w2', force: false } },
       { method: 'worktree.remove', params: { workspace_id: 'w2', force: false } },
+      { method: 'pane.rename', params: { pane_id: 'w1:p1', label: 'Reviewer' } },
+      { method: 'pane.rename', params: { pane_id: 'w1:p1', label: null } },
+      { method: 'workspace.rename', params: { workspace_id: 'w2', label: 'Docs' } },
     ]);
 
     const kinds = await (await host.request('/api/agents', { headers: { Cookie: cookie } })).json();

@@ -375,3 +375,33 @@ test('new workspaces can start from the folder beside open projects', async ({ p
   await expect(page.locator('#connection')).toHaveText('Watching');
   expect(await actions(page)).toEqual([{ action: 'workspace', cwd: '/home/dev/Work/site' }]);
 });
+
+test('panes and workspaces can be renamed without leaving watch mode', async ({ page }) => {
+  await open(page);
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-rename-pane').click();
+  await expect(page.locator('#rename-input')).toHaveValue('First agent');
+  await expect(page.locator('#rename-input')).toBeFocused();
+  await page.locator('#rename-input').fill('Reviewer');
+  await page.locator('#rename-save').click();
+  await expect(page.locator('#pane-menu')).toBeHidden();
+  await expect(page.locator('#heading')).toHaveText('Reviewer');
+  await expect(page.locator('#agent-switcher [data-pane="w1:p1"] .chip-name')).toHaveText('Reviewer');
+
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-rename-workspace').click();
+  await expect(page.locator('#rename-input')).toHaveValue('tap');
+  await page.locator('#rename-input').fill('');
+  await page.locator('#rename-save').click();
+  await expect(page.locator('#pane-menu')).toBeVisible(); // An empty workspace name is not submitted.
+  await page.locator('#rename-input').fill('Tap app');
+  await page.locator('#rename-save').click();
+  await expect(page.locator('#heading + small')).toContainText('Tap app');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect(await actions(page)).toEqual([
+    { action: 'rename-pane', paneId: 'w1:p1', label: 'Reviewer' },
+    { action: 'rename-workspace', workspaceId: 'w1', label: 'Tap app' },
+  ]);
+  // Renaming reconnects nothing: the one watch stream is still the only connection.
+  expect((await messages(page)).filter(message => message.type === 'connect')).toHaveLength(1);
+});
