@@ -25,6 +25,7 @@ let pushSubscribed = false;
 let failPushTest = false;
 const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString('base64url');
 let created = 0;
+let uploads = 0;
 const peers = new Set<ServerWebSocket<Peer>>();
 // Mirrors src/actions.ts results: new panes are reported back by id and open watch-only.
 function addPane(workspace_id: string, extra: Partial<Snapshot['panes'][number]> = {}) {
@@ -76,7 +77,7 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0;
+      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
@@ -109,7 +110,7 @@ const server = Bun.serve<Peer>({
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
     }
     if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
-      || path === '/api/push' || path === '/api/push/test') {
+      || path === '/api/push' || path === '/api/push/test' || path === '/api/uploads') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
@@ -126,6 +127,14 @@ const server = Bun.serve<Peer>({
         if (request.method === 'DELETE') pushSubscribed = false;
         if (path === '/api/push/test' && failPushTest) return new Response('Could not reach the push service: Push service answered 500', { status: 502 });
         return new Response('ok');
+      }
+      if (path === '/api/uploads') {
+        if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
+        const type = request.headers.get('content-type') || '';
+        const bytes = new Uint8Array(await request.arrayBuffer());
+        messages.push({ type: 'upload', contentType: type, size: bytes.length, png: bytes[0] === 0x89, jpeg: bytes[0] === 0xff });
+        if (!/^image\/(png|jpeg)$/.test(type)) return new Response('Only PNG, JPEG, WebP and GIF pictures can be attached.', { status: 415 });
+        return Response.json({ path: `/home/dev/.local/state/whistle/uploads/20261017-143210-${(++uploads).toString(16).padStart(8, '0')}.${type === 'image/png' ? 'png' : 'jpg'}` });
       }
       if (path === '/api/actions') {
         if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });

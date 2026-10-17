@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type Message = { type: string; pane?: string; control?: boolean; height?: number; rows?: number; id?: number; key?: string; text?: string };
+type Message = { type: string; pane?: string; control?: boolean; height?: number; rows?: number; id?: number; key?: string; text?: string;
+  contentType?: string; jpeg?: boolean; size?: number };
 const fixtureUrl = (path: string) => `http://127.0.0.1:8792${path}`;
 async function messages(page: Page): Promise<Message[]> { return (await page.request.get(fixtureUrl('/__test/messages'))).json(); }
 async function pair(page: Page) {
@@ -466,4 +467,51 @@ test('an alert opens its pane watch-only, from a closed app or an open one', asy
   await expect(page.locator('#connection')).toHaveText('Watching');
   expect((await messages(page)).filter(message => message.type === 'connect').map(({ pane, control }) => ({ pane, control })))
     .toEqual([{ pane: 'w2:p1', control: false }, { pane: 'w1:p1', control: false }]);
+});
+
+test('pictures upload into the draft as paths and are only sent with it', async ({ page }) => {
+  const upload = (message: Message) => message.type === 'upload';
+  await control(page);
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('what is wrong here?');
+
+  // A large camera photo is shrunk and re-encoded as JPEG on the phone before it is sent.
+  const photo = Buffer.from(await page.evaluate(() => {
+    const canvas = Object.assign(document.createElement('canvas'), { width: 4000, height: 3000 });
+    const context = canvas.getContext('2d')!;
+    for (let i = 0; i < 400; i++) { context.fillStyle = `hsl(${i * 37} 70% 50%)`; context.fillRect((i * 97) % 4000, (i * 53) % 3000, 300, 200); }
+    return canvas.toDataURL('image/jpeg', 1).split(',')[1];
+  }), 'base64');
+  await page.locator('#picture-input').setInputFiles({ name: 'IMG_2041.jpg', mimeType: 'image/jpeg', buffer: photo });
+  await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000001.jpg ');
+  await expect(page.locator('#attachments li')).toHaveCount(1);
+  await expect(page.locator('#attachments img')).toHaveAttribute('src', /^data:image\/jpeg/);
+  const [sent] = (await messages(page)).filter(upload);
+  expect(sent).toMatchObject({ contentType: 'image/jpeg', jpeg: true });
+  expect(sent.size).toBeLessThan(photo.length);
+
+  // A pasted screenshot stays PNG. Attaching never types anything into the terminal.
+  await page.locator('#draft').evaluate(async (textarea: HTMLTextAreaElement) => {
+    const canvas = Object.assign(document.createElement('canvas'), { width: 300, height: 200 });
+    canvas.getContext('2d')!.fillRect(10, 10, 100, 50);
+    const blob = await new Promise<Blob>(resolve => canvas.toBlob(value => resolve(value!), 'image/png'));
+    const data = new DataTransfer();
+    data.items.add(new File([blob], 'screenshot.png', { type: 'image/png' }));
+    textarea.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator('#attachments li')).toHaveCount(2);
+  expect((await messages(page)).filter(upload).map(message => message.contentType)).toEqual(['image/jpeg', 'image/png']);
+  expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Remove picture 1' }).click();
+  await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png ');
+  await expect(page.locator('#attachments li')).toHaveCount(1);
+  await page.locator('#submit').click();
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(message => message.text))
+    .toEqual(['\x1b[200~what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png \x1b[201~\r']);
+
+  // Files that are not readable pictures are refused on the phone with a reason.
+  await page.locator('#picture-input').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') });
+  await expect(page.locator('#attach-error')).toHaveText('This file is not a picture Whistle can read.');
+  expect((await messages(page)).filter(upload)).toHaveLength(2);
 });

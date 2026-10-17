@@ -6,6 +6,7 @@ import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts
 import { agentKinds, parseAction, runAction, worktrees } from './actions.ts';
 import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSubscription, webPushSender } from './push.ts';
 import { dimensions, parseCommand } from './protocol.ts';
+import { MAX_UPLOAD_BYTES, UploadError, saveUpload, sweepUploads } from './uploads.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
 
@@ -22,6 +23,7 @@ const pairingTickets = new PairingTickets();
 const pushStore = new PushStore(join(paths.stateDir, 'push.sqlite'));
 const vapid = new VapidKeys(join(paths.stateDir, 'push-vapid.json'), config.publicOrigin || 'mailto:whistle@localhost.invalid');
 const sendPush = webPushSender(pushStore, vapid);
+const uploadDir = join(paths.stateDir, 'uploads');
 const failures = new Map<string, { count: number; until: number }>();
 const controllers = new Map<string, ServerWebSocket<Peer>>();
 const peers = new Set<ServerWebSocket<Peer>>();
@@ -78,10 +80,16 @@ function pairedResponse(secure: boolean, name: string) {
 const server = Bun.serve<Peer>({
   hostname: config.host,
   port: config.port,
-  maxRequestBodySize: 4096,
+  maxRequestBodySize: MAX_UPLOAD_BYTES,
   async fetch(request, server) {
     try {
       const url = new URL(request.url);
+      // Pictures are the only large bodies; every other route keeps the small limit, and a
+      // body must declare its length so it can be refused before it is read.
+      const bodyLimit = url.pathname === '/api/uploads' ? MAX_UPLOAD_BYTES : 4096;
+      if (request.headers.has('transfer-encoding') || Number(request.headers.get('content-length') || 0) > bodyLimit) {
+        return new Response('Request too large', { status: 413, headers });
+      }
       // Explicit operator configuration, never client-supplied Forwarded headers.
       const publicOrigin = config.publicOrigin || url.origin;
       const secure = publicOrigin.startsWith('https:');
@@ -178,6 +186,16 @@ const server = Bun.serve<Peer>({
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
           return Response.json(await runAction(parseAction(await request.json())), { headers });
         }
+        if (url.pathname === '/api/uploads' && request.method === 'POST') {
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
+          try {
+            const path = await saveUpload(uploadDir, request.headers.get('content-type') || '', Buffer.from(await request.arrayBuffer()));
+            return Response.json({ path }, { headers });
+          } catch (error) {
+            if (error instanceof UploadError) return new Response(error.message, { status: error.status, headers });
+            throw error;
+          }
+        }
         if (url.pathname === '/terminal') {
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
           const paneId = url.searchParams.get('pane') || '';
@@ -272,6 +290,7 @@ const sweeper = setInterval(() => {
     cleanup(peer); peer.close(1008, 'Device expired or revoked');
   }
   for (const [ip, failure] of failures) if (failure.until < Date.now()) failures.delete(ip);
+  void sweepUploads(uploadDir);
 }, 60_000);
 sweeper.unref();
 // Polls only while at least one device has alerts on.

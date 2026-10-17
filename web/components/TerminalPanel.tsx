@@ -3,6 +3,7 @@ import type { Pane } from '../../src/herdr.ts';
 import { modifierOrder, namedKeys } from '../../src/keys.ts';
 import { TerminalSession, type SessionState } from '../terminal/session.ts';
 import { Icon } from './Icon.tsx';
+import { attachPicture, attachedPaths, previewFor } from '../attach.ts';
 
 const keyGroups = [
   ['Editing and navigation', namedKeys],
@@ -30,6 +31,10 @@ const CONTROL_END = [12, 70, 12];
 function vibrate(pattern: number | number[]) {
   try { navigator.vibrate?.(pattern); } catch { /* Blocked by the browser or no user activation yet. */ }
 }
+
+// Paths go at the end of the draft so the text written so far stays as it was.
+const withPath = (draft: string, path: string) => `${draft.trimEnd()}${draft.trim() ? ' ' : ''}${path} `;
+const withoutPath = (draft: string, path: string) => draft.split(path).join('').replace(/[ \t]{2,}/g, ' ').replace(/^ /, '');
 
 function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
   const customKey = useRef<HTMLInputElement>(null);
@@ -86,6 +91,9 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const [keypadMax, setKeypadMax] = useState<number>();
   const [compose, setCompose] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [attachError, setAttachError] = useState('');
   useEffect(() => {
     const session = new TerminalSession(viewport.current!, host.current!, onState);
     onEngine(session);
@@ -99,8 +107,28 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
     else engine?.close();
   });
   useEffect(() => {
-    setCompose(false); setKeysOpen(false); syncPane();
+    setCompose(false); setKeysOpen(false); setAttachError(''); syncPane();
   }, [engine, paneId, terminalId]);
+  // An upload can finish after the person switched panes or kept typing: it lands in the
+  // newest draft of the pane it was attached for, or nowhere.
+  const latest = useRef({ paneId, draft });
+  useLayoutEffect(() => { latest.current = { paneId, draft }; });
+  const attach = async (files: File[]) => {
+    const pictures = files.filter(file => file.type.startsWith('image/'));
+    if (!pictures.length) return;
+    const forPane = paneId;
+    setAttaching(true); setAttachError('');
+    try {
+      for (const file of pictures) {
+        const path = await attachPicture(file);
+        if (latest.current.paneId !== forPane) return;
+        onDraft(withPath(latest.current.draft, path));
+      }
+    } catch (error) {
+      if (latest.current.paneId === forPane) setAttachError((error as Error).message);
+    } finally { setAttaching(false); }
+  };
+  const attached = attachedPaths(draft);
   useEffect(() => {
     engine?.resize();
     if (compose) editor.current?.focus();
@@ -147,9 +175,27 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
       </div>
       <div id="compose" hidden={!compose}>
         <div className="compose-head"><label htmlFor="draft">Draft</label>
+          <button type="button" id="attach" className="quiet" disabled={attaching} aria-busy={attaching}
+            onClick={() => picker.current?.click()}><Icon name="image" size={18} />{attaching ? 'Attaching…' : 'Picture'}</button>
+          <input type="file" id="picture-input" ref={picker} accept="image/*" multiple hidden onChange={event => {
+            void attach([...event.target.files || []]); event.target.value = '';
+          }} />
           <button type="button" id="clear-draft" className="quiet" disabled={!draft} onClick={() => { onDraft(''); editor.current?.focus(); }}>Clear</button></div>
         <textarea id="draft" ref={editor} rows={3} spellCheck={false} autoCapitalize="off" value={draft}
-          placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)} />
+          placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
+          onPaste={event => {
+            const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+            if (files.length) { event.preventDefault(); void attach(files); }
+          }} />
+        {attachError ? <p id="attach-error" role="alert">{attachError}</p> : null}
+        {attached.length ? <ul id="attachments" aria-label="Attached pictures">
+          {attached.map((path, index) => <li key={path}>
+            {previewFor(path) ? <img src={previewFor(path)} alt="" width={40} height={40} /> : <span className="no-preview"><Icon name="image" size={18} /></span>}
+            <span>Picture {index + 1}</span>
+            <button type="button" className="quiet" aria-label={`Remove picture ${index + 1}`}
+              onClick={() => onDraft(withoutPath(draft, path))}><Icon name="close" size={16} /></button>
+          </li>)}
+        </ul> : null}
         <div className="compose-actions">
           <button type="button" id="paste" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, false)}>Paste</button>
           <button type="button" id="submit" className="primary" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, true)}>Paste + Enter</button>
