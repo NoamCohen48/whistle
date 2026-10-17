@@ -706,3 +706,23 @@ test('expired drafts are removed and clearing a restored draft removes its key',
   await page.locator('#clear-draft').click();
   expect(await page.evaluate(() => localStorage.getItem('whistle-draft:w2:p1'))).toBeNull();
 });
+
+
+test('pane previews render, truncate, update and poll only in the list', async ({ page }) => {
+  let reads = 0;
+  let line = 'Reading the fixture ' + 'x'.repeat(150);
+  await page.route('**/api/previews', route => { reads++; return route.fulfill({ json: { 'w1:p1': line } }); });
+  await pair(page);
+  await expect(page.locator('#pane-list .pane-preview').first()).toHaveText(line.slice(0, 120));
+  await openFromList();
+  const previous = reads;
+  await page.waitForTimeout(10500);
+  expect(reads).toBe(previous);
+  line = 'Finished fixture checks';
+  await page.locator('#back').click();
+  await expect(page.locator('#pane-list .pane-preview').first()).toHaveText(line);
+  async function openFromList() {
+    await page.locator('#agent-switcher [data-pane="w1:p1"]').click();
+    await expect(page.locator('#connection')).toHaveText('Watching');
+  }
+});

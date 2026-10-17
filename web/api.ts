@@ -47,6 +47,9 @@ export async function runAction(action: Action): Promise<ActionResult> {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action),
   }));
 }
+export async function loadPreviews(signal?: AbortSignal): Promise<Record<string, string>> {
+  return json(await fetch('/api/previews', { signal, cache: 'no-store' }));
+}
 export async function loadAgentKinds(): Promise<string[]> {
   return (await json<{ kinds: string[] }>(await fetch('/api/agents', { cache: 'no-store' }))).kinds;
 }

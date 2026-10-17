@@ -148,10 +148,11 @@ const server = Bun.serve<Peer>({
       } else if (body.token !== 'test-token') return new Response('Incorrect access token', { status: 401 });
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
     }
-    if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
+    if (path === '/api/previews' || path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
       || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/uploads'
       || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/folders') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
+      if (path === '/api/previews') return Response.json(Object.fromEntries(inventory.panes.map(pane => [pane.pane_id, `${pane.label || pane.pane_id}: checking the fixture`])), { headers: { 'Cache-Control': 'no-store' } });
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
       if (path === '/api/worktrees') return Response.json({ worktrees: [
