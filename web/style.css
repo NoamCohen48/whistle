@@ -337,6 +337,21 @@ select {
 .folder-chips { margin-top: -8px }
 .folder-chips button { gap: 7px; max-width: 100%; padding: 0 12px; font-size: 13px; color: var(--muted) }
 .folder-chips .icon { color: var(--faint) }
+.folder-browser { margin-top: -6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); overflow: hidden }
+.folder-browser .sheet-status { margin: 0; padding: 14px }
+.crumbs { display: flex; gap: 2px; padding: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none }
+.crumbs button { flex: none; min-height: 36px; padding: 0 9px; border: 0; background: transparent; font: 13px var(--mono); color: var(--muted) }
+.crumbs button + button::before { content: '/'; margin-right: 9px; color: var(--faint) }
+.crumbs button[aria-current] { color: var(--text); font-weight: 650 }
+.folder-list { list-style: none; margin: 0; padding: 4px; max-height: min(38dvh, 320px); overflow-y: auto; overscroll-behavior: contain }
+.folder-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; min-height: 46px;
+  padding: 0 10px; text-align: left; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 15px;
+}
+.folder-row > .icon:first-child { color: var(--faint) }
+.folder-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.folder-row small { padding: 1px 6px; border: 1px solid var(--line-strong); border-radius: 4px; font: 11px var(--mono); color: var(--muted) }
+.folder-row > .icon:last-child { grid-column: 4; color: var(--faint) }
 .toggle { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; gap: 3px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg) }
 .toggle button { min-height: 38px; border: 0; background: transparent; color: var(--muted); font-size: 14px }
 .toggle button[aria-pressed=true] { background: var(--surface-2); color: var(--text); font-weight: 600 }
