@@ -405,3 +405,28 @@ test('panes and workspaces can be renamed without leaving watch mode', async ({ 
   // Renaming reconnects nothing: the one watch stream is still the only connection.
   expect((await messages(page)).filter(message => message.type === 'connect')).toHaveLength(1);
 });
+
+test('a long pane list can be searched and cleared', async ({ page, request }) => {
+  await pair(page);
+  await expect(page.locator('#pane-search')).toHaveCount(0);
+  await request.post(fixtureUrl('/__test/add-panes'));
+  await page.locator('#refresh').click();
+  await page.locator('#pane-search').fill('claude runn');
+  await expect(page.locator('#search-results .pane strong')).toHaveText(['Test runner']);
+  await expect(page.locator('#pane-list')).toBeHidden();
+  await page.locator('#pane-search').fill('explorer');
+  await expect(page.locator('#search-results .pane strong')).toHaveText(['Second agent']);
+  await page.locator('#pane-search').fill('nothing like this');
+  await expect(page.locator('#search-results')).toContainText('No matches');
+  await page.locator('#pane-search').press('Escape');
+  await expect(page.locator('#pane-search')).toHaveValue('');
+  await expect(page.locator('#pane-list .pane')).toHaveCount(6);
+  await page.locator('#pane-search').fill('runner');
+  await page.locator('#search-results .pane').click();
+  await expect(page.locator('#heading')).toHaveText('Test runner');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#back').click();
+  await expect(page.locator('#pane-search')).toHaveValue('runner');
+  await page.locator('#clear-search').click();
+  await expect(page.locator('#search-results')).toHaveCount(0);
+});

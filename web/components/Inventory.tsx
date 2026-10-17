@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Pane, Snapshot, Workspace } from '../../src/herdr.ts';
 import { groupWorkspaces } from '../../src/workspaces.ts';
 import { Icon } from './Icon.tsx';
@@ -57,7 +57,8 @@ function PaneRow({ pane, detail, onSelect }: { pane: Pane; detail?: string; onSe
     <span className="pane-copy">
       <strong>{paneName(pane)}</strong>
       <small><span className="state" data-tone={statusTone(pane)}>{statusText(pane)}</span>
-        <span>{detail ?? (pane.agent || 'terminal')}</span>{pane.cwd && detail === undefined ? <span className="cwd">{pane.cwd}</span> : null}</small>
+        <span>{pane.agent || 'terminal'}</span>
+        {detail !== undefined ? <span>{detail}</span> : pane.cwd ? <span className="cwd">{pane.cwd}</span> : null}</small>
     </span>
     <code className="pane-id">{pane.pane_id}</code>
     <Icon name="forward" size={18} />
@@ -83,24 +84,52 @@ function WorkspaceGroup({ workspace, snapshot, nested = false, children, onSelec
   </section>;
 }
 
+// Search appears once the list is long enough to need it.
+export const SEARCH_THRESHOLD = 6;
+function matches(snapshot: Snapshot, pane: Pane, words: string[]) {
+  const text = [paneName(pane), workspaceName(snapshot, pane), pane.agent, statusText(pane), pane.cwd, pane.pane_id]
+    .filter(Boolean).join(' ').toLowerCase();
+  return words.every(word => text.includes(word));
+}
+
 export function Inventory({ snapshot, hidden, banner, onSelect }: {
   snapshot?: Snapshot; hidden: boolean; banner?: ReactNode; onSelect: (pane: Pane) => void;
 }) {
   const count = snapshot?.panes.length || 0;
+  const [query, setQuery] = useState('');
+  const words = useDeferredValue(query).toLowerCase().split(/\s+/).filter(Boolean);
+  const searchable = count >= SEARCH_THRESHOLD;
+  const results = snapshot && searchable && words.length ? snapshot.panes.filter(pane => matches(snapshot, pane, words)) : undefined;
   // Blocked agents are waiting on an answer, so they come before finished ones.
   const waiting = (snapshot?.panes.filter(needsYou) || [])
     .sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
   return <main id="panes" hidden={hidden} aria-busy={!snapshot}>
     {banner}
     <div className="intro"><h1>Your herd</h1></div>
-    {snapshot && waiting.length ? <section id="needs-you" className="workspace-group" aria-labelledby="needs-you-heading">
+    {searchable ? <div className="search" role="search">
+      <Icon name="search" size={18} />
+      <input id="pane-search" type="search" value={query} placeholder="Search panes" aria-label="Search panes"
+        autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="search"
+        onChange={event => setQuery(event.target.value)}
+        onKeyDown={event => { if (event.key === 'Escape' && query) { event.preventDefault(); setQuery(''); } }} />
+      {query ? <button type="button" id="clear-search" className="icon-button" aria-label="Clear search"
+        onClick={() => setQuery('')}><Icon name="close" size={18} /></button> : null}
+    </div> : null}
+    {results ? <section id="search-results" className="workspace-group" aria-live="polite">
+      <h2 className="workspace"><span className="workspace-name">
+        {results.length ? `${results.length} ${results.length === 1 ? 'match' : 'matches'}` : 'No matches'}</span></h2>
+      {results.length ? <ul className="pane-list">{results.map(pane => <li key={pane.pane_id}>
+        <PaneRow pane={pane} detail={workspaceName(snapshot!, pane)} onSelect={onSelect} />
+      </li>)}</ul> : null}
+    </section> : null}
+    {!results && snapshot && waiting.length ? <section id="needs-you" className="workspace-group" aria-labelledby="needs-you-heading">
       <h2 className="workspace" id="needs-you-heading"><span className="workspace-name">Needs you</span>
         <span className="workspace-count">{waiting.length}</span></h2>
       <ul className="pane-list">{waiting.map(pane => <li key={pane.pane_id}>
         <PaneRow pane={pane} detail={workspaceName(snapshot, pane)} onSelect={onSelect} />
       </li>)}</ul>
     </section> : null}
-    <div id="pane-list">{!snapshot ? <div className="skeleton" role="status" aria-label="Loading panes…">
+    <div id="pane-list" hidden={Boolean(results)}>{!snapshot ? <div className="skeleton" role="status" aria-label="Loading panes…">
       {[0, 1, 2].map(row => <span key={row} />)}</div>
       : count ? groupWorkspaces(snapshot.workspaces).map(group =>
         <WorkspaceGroup key={group.workspace.workspace_id} workspace={group.workspace} snapshot={snapshot} onSelect={onSelect}>

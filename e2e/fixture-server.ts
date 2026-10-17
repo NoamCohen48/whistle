@@ -87,6 +87,11 @@ const server = Bun.serve<Peer>({
       if (pane) pane.agent_status = url.searchParams.get('status') || 'idle';
       return new Response(pane ? 'updated' : 'missing', { status: pane ? 200 : 404 });
     }
+    if (path === '/__test/add-panes') {
+      const names = ['Docs writer', 'Test runner', 'Release notes', 'Lint fixer'];
+      for (const label of names) addPane('w1', { label, agent: 'claude', agent_status: 'idle', cwd: '/home/dev/Work/tap' });
+      return new Response('added');
+    }
     if (path === '/__test/replace') {
       inventory.panes[0].terminal_id = 'replacement'; return new Response('replaced');
     }
