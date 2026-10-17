@@ -74,6 +74,7 @@ Multi-Herdr-session discovery also remains separate. The service currently uses 
 | Private state | `~/.local/state/whistle/` |
 | Cookie hashes / device metadata | `~/.local/state/whistle/devices.sqlite` |
 | Alert key / subscriptions | `push-vapid.json`, `push.sqlite` in private state |
+| Attached pictures (kept 3 days) | `uploads/` in private state |
 | PC access token / last URL / QR | `access-token`, `server-url`, `pair.png` in private state |
 | User unit | `~/.config/systemd/user/whistle.service` |
 | CLI launcher | `~/.local/bin/whistle` |
@@ -123,6 +124,12 @@ Phone-side close and removal are behind a confirm step. Removal is never forced 
 - **Allowed push services only:** subscription endpoints must be HTTPS on the browser vendors' push hosts (Google FCM, Mozilla, Microsoft WNS, Apple), with no port or credentials, and the keys must be well formed. The PC therefore never sends requests to arbitrary tailnet or local addresses on a browser's say-so.
 - **When alerts fire:** while at least one device is subscribed, the host polls `session.snapshot` every 3 s. An alert is sent when an agent pane *changes* into Herdr's `blocked` ("needs you") or `done` ("finished") status. Panes already waiting when polling starts, panes that appear already waiting and shells never alert, and a wait alerts once. A device that has that pane open in Whistle is skipped; a hidden or locked phone has no open stream, so it is alerted.
 - **What leaves the PC:** the payload is `{title, body, paneId}` (pane name, workspace, agent kind). It is encrypted for the phone, so the vendor's push service sees only ciphertext, the endpoint, size and timing. No terminal content is ever sent. The PC needs outbound HTTPS to the push service; delivery is best effort (`TTL` one hour, `Urgency: high`, one `Topic` per pane so undelivered alerts collapse).
+
+## Attached pictures
+
+`POST /api/uploads` (paired cookie, exact Origin) stores one picture for an agent to read and returns `{path}`; the phone puts that path in the draft and nothing is typed into a terminal until the person sends the draft. `src/uploads.ts` checks the bytes against the declared type (PNG, JPEG, WebP or GIF only; no SVG), caps it at 10 MB and writes it under a generated name as `0600` in `uploads/` (`0700`). The minute sweeper deletes Whistle-named pictures older than three days and leaves anything else in the folder alone.
+
+Request bodies: the server's limit is 10 MB for this route only. Every other route refuses a declared body over 4 KB, and any chunked body, with 413 before reading it, so pairing, login and actions keep their old limit. An agent outside its project folder may ask permission before reading a picture.
 
 ## Checks
 
