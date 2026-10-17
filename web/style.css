@@ -188,7 +188,6 @@ header .title code { color: var(--faint); font-size: 11.5px }
 [data-phase=connecting] #connection::before, [data-phase=requesting-control] #connection::before { animation: blink 1s ease-in-out infinite }
 @keyframes blink { 50% { opacity: .25 } }
 #control { min-width: 128px; transition: none }
-#jump-input { flex-shrink: 0 }
 [data-phase=controlling] #notice { display: none }
 #sizing { padding: 0 10px; font-size: 14px }
 
@@ -197,10 +196,18 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .terminal-frame::after { content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none }
 [data-phase=controlling] .terminal-frame::after { box-shadow: inset 0 0 0 2px var(--live), inset 0 18px 24px -20px var(--live); transition: box-shadow .2s }
 [data-phase=disconnected] .terminal-frame::after, [data-phase=paused] .terminal-frame::after { box-shadow: inset 0 2px var(--alert) }
-#terminal-viewport { flex: 1; min-height: 60px; overflow: auto; background: var(--bg); padding: 4px 8px; overscroll-behavior: contain }
+#terminal-viewport { isolation: isolate; flex: 1; min-height: 60px; overflow: auto; background: var(--bg); padding: 4px 8px; overscroll-behavior: contain }
 #terminal { height: 100%; min-height: 40px }
 .xterm { padding: 0 }
 .xterm-viewport { overscroll-behavior: contain }
+
+#terminal-history { position: absolute; z-index: 3; top: 12px; bottom: 12px; right: 0; width: 44px; opacity: 0; pointer-events: none; touch-action: none; cursor: grab; transition: opacity .18s }
+#terminal-history[data-visible=true] { opacity: 1; pointer-events: auto }
+#terminal-history:active { cursor: grabbing }
+#latest { position: absolute; z-index: 3; right: 48px; bottom: 12px; min-height: 44px; padding: 0 14px; border-radius: 22px; background: var(--surface); color: var(--text); box-shadow: 0 2px 8px rgba(0, 0, 0, .25); font-size: 13px }
+#terminal-history:focus-visible { outline: 2px solid var(--live); outline-offset: -3px }
+#terminal-history > span { position: absolute; top: 0; right: 8px; width: 5px; min-height: 32px; border-radius: 3px; background: var(--muted); box-shadow: 0 0 0 1px var(--bg); pointer-events: none }
+@media (prefers-reduced-motion: reduce) { #terminal-history { transition: none } }
 
 /* Compose */
 #compose { max-height: calc(var(--app-height, 100dvh) * .4); overflow: auto; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface) }

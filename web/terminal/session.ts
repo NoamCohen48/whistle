@@ -35,6 +35,9 @@ export class TerminalSession {
   private followInput = true;
   private expectedScrollTop?: number;
   private touchY?: number;
+  private touchMoved = false;
+  private touchSamples: { y: number; time: number }[] = [];
+  private flingFrame?: number;
   private disposed = false;
 
   constructor(private readonly viewport: HTMLElement, private readonly host: HTMLElement,
@@ -67,21 +70,37 @@ export class TerminalSession {
     }, { passive: true, signal });
     viewport.addEventListener('wheel', event => {
       if (event.ctrlKey || event.deltaY === 0) return;
-      event.preventDefault(); event.stopPropagation();
+      event.preventDefault(); event.stopPropagation(); this.stopFling();
       let scale = 1;
       if (event.deltaMode === 1) scale = 17;
       if (event.deltaMode === 2) scale = viewport.clientHeight;
       this.scroll(event.deltaY < 0 ? 'up' : 'down', Math.abs(event.deltaY) * scale);
     }, { passive: false, capture: true, signal });
-    viewport.addEventListener('touchstart', event => { this.touchY = event.touches[0]?.clientY; }, { passive: true, signal });
+    viewport.addEventListener('touchstart', event => {
+      this.stopFling(); this.touchSamples = []; this.touchMoved = false;
+      this.touchY = event.touches.length === 1 ? event.touches[0].clientY : undefined;
+      if (this.touchY !== undefined) this.sampleTouch(this.touchY);
+    }, { passive: true, signal });
     viewport.addEventListener('touchmove', event => {
-      if (this.touchY === undefined || event.touches.length !== 1) return;
+      if (event.touches.length !== 1) { this.touchY = undefined; this.touchSamples = []; return; }
+      if (this.touchY === undefined) return;
+      this.sampleTouch(event.touches[0].clientY);
       const delta = this.touchY - event.touches[0].clientY;
       if (Math.abs(delta) < 8) return;
-      event.preventDefault(); event.stopPropagation(); this.touchY = event.touches[0].clientY;
+      event.preventDefault(); event.stopPropagation(); this.touchMoved = true; this.touchY = event.touches[0].clientY;
       this.scroll(delta < 0 ? 'up' : 'down', Math.abs(delta));
     }, { passive: false, capture: true, signal });
-    viewport.addEventListener('touchend', () => { this.touchY = undefined; }, { passive: true, signal });
+    viewport.addEventListener('touchend', event => {
+      if (this.touchMoved && this.touchY !== undefined && !event.touches.length) {
+        this.sampleTouch(event.changedTouches[0]?.clientY ?? this.touchY);
+        const first = this.touchSamples[0], last = this.touchSamples.at(-1);
+        if (first && last && last.time > first.time) this.startFling((first.y - last.y) / (last.time - first.time));
+      }
+      this.touchY = undefined; this.touchSamples = [];
+    }, { passive: true, signal });
+    viewport.addEventListener('touchcancel', () => {
+      this.stopFling(); this.touchY = undefined; this.touchSamples = [];
+    }, { passive: true, signal });
     window.addEventListener('resize', this.resize, { signal });
     window.visualViewport?.addEventListener('resize', this.resize, { signal });
     document.addEventListener('visibilitychange', () => {
@@ -100,6 +119,34 @@ export class TerminalSession {
       }
     }, 10_000);
     this.resize();
+  }
+
+  private sampleTouch(y: number) {
+    const time = performance.now();
+    this.touchSamples = this.touchSamples.filter(sample => time - sample.time <= 100);
+    this.touchSamples.push({ y, time });
+  }
+  private stopFling() {
+    if (this.flingFrame !== undefined) cancelAnimationFrame(this.flingFrame);
+    this.flingFrame = undefined;
+  }
+  private startFling(speed: number) {
+    this.stopFling();
+    if (Math.abs(speed) < 0.5 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let velocity = Math.sign(speed) * Math.min(Math.abs(speed), 3.5) * Math.min(3, 1.5 + Math.abs(speed) / 3);
+    let previous = performance.now();
+    this.followInput = false;
+    const frame = (now: number) => {
+      this.flingFrame = undefined;
+      const elapsed = Math.min(32, Math.max(0, now - previous)); previous = now;
+      const { top: current, max } = this.scrollInfo();
+      const top = Math.max(0, Math.min(max, current + velocity * elapsed));
+      this.setLocalTop(top); // Local only: momentum can never request PC history.
+      velocity *= Math.pow(0.95, elapsed / 16);
+      if (top <= 0 || top >= max || Math.abs(velocity) < 0.03) return;
+      this.flingFrame = requestAnimationFrame(frame);
+    };
+    this.flingFrame = requestAnimationFrame(frame);
   }
 
   private update(patch: Partial<SessionState>) {
@@ -130,6 +177,7 @@ export class TerminalSession {
   toggleWidth() { this.update({ fitWidth: !this.state.fitWidth }); this.resize(); }
 
   private disconnect() {
+    this.stopFling(); this.touchY = undefined; this.touchSamples = [];
     this.generation++;
     clearTimeout(this.reconnectTimer);
     const old = this.socket; this.socket = undefined;
@@ -159,6 +207,7 @@ export class TerminalSession {
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'terminal.frame') {
+          const firstFrame = !received;
           if (!received) {
             received = true; this.reconnectDelay = 1000;
             this.update({ phase: control ? 'controlling' : 'watching' });
@@ -166,7 +215,11 @@ export class TerminalSession {
           if (!control) { this.watchCols = message.width; this.watchRows = message.height; }
           this.terminal.resize(message.width, message.height);
           this.terminal.write(Uint8Array.from(atob(message.bytes), c => c.charCodeAt(0)), () => {
-            if (epoch === this.generation && !this.disposed && this.followInput) this.revealInput();
+            // Resetting the previous pane can queue a native scroll event before this
+            // first write finishes. It must not strand a newly opened pane in reading mode.
+            if (epoch === this.generation && !this.disposed && (firstFrame || this.followInput)) {
+              this.followInput = true; this.revealInput();
+            }
           });
         } else if (message.type === 'ack') this.pending.delete(message.id);
         else if (message.type === 'key-rejected') { this.pending.delete(message.id); this.fail(message.message); }
@@ -176,6 +229,7 @@ export class TerminalSession {
     ws.onerror = () => { if (epoch === this.generation) this.fail('Connection failed. Pane may be unavailable or already controlled.'); };
     ws.onclose = () => {
       if (epoch !== this.generation || this.disposed) return;
+      this.stopFling();
       this.update({ phase: 'disconnected', modifiers: [] });
       if (this.pending.size) this.fail('Input delivery is uncertain. Check the pane before retrying. Nothing is replayed.');
       this.pending.clear();
@@ -234,21 +288,57 @@ export class TerminalSession {
     }, 180);
   };
   private setViewTop(top: number) { this.viewport.scrollTop = top; this.expectedScrollTop = this.viewport.scrollTop; }
-  private revealInput() {
+  private inputTop() {
     const screen = this.host.querySelector<HTMLElement>('.xterm-screen');
-    if (!screen) return;
-    this.setViewTop(inputScrollTop(this.terminal.buffer.active.cursorY, this.terminal.rows, screen.offsetHeight,
-      this.viewport.clientHeight, Math.max(0, this.viewport.scrollHeight - this.viewport.clientHeight)));
+    return inputScrollTop(this.terminal.buffer.active.cursorY, this.terminal.rows, screen?.offsetHeight || 0,
+      this.viewport.clientHeight, Math.max(0, this.viewport.scrollHeight - this.viewport.clientHeight));
   }
-  jumpToInput() { this.followInput = true; this.revealInput(); }
+  private revealInput() {
+    this.terminal.scrollToBottom();
+    this.setViewTop(this.inputTop());
+  }
+  jumpToInput() { this.stopFling(); this.followInput = true; this.revealInput(); }
   focusKeyboard() { this.jumpToInput(); this.terminal.focus(); }
   scroll(direction: 'up' | 'down', pixels = 8 * 17) {
     this.followInput = false;
-    const result = pageScroll(this.viewport.scrollTop, Math.max(0, this.viewport.scrollHeight - this.viewport.clientHeight), direction, pixels);
-    if (!result.remote) this.setViewTop(result.top);
+    const info = this.scrollInfo();
+    const result = pageScroll(info.top, info.max, direction, pixels);
+    if (!result.remote) this.setLocalTop(result.top);
     else if (this.state.phase === 'controlling' && this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ type: 'scroll', direction, lines: Math.min(30, Math.max(1, Math.ceil(pixels / 17))) }));
     }
+  }
+  private rowHeight() {
+    const screen = this.host.querySelector<HTMLElement>('.xterm-screen');
+    return (screen?.offsetHeight || this.terminal.rows * 17) / this.terminal.rows;
+  }
+  // One local coordinate spans xterm's scrollback and the tall screen below it.
+  scrollInfo() {
+    const buffer = this.terminal.buffer.active;
+    const row = this.rowHeight();
+    return {
+      top: buffer.viewportY * row + this.viewport.scrollTop,
+      max: buffer.baseY * row + Math.max(0, this.viewport.scrollHeight - this.viewport.clientHeight),
+      viewportHeight: this.viewport.clientHeight,
+      awayFromInput: buffer.viewportY < buffer.baseY || this.viewport.scrollTop < this.inputTop() - row,
+    };
+  }
+  private setLocalTop(top: number) {
+    const row = this.rowHeight();
+    const line = Math.min(this.terminal.buffer.active.baseY, Math.max(0, Math.floor(top / row)));
+    this.terminal.scrollToLine(line);
+    this.setViewTop(Math.max(0, top - line * row));
+  }
+  scrollToFraction(fraction: number) {
+    if (!Number.isFinite(fraction)) return;
+    this.stopFling(); this.followInput = false;
+    this.setLocalTop(Math.max(0, Math.min(1, fraction)) * this.scrollInfo().max);
+  }
+  // Notifications carry no scroll offsets into React; consumers read them on demand.
+  onScroll(listener: () => void) {
+    const subscription = this.terminal.onScroll(listener);
+    this.viewport.addEventListener('scroll', listener, { passive: true });
+    return () => { subscription.dispose(); this.viewport.removeEventListener('scroll', listener); };
   }
   // Read-only: the terminal's text (scrollback and screen) for selecting and copying on the
   // phone. Wrapped rows are joined back into their logical line. Sends nothing, changes nothing.

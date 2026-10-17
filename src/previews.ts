@@ -13,7 +13,7 @@ export async function panePreviews(panes: Pane[], read = rpc, budgetMs = 1500): 
   const result: Record<string, string> = {};
   const deadline = Date.now() + budgetMs;
   let index = 0;
-  await Promise.all(Array.from({ length: Math.min(8, panes.length) }, async () => {
+  async function worker() {
     while (index < panes.length && Date.now() < deadline) {
       const pane = panes[index++];
       try {
@@ -23,7 +23,7 @@ export async function panePreviews(panes: Pane[], read = rpc, budgetMs = 1500): 
         result[pane.pane_id] = previewLine(response.text);
       } catch { /* A closed or busy pane need not prevent the rest of the list. */ }
     }
-    return;
-  }));
+  }
+  await Promise.all(Array.from({ length: Math.min(8, panes.length) }, () => worker()));
   return result;
 }

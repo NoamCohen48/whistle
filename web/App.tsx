@@ -60,6 +60,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     let active = true;
     void startup.then(result => {
       if (!active) return;
+      // Startup's 401 can arrive before the pairing-loss listener mounts.
+      setDrafts(readDrafts());
       setSnapshot(result.snapshot); setPaired(Boolean(result.snapshot)); setError(result.error); setLoading(false);
       const shortcut = sessionStorage.getItem('whistle-shortcut');
       sessionStorage.removeItem('whistle-shortcut');

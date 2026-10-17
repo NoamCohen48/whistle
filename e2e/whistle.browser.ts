@@ -177,7 +177,7 @@ test('local scrolling stays put, edge scrolling is remote, and Keys does not res
   await viewport.evaluate(node => { node.scrollTop = 0; });
   await page.mouse.wheel(0, -100);
   await expect.poll(async () => (await messages(page)).filter(message => message.type === 'scroll').length).toBeGreaterThan(0);
-  await page.locator('#jump-input').click();
+  await page.locator('#latest').click();
   await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
 });
 
@@ -223,7 +223,7 @@ test('short viewports and touch scrolling retain usable terminal controls', asyn
   await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeLessThan(top);
   const toolbar = await page.locator('.main-keys').boundingBox();
   expect(toolbar!.y + toolbar!.height).toBeLessThanOrEqual(450);
-  await page.locator('#jump-input').click();
+  await page.locator('#latest').click();
   await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
 });
 
@@ -725,4 +725,125 @@ test('pane previews render, truncate, update and poll only in the list', async (
     await page.locator('#agent-switcher [data-pane="w1:p1"]').click();
     await expect(page.locator('#connection')).toHaveText('Watching');
   }
+});
+
+
+async function terminalTouch(page: Page, type: string, y: number) {
+  await page.locator('#terminal-viewport').evaluate((node, { type, y }) => {
+    const touch = new Touch({ identifier: 1, target: node, clientY: y });
+    node.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [touch], changedTouches: [touch], bubbles: true, cancelable: true }));
+  }, { type, y });
+}
+async function flingUp(page: Page, advance = (ms: number) => page.waitForTimeout(ms)) {
+  await terminalTouch(page, 'touchstart', 200);
+  await advance(20);
+  await terminalTouch(page, 'touchmove', 230);
+  await advance(20);
+  await terminalTouch(page, 'touchmove', 260);
+  await terminalTouch(page, 'touchend', 260);
+}
+
+test('quick swipes glide locally, stop on touch and stop at the edge without PC history', async ({ page }) => {
+  await page.clock.install();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await control(page);
+  const viewport = page.locator('#terminal-viewport');
+  await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+  await page.waitForTimeout(250);
+  // Gesture speed must not depend on CI's browser/driver round-trip latency.
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  const advance = (ms: number) => page.clock.runFor(ms);
+  await flingUp(page, advance);
+  const lifted = await viewport.evaluate(node => node.scrollTop);
+  await advance(32);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeLessThan(lifted - 10);
+  await terminalTouch(page, 'touchstart', 260);
+  const caught = await viewport.evaluate(node => node.scrollTop);
+  await advance(120);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(caught, 0);
+  await terminalTouch(page, 'touchend', 260);
+  await page.locator('#latest').click();
+  await flingUp(page, advance);
+  await advance(2000);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBe(0);
+  expect((await messages(page)).filter(message => message.type === 'scroll')).toEqual([]);
+  await terminalTouch(page, 'touchstart', 200);
+  await terminalTouch(page, 'touchmove', 240);
+  await terminalTouch(page, 'touchend', 240);
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'scroll').length).toBeGreaterThan(0);
+});
+
+test('slow drags stay one-to-one; reduced-motion swipes never glide or resize watch', async ({ page }) => {
+  await open(page);
+  const viewport = page.locator('#terminal-viewport');
+  await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+  const top = await viewport.evaluate(node => node.scrollTop);
+  await terminalTouch(page, 'touchstart', 200);
+  await page.waitForTimeout(150);
+  await terminalTouch(page, 'touchmove', 220);
+  await terminalTouch(page, 'touchend', 220);
+  await page.waitForTimeout(150);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(top - 20, 0);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await flingUp(page);
+  const lifted = await viewport.evaluate(node => node.scrollTop);
+  await page.waitForTimeout(150);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(lifted, 0);
+  expect((await messages(page)).filter(message => ['resize', 'input', 'scroll'].includes(message.type))).toEqual([]);
+});
+
+
+test('history handle traverses all local scrollback, fades and never controls the PC', async ({ page }) => {
+  await open(page);
+  const viewport = page.locator('#terminal-viewport');
+  await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+  await page.request.post(fixtureUrl('/__test/history'));
+  const handle = page.locator('#terminal-history');
+  await expect(handle).toHaveAttribute('data-visible', 'true');
+  const box = await handle.boundingBox();
+  if (!box) throw new Error('No history track');
+  await page.mouse.move(box.x + 22, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 22, box.y);
+  await expect(handle).toHaveAttribute('aria-valuenow', '0');
+  await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBe(0);
+  await expect(page.locator('#terminal .xterm-rows')).toContainText('history 1');
+  await page.mouse.move(box.x + 22, box.y + box.height);
+  await expect(handle).toHaveAttribute('aria-valuenow', '100');
+  await page.mouse.up();
+  await expect(handle).toHaveAttribute('data-visible', 'false', { timeout: 3000 });
+  expect((await messages(page)).filter(message => ['resize', 'input', 'scroll'].includes(message.type))).toEqual([]);
+});
+
+
+test('Latest appears while reading, returns to the input without focus or resize, and clears on switching', async ({ page }) => {
+  await open(page);
+  const viewport = page.locator('#terminal-viewport');
+  const latest = page.locator('#latest');
+  await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+  await expect(latest).toBeHidden();
+  const inputTop = await viewport.evaluate(node => node.scrollTop);
+  const height = await viewport.evaluate(node => node.clientHeight);
+  await viewport.hover();
+  await page.mouse.wheel(0, -150);
+  await expect(latest).toBeVisible();
+  await latest.click();
+  await expect(latest).toBeHidden();
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(inputTop, 0);
+  expect(await viewport.evaluate(node => node.clientHeight)).toBe(height);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await flingUp(page);
+  await expect(latest).toBeVisible();
+  await latest.click();
+  const caught = await viewport.evaluate(node => node.scrollTop);
+  await page.waitForTimeout(150);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(caught, 0);
+  await flingUp(page);
+  await page.locator('#agent-switcher [data-pane="w2:p1"]').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect(latest).toBeHidden();
+  const switched = await viewport.evaluate(node => node.scrollTop);
+  await page.waitForTimeout(200);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(switched, 0);
+  expect((await messages(page)).filter(message => ['resize', 'input', 'scroll'].includes(message.type))).toEqual([]);
 });

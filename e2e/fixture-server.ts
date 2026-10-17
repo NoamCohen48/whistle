@@ -125,6 +125,13 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
     if (path === '/__test/messages') return Response.json(messages);
     if (path === '/__test/pairings') return Response.json(pairings);
+    if (path === '/__test/history') {
+      for (const peer of peers) {
+        const bytes = '\x1b[2J\x1b[H' + Array.from({ length: 200 }, (_, i) => `history ${i + 1}\r\n`).join('');
+        peer.send(JSON.stringify({ type: 'terminal.frame', width: peer.data.width, height: peer.data.height, bytes: Buffer.from(bytes).toString('base64') }));
+      }
+      return new Response('history');
+    }
     if (path === '/__test/disconnect') { for (const peer of peers) peer.close(); return new Response('closed'); }
     if (path === '/__test/status') {
       const pane = inventory.panes.find(item => item.pane_id === url.searchParams.get('pane'));
