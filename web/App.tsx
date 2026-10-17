@@ -2,6 +2,7 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { Pane, Snapshot } from '../src/herdr.ts';
 import { loadPanes, pairBrowser, PairingRequired, runAction, type Action, type Startup } from './api.ts';
 import { CreateSheet, PaneMenu, type CreateRequest } from './components/Actions.tsx';
+import { ChangesSheet } from './components/Changes.tsx';
 import { Icon } from './components/Icon.tsx';
 import { AgentSwitcher, Inventory, paneName, workspaceName } from './components/Inventory.tsx';
 import { Pairing } from './components/Pairing.tsx';
@@ -22,6 +23,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [createRequest, setCreateRequest] = useState<CreateRequest>();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [changesFor, setChangesFor] = useState<string>();
   const [alerts, setAlerts] = useState<AlertState>('unsupported');
   const [alertsBusy, setAlertsBusy] = useState(false);
   const alertsGeneration = useRef(0);
@@ -170,7 +172,9 @@ export function App({ startup }: { startup: Promise<Startup> }) {
         <Icon name="plus" />New</button>}
       <CreateSheet request={createRequest} snapshot={snapshot} onClose={() => setCreateRequest(undefined)} onCreated={created} />
       <PaneMenu open={menuOpen} pane={selected} snapshot={snapshot} onClose={() => setMenuOpen(false)}
-        onNew={request => { setMenuOpen(false); setCreateRequest(request); }} onDone={destroy} onRename={rename} />
+        onNew={request => { setMenuOpen(false); setCreateRequest(request); }} onDone={destroy} onRename={rename}
+        onChanges={() => { setMenuOpen(false); setChangesFor(selected?.pane_id); }} />
+      <ChangesSheet pane={selected} open={Boolean(selected) && changesFor === selected?.pane_id} onClose={() => setChangesFor(undefined)} />
     </div>
   </>;
 }

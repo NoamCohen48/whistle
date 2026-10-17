@@ -26,6 +26,14 @@ let failPushTest = false;
 const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString('base64url');
 let created = 0;
 let uploads = 0;
+// Review data for w1:p1 only; any other pane reports a folder outside Git.
+const changes = { branch: 'feature/review', truncated: false, files: [
+  { path: 'assets/logo.png', status: 'modified', added: 0, removed: 0, binary: true },
+  { path: 'src/old.ts', status: 'deleted', added: 0, removed: 8, binary: false },
+  { path: 'web/App.tsx', status: 'modified', added: 12, removed: 3, binary: false },
+  { path: 'web/components/Changes.tsx', status: 'untracked', added: 40, removed: 0, binary: false },
+] };
+const appDiff = '@@ -10,6 +10,7 @@ export function App() {\n   const [menuOpen, setMenuOpen] = useState(false);\n-  const [old, setOld] = useState();\n+  const [changesFor, setChangesFor] = useState<string>();\n+  const [review, setReview] = useState(false);\n   return null;\n';
 const peers = new Set<ServerWebSocket<Peer>>();
 // Mirrors src/actions.ts results: new panes are reported back by id and open watch-only.
 function addPane(workspace_id: string, extra: Partial<Snapshot['panes'][number]> = {}) {
@@ -110,7 +118,8 @@ const server = Bun.serve<Peer>({
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
     }
     if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
-      || path === '/api/push' || path === '/api/push/test' || path === '/api/uploads') {
+      || path === '/api/push' || path === '/api/push/test' || path === '/api/uploads'
+      || path === '/api/changes' || path === '/api/changes/file') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
@@ -127,6 +136,15 @@ const server = Bun.serve<Peer>({
         if (request.method === 'DELETE') pushSubscribed = false;
         if (path === '/api/push/test' && failPushTest) return new Response('Could not reach the push service: Push service answered 500', { status: 502 });
         return new Response('ok');
+      }
+      if (path.startsWith('/api/changes')) {
+        const pane = url.searchParams.get('pane');
+        messages.push({ type: 'changes', pane, path: url.searchParams.get('path') || undefined });
+        if (pane !== 'w1:p1') return new Response('This folder is not a Git repository.', { status: 422 });
+        if (path === '/api/changes') return Response.json(changes);
+        const file = changes.files.find(item => item.path === url.searchParams.get('path'));
+        if (!file) return new Response('That file has no changes any more.', { status: 422 });
+        return Response.json({ diff: file.binary ? '' : file.path === 'web/App.tsx' ? appDiff : '@@ -0,0 +1,1 @@\n+export {};\n', binary: file.binary, truncated: false });
       }
       if (path === '/api/uploads') {
         if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });

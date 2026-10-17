@@ -354,6 +354,34 @@ select {
 .sheet-error { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--alert-wash); color: #ffd9d0; font-size: 14px }
 .sheet-form > .primary { min-height: 50px; font-size: 16px }
 .menu { margin: 4px -8px 0 }
+/* Changes */
+#changes { max-width: 760px }
+.changes-summary { display: flex; align-items: center; gap: 8px; margin: 2px -10px 10px 0 }
+.changes-summary p { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; color: var(--muted); font-size: 14px }
+.changes-summary strong { color: var(--text); font-weight: 600; overflow-wrap: anywhere }
+.counts { flex-shrink: 0; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted) }
+.counts ins { color: var(--accent); text-decoration: none }
+.counts del { color: var(--alert); text-decoration: none }
+.empty-changes { padding: 28px 0 20px; color: var(--muted); text-align: center }
+.change-list { margin: 0 -8px; padding: 0; list-style: none }
+.change-list > li + li { border-top: 1px solid var(--line) }
+.change-file { width: 100%; min-height: 52px; justify-content: flex-start; gap: 12px; padding: 6px 8px; border: 0; background: transparent; text-align: left }
+.change-file[aria-expanded=true] { background: var(--surface-2) }
+.change-status { flex-shrink: 0; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; font-size: 12px; font-weight: 700; text-decoration: none; background: var(--bg); color: var(--muted) }
+.change-status[data-status=added], .change-status[data-status=untracked] { color: var(--accent) }
+.change-status[data-status=deleted] { color: var(--alert) }
+.change-status[data-status=renamed] { color: var(--text) }
+.change-path { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 14px; overflow-wrap: anywhere }
+.change-path small { color: var(--muted); font-size: 12px }
+.change-path .dir { color: var(--muted) }
+.change-path strong { font-weight: 600 }
+.change-list .sheet-status, .change-list .sheet-error { margin: 4px 8px 12px }
+.diff { margin: 0 0 8px; padding: 8px 0; max-height: 60dvh; overflow: auto; background: var(--bg); font: 12.5px/1.5 var(--mono, ui-monospace, monospace); tab-size: 4; overscroll-behavior: contain }
+.diff span { display: block; min-width: max-content; padding: 0 10px; white-space: pre }
+.diff [data-line=add] { background: color-mix(in srgb, var(--accent) 14%, transparent) }
+.diff [data-line=del] { background: color-mix(in srgb, var(--alert) 16%, transparent) }
+.diff [data-line=hunk] { color: var(--muted); background: var(--surface-2) }
+.diff [data-line=note] { color: var(--muted) }
 .menu button { width: 100%; justify-content: flex-start; gap: 14px; min-height: 52px; padding: 0 12px; border: 0; background: transparent; font-size: 16px }
 .menu .icon { color: var(--muted) }
 .menu li:not(.danger) + .danger, .menu .separated { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px }

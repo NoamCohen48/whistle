@@ -6,6 +6,7 @@ import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts
 import { agentKinds, parseAction, runAction, worktrees } from './actions.ts';
 import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSubscription, webPushSender } from './push.ts';
 import { dimensions, parseCommand } from './protocol.ts';
+import { ChangesError, changes, fileDiff } from './changes.ts';
 import { MAX_UPLOAD_BYTES, UploadError, saveUpload, sweepUploads } from './uploads.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
@@ -162,6 +163,21 @@ const server = Bun.serve<Peer>({
           const workspaceId = url.searchParams.get('workspace') || '';
           if (!/^[A-Za-z0-9:_.-]{1,128}$/.test(workspaceId)) return new Response('Invalid workspace', { status: 400, headers });
           return Response.json({ worktrees: await worktrees(workspaceId) }, { headers });
+        }
+        if ((url.pathname === '/api/changes' || url.pathname === '/api/changes/file') && request.method === 'GET') {
+          const pane = (await snapshot()).panes.find(item => item.pane_id === url.searchParams.get('pane'));
+          if (!pane) return new Response('Pane no longer exists', { status: 404, headers });
+          if (!pane.cwd?.startsWith('/')) return new Response('Herdr does not report a folder for this pane.', { status: 422, headers });
+          const path = url.searchParams.get('path') || '';
+          if (url.pathname === '/api/changes/file' && (!path || path.length > 4096 || path.includes('\0'))) {
+            return new Response('Invalid path', { status: 400, headers });
+          }
+          try {
+            return Response.json(url.pathname === '/api/changes' ? await changes(pane.cwd) : await fileDiff(pane.cwd, path), { headers });
+          } catch (error) {
+            if (error instanceof ChangesError) return new Response(error.message, { status: 422, headers });
+            throw error;
+          }
         }
         if (url.pathname === '/api/push') {
           if (request.method === 'GET') {

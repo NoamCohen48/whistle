@@ -11,7 +11,7 @@ const kinds: [CreateKind, IconName, string][] = [
 const label = (workspace: Workspace) => workspace.label || workspace.name || workspace.workspace_id;
 
 // Bottom sheet on a native modal <dialog>: focus trap, Escape and back gesture come for free.
-function Sheet({ open, title, onClose, children, id }: { open: boolean; title: string; onClose: () => void; children: ReactNode; id: string }) {
+export function Sheet({ open, title, onClose, children, id }: { open: boolean; title: string; onClose: () => void; children: ReactNode; id: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
@@ -194,8 +194,8 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
 }
 
 type Pending = 'close-pane' | 'remove-worktree' | 'rename-pane' | 'rename-workspace' | undefined;
-export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRename }: {
-  open: boolean; pane?: Pane; snapshot?: Snapshot; onClose: () => void;
+export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRename, onChanges }: {
+  open: boolean; pane?: Pane; snapshot?: Snapshot; onClose: () => void; onChanges: () => void;
   onNew: (request: CreateRequest) => void;
   onDone: (action: Action) => Promise<void>;
   onRename: (action: Action) => Promise<void>;
@@ -233,6 +233,8 @@ export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRenam
         <Icon name="agent" />New agent here</button></li>
       <li><button type="button" id="menu-new-terminal" onClick={() => onNew({ kind: 'terminal', workspaceId: pane?.workspace_id })}>
         <Icon name="terminal" />New terminal here</button></li>
+      {pane?.cwd ? <li className="separated"><button type="button" id="menu-changes" onClick={onChanges}>
+        <Icon name="diff" />Review changes</button></li> : null}
       <li className="separated"><button type="button" id="menu-rename-pane" onClick={() => setPending('rename-pane')}>
         <Icon name="compose" />Rename pane</button></li>
       {workspace ? <li><button type="button" id="menu-rename-workspace" onClick={() => setPending('rename-workspace')}>
