@@ -390,6 +390,14 @@ select {
 .diff [data-line=del] { background: color-mix(in srgb, var(--alert) 16%, transparent) }
 .diff [data-line=hunk] { color: var(--muted); background: var(--surface-2) }
 .diff [data-line=note] { color: var(--muted) }
+/* Terminal text */
+#terminal-text-sheet { max-width: 760px }
+#terminal-text { margin: 4px -16px 0; padding: 10px 16px; max-height: 62dvh; overflow: auto; background: var(--bg); font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; overscroll-behavior: contain }
+
+.path-link { display: inline; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer }
+.text-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px }
+.text-actions .sheet-status { flex: 1; margin: 0 }
+#copy-text { gap: 8px; min-height: 46px; padding: 0 18px }
 .change-picture { display: block; width: calc(100% - 16px); margin: 4px 8px 12px; padding: 0; min-height: 0; border: 1px solid var(--line); background: var(--bg) repeating-conic-gradient(var(--surface) 0 25%, transparent 0 50%) 0 0 / 16px 16px; overflow: hidden }
 .change-picture img { display: block; width: 100%; max-height: 50dvh; object-fit: contain }
 /* Picture viewer */

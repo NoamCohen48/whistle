@@ -78,10 +78,10 @@ function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSessio
   </div>;
 }
 
-export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner }: {
+export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner, onText }: {
   pane?: Pane; state: SessionState; onState: Dispatch<SetStateAction<SessionState>>;
   engine?: TerminalSession; onEngine: Dispatch<SetStateAction<TerminalSession | undefined>>;
-  draft: string; onDraft: (value: string) => void; banner?: ReactNode;
+  draft: string; onDraft: (value: string) => void; banner?: ReactNode; onText: (text: string) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -168,6 +168,8 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
         </div>
         <button type="button" id="sizing" className="quiet" hidden={!controlling} aria-label={state.fitWidth ? 'Width: fit' : 'Width: original'}
           onClick={() => engine?.toggleWidth()}><Icon name="width" size={18} />{state.fitWidth ? 'Fit' : 'Full'}</button>
+        <button type="button" id="terminal-text" className="icon-button" aria-label="Terminal text" aria-haspopup="dialog"
+          disabled={!ready} onClick={() => engine && onText(engine.text())}><Icon name="text" /></button>
         <button type="button" id="jump-input" className="icon-button" aria-label="Jump to input"
           disabled={!ready} onClick={() => engine?.jumpToInput()}><Icon name="cursor" /></button>
         <button type="button" id="control" className={controlling ? 'release' : 'primary'} disabled={switching || !engine}

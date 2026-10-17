@@ -91,8 +91,8 @@ function applyAction(body: Record<string, string>): { paneId?: string; warning?:
 }
 function frame(ws: ServerWebSocket<Peer>) {
   const { width, height, pane } = ws.data;
-  const screen = '\x1b[?2004h\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` +
-    Array.from({ length: height - 2 }, (_, row) => `row ${row + 2}\r\n`).join('') +
+  const screen = '\x1b[?2004h\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` + 'Saved screenshot to docs/home-screen.png\r\n' +
+    Array.from({ length: height - 3 }, (_, row) => `row ${row + 3}\r\n`).join('') +
     `\x1b[${Math.min(height - 2, 48)};1Hinput> `;
   ws.send(JSON.stringify({ type: 'terminal.frame', width, height, bytes: Buffer.from(screen).toString('base64') }));
 }

@@ -248,6 +248,21 @@ export class TerminalSession {
       this.socket.send(JSON.stringify({ type: 'scroll', direction, lines: Math.min(30, Math.max(1, Math.ceil(pixels / 17))) }));
     }
   }
+  // Read-only: the terminal's text (scrollback and screen) for selecting and copying on the
+  // phone. Wrapped rows are joined back into their logical line. Sends nothing, changes nothing.
+  text() {
+    const buffer = this.terminal.buffer.active;
+    const lines: string[] = [];
+    for (let row = 0; row < buffer.length; row++) {
+      const line = buffer.getLine(row);
+      if (!line) continue;
+      if (line.isWrapped && lines.length) lines[lines.length - 1] += line.translateToString(false);
+      else lines.push(line.translateToString(false));
+    }
+    const trimmed = lines.map(line => line.trimEnd());
+    while (trimmed.length && !trimmed.at(-1)) trimmed.pop();
+    return trimmed.join('\n');
+  }
   dispose() {
     if (this.disposed) return;
     this.disconnect(); this.disposed = true;
