@@ -4,6 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { ServerWebSocket } from 'bun';
 import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts';
 import { agentKinds, parseAction, runAction, worktrees } from './actions.ts';
+import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSubscription, webPushSender } from './push.ts';
 import { dimensions, parseCommand } from './protocol.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
@@ -18,6 +19,9 @@ const tokenPath = join(paths.stateDir, 'access-token');
 const accessToken = await ensureToken(paths);
 const devices = new DeviceStore(join(paths.stateDir, 'devices.sqlite'));
 const pairingTickets = new PairingTickets();
+const pushStore = new PushStore(join(paths.stateDir, 'push.sqlite'));
+const vapid = new VapidKeys(join(paths.stateDir, 'push-vapid.json'), config.publicOrigin || 'mailto:whistle@localhost.invalid');
+const sendPush = webPushSender(pushStore, vapid);
 const failures = new Map<string, { count: number; until: number }>();
 const controllers = new Map<string, ServerWebSocket<Peer>>();
 const peers = new Set<ServerWebSocket<Peer>>();
@@ -126,6 +130,7 @@ const server = Bun.serve<Peer>({
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
           const id = url.pathname.slice('/api/devices/'.length);
           if (!devices.revoke(id)) return new Response('Device not found', { status: 404, headers });
+          pushStore.remove(id);
           for (const peer of peers) if (peer.data.deviceId === id) {
             message(peer, { type: 'error', message: 'This device was revoked. Pair again to reconnect.' });
             cleanup(peer); peer.close(1008, 'Device revoked');
@@ -149,6 +154,25 @@ const server = Bun.serve<Peer>({
           const workspaceId = url.searchParams.get('workspace') || '';
           if (!/^[A-Za-z0-9:_.-]{1,128}$/.test(workspaceId)) return new Response('Invalid workspace', { status: 400, headers });
           return Response.json({ worktrees: await worktrees(workspaceId) }, { headers });
+        }
+        if (url.pathname === '/api/push') {
+          if (request.method === 'GET') {
+            return Response.json({ publicKey: vapid.publicKey, subscribed: Boolean(pushStore.get(current.id)) }, { headers });
+          }
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
+          if (request.method === 'PUT') { pushStore.save(current.id, parseSubscription(await request.json())); return new Response('Subscribed', { headers }); }
+          if (request.method === 'DELETE') { pushStore.remove(current.id); return new Response('Unsubscribed', { headers }); }
+          return new Response('Method not allowed', { status: 405, headers });
+        }
+        if (url.pathname === '/api/push/test' && request.method === 'POST') {
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
+          try {
+            await sendPush(current.id, { title: 'Alerts are on', body: 'Whistle will tell you when an agent needs you.', paneId: '' });
+          } catch (error) {
+            if (error instanceof PushGone) pushStore.remove(current.id);
+            return new Response(`Could not reach the push service: ${(error as Error).message}`, { status: 502, headers });
+          }
+          return new Response('Sent', { headers });
         }
         if (url.pathname === '/api/actions' && request.method === 'POST') {
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
@@ -250,6 +274,22 @@ const sweeper = setInterval(() => {
   for (const [ip, failure] of failures) if (failure.until < Date.now()) failures.delete(ip);
 }, 60_000);
 sweeper.unref();
+// Polls only while at least one device has alerts on.
+const watcher = new AgentWatcher({
+  snapshot, subscribers: () => pushStore.all(), send: sendPush,
+  isActive: deviceId => devices.isActive(deviceId),
+  // A phone with the pane open is already looking at it.
+  isWatching: (deviceId, paneId) => [...peers].some(peer => peer.data.deviceId === deviceId && peer.data.paneId === paneId && !peer.data.closed),
+  onGone: deviceId => pushStore.remove(deviceId),
+  onError: error => console.error(`Whistle alert not delivered: ${error.message}`),
+});
+let watching = false;
+const alerts = setInterval(() => {
+  if (watching) return;
+  watching = true;
+  void watcher.tick().catch(() => { /* Herdr briefly unavailable: try again next tick. */ }).finally(() => { watching = false; });
+}, 3000);
+alerts.unref();
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
@@ -260,11 +300,13 @@ async function shutdown() {
     return closed;
   });
   clearInterval(sweeper);
+  clearInterval(alerts);
   await server.stop(true);
   // Let controller CLI children flush terminal.release before the host exits.
   // These are Whistle streams, never the Herdr daemon or agent processes.
   await Promise.race([Promise.all(closing), Bun.sleep(1500)]);
   devices.close();
+  pushStore.close();
   process.exit(0);
 }
 const stop = () => { void shutdown().catch(cause => { console.error(`Whistle shutdown: ${(cause as Error).message}`); process.exit(1); }); };

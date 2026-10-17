@@ -452,3 +452,18 @@ test('taking and losing control vibrate differently', async ({ page, request }) 
   await expect(page.locator('#connection')).toHaveText('Disconnected');
   await expect.poll(vibrations).toEqual([18, [12, 70, 12], 18, [12, 70, 12]]);
 });
+
+test('an alert opens its pane watch-only, from a closed app or an open one', async ({ page }) => {
+  await pair(page);
+  await page.goto('about:blank'); // A fresh load, as when the worker opens a new window.
+  await page.goto('/#pane=w2:p1');
+  await expect(page.locator('#heading')).toHaveText('Second agent');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect(page).toHaveURL('/');
+  await page.locator('#back').click();
+  await page.evaluate(() => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { type: 'open-pane', paneId: 'w1:p1' } })));
+  await expect(page.locator('#heading')).toHaveText('First agent');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect((await messages(page)).filter(message => message.type === 'connect').map(({ pane, control }) => ({ pane, control })))
+    .toEqual([{ pane: 'w2:p1', control: false }, { pane: 'w1:p1', control: false }]);
+});
