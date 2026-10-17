@@ -223,3 +223,117 @@ test('errors and armed modifiers overlay the terminal without resizing the PTY',
   await expect(page.locator('#error')).toBeHidden();
   expect((await messages(page)).filter(message => ['input', 'key'].includes(message.type))).toEqual([]);
 });
+
+type ActionMessage = Message & { action?: string; workspaceId?: string; kind?: string; cwd?: string; branch?: string; base?: string; path?: string; paneId?: string };
+const actions = async (page: Page) => (await messages(page) as ActionMessage[]).filter(message => message.type === 'action')
+  .map(({ type: _type, ...rest }) => rest);
+
+test('new agents, terminals and workspaces open watch-only without desktop focus', async ({ page }) => {
+  await pair(page);
+  await page.locator('#new').click();
+  await expect(page.locator('#create-sheet')).toBeVisible();
+  await expect(page.locator('#new-workspace')).toHaveValue('w1');
+  // The fixture's existing panes run pi, so it is preselected; choose another agent explicitly.
+  await expect(page.locator('[data-agent="pi"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-agent="claude"]').click();
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#create-sheet')).toBeHidden();
+  await expect(page.locator('#heading')).toHaveText('claude');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  const opened = (await messages(page)).filter(message => message.type === 'connect');
+  expect(opened.at(-1)).toMatchObject({ pane: 'w1:n1', control: false });
+
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-new-terminal').click();
+  await expect(page.locator('[data-kind="terminal"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#pane-info')).toHaveText('w1:n2');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+
+  await page.locator('#back').click();
+  await page.locator('#new').click();
+  await page.locator('[data-kind="workspace"]').click();
+  await page.locator('#new-folder').fill('relative');
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#create-sheet .sheet-error')).toHaveText('Use an absolute path or ~/…');
+  await page.locator('#new-folder').fill('~/Work/site');
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#pane-info')).toHaveText('wn3:n4');
+  await expect(page.locator('#heading + small')).toContainText('site');
+  expect(await actions(page)).toEqual([
+    { action: 'agent', workspaceId: 'w1', kind: 'claude' },
+    { action: 'terminal', workspaceId: 'w1' },
+    { action: 'workspace', cwd: 'relative' },
+    { action: 'workspace', cwd: '~/Work/site' },
+  ]);
+  expect((await messages(page)).filter(message => message.type === 'connect').every(message => !message.control)).toBe(true);
+});
+
+test('worktrees can be created, opened and reached when already open', async ({ page }) => {
+  await pair(page);
+  await page.locator('#new').click();
+  await page.locator('[data-kind="worktree"]').click();
+  await expect(page.locator('#new-repository')).toHaveValue('w1');
+  await page.locator('#new-branch').fill('feat/phone');
+  await page.locator('#new-base').fill('main');
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#pane-info')).toHaveText('wn1:n2');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#back').click();
+  await expect(page.locator('[data-workspace="w1"] > [data-workspace="wn1"] .worktree-badge')).toHaveText('Worktree');
+
+  await page.locator('#new').click();
+  await page.locator('[data-kind="worktree"]').click();
+  await page.locator('#worktree-existing').click();
+  await page.locator('.worktree-choice', { hasText: 'explorer' }).click();
+  await expect(page.locator('#pane-info')).toHaveText('w2:p1');
+  await page.locator('#back').click();
+  await page.locator('#new').click();
+  await page.locator('[data-kind="worktree"]').click();
+  await page.locator('#worktree-existing').click();
+  await page.locator('.worktree-choice', { hasText: 'docs' }).click();
+  await expect(page.locator('#pane-info')).toHaveText('wn3:n4');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect(await actions(page)).toEqual([
+    { action: 'worktree-create', workspaceId: 'w1', branch: 'feat/phone', base: 'main' },
+    { action: 'worktree-open', workspaceId: 'w1', path: '/tap-worktrees/docs' },
+  ]);
+});
+
+test('closing a pane and removing a worktree need confirmation; failures return to watching', async ({ page, request }) => {
+  await control(page);
+  await page.locator('#pane-actions').click();
+  await expect(page.locator('#menu-remove-worktree')).toHaveCount(0);
+  await page.locator('#menu-close-pane').click();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#pane-menu')).toBeHidden();
+  expect(await actions(page)).toEqual([]);
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-close-pane').click();
+  await page.locator('#confirm-destructive').click();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await expect(page.locator('#error')).toBeHidden();
+  await expect(page.locator('#agent-switcher [data-pane="w1:p1"]')).toHaveCount(0);
+
+  await page.locator('#agent-switcher [data-pane="w2:p1"]').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-remove-worktree').click();
+  await request.post(fixtureUrl('/__test/fail-action?message=Worktree has uncommitted changes'));
+  await page.locator('#confirm-destructive').click();
+  await expect(page.locator('#pane-menu .sheet-error')).toHaveText('Worktree has uncommitted changes');
+  await page.locator('#pane-menu').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-remove-worktree').click();
+  await page.locator('#confirm-destructive').click();
+  await expect(page.locator('[data-workspace="w2"]')).toHaveCount(0);
+  expect(await actions(page)).toEqual([
+    { action: 'close-pane', paneId: 'w1:p1' },
+    { action: 'remove-worktree', workspaceId: 'w2' },
+    { action: 'remove-worktree', workspaceId: 'w2' },
+  ]);
+});

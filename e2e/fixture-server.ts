@@ -20,7 +20,35 @@ let messages: Record<string, unknown>[] = [];
 let pairings = 0;
 let acknowledge = true;
 let workerRevision = 1;
+let failNextAction = '';
+let created = 0;
 const peers = new Set<ServerWebSocket<Peer>>();
+// Mirrors src/actions.ts results: new panes are reported back by id and open watch-only.
+function addPane(workspace_id: string, extra: Partial<Snapshot['panes'][number]> = {}) {
+  const pane_id = `${workspace_id}:n${++created}`;
+  inventory.panes.push({ pane_id, terminal_id: `new${created}`, workspace_id, tab_id: `tab-new${created}`, cwd: '/fixture', ...extra });
+  return pane_id;
+}
+function addWorkspace(label: string, linkedTo?: string) {
+  const workspace_id = `wn${++created}`;
+  const repo = inventory.workspaces.find(item => item.workspace_id === linkedTo)?.worktree;
+  inventory.workspaces.push({ workspace_id, label, ...(repo ? { worktree: { repo_key: repo.repo_key, is_linked_worktree: true } } : {}) });
+  return workspace_id;
+}
+function applyAction(body: Record<string, string>): { paneId?: string; warning?: string } {
+  switch (body.type) {
+    case 'terminal': return { paneId: addPane(body.workspaceId) };
+    case 'agent': return { paneId: addPane(body.workspaceId, { agent: body.kind, agent_status: 'idle', label: body.kind }) };
+    case 'workspace': return { paneId: addPane(addWorkspace(body.label || body.cwd.split('/').pop() || 'workspace')) };
+    case 'worktree-create': return { paneId: addPane(addWorkspace(body.branch, body.workspaceId)) };
+    case 'worktree-open': return { paneId: addPane(addWorkspace(body.path.split('/').pop()!, body.workspaceId)) };
+    case 'close-pane': inventory.panes = inventory.panes.filter(pane => pane.pane_id !== body.paneId); return {};
+    case 'remove-worktree':
+      inventory.workspaces = inventory.workspaces.filter(item => item.workspace_id !== body.workspaceId);
+      inventory.panes = inventory.panes.filter(pane => pane.workspace_id !== body.workspaceId); return {};
+    default: throw new Error('Unknown action');
+  }
+}
 function frame(ws: ServerWebSocket<Peer>) {
   const { width, height, pane } = ws.data;
   const screen = '\x1b[?2004h\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` +
@@ -37,10 +65,11 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pairings = 0; acknowledge = true; workerRevision = 1;
+      inventory = structuredClone(initial); messages = []; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
+    if (path === '/__test/fail-action') { failNextAction = url.searchParams.get('message') || 'Fixture action failed'; return new Response('armed'); }
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
     if (path === '/__test/messages') return Response.json(messages);
     if (path === '/__test/pairings') return Response.json(pairings);
@@ -57,9 +86,22 @@ const server = Bun.serve<Peer>({
       } else if (body.token !== 'test-token') return new Response('Incorrect access token', { status: 401 });
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
     }
-    if (path === '/api/panes' || path === '/terminal') {
+    if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
+      if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
+      if (path === '/api/worktrees') return Response.json({ worktrees: [
+        { path: '/tap-worktrees/docs', label: 'docs', branch: 'docs' },
+        { path: '/explorer', label: 'app-explorer', branch: 'explorer', openPaneId: 'w2:p1' },
+      ] });
+      if (path === '/api/actions') {
+        if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
+        const body = await request.json();
+        messages.push({ ...body, action: body.type, type: 'action' });
+        if (body.type === 'workspace' && !/^~?\//.test(body.cwd)) return new Response('Use an absolute path or ~/…', { status: 400 });
+        if (failNextAction) { const message = failNextAction; failNextAction = ''; return new Response(message, { status: 400 }); }
+        return Response.json(applyAction(body));
+      }
       if (request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
       const pane = url.searchParams.get('pane') || '';
       const control = url.searchParams.get('mode') === 'control';
