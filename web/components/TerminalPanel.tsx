@@ -23,6 +23,13 @@ const notices: Record<SessionState['phase'], string> = {
   disconnected: 'Reconnecting…', paused: '',
 };
 const title = (modifier: string) => modifier[0].toUpperCase() + modifier.slice(1);
+// Felt, not just seen: one short pulse when input starts reaching the PC, two when it stops
+// (released, lost to a disconnect or switched away). Silently absent where unsupported.
+const CONTROL_START = 18;
+const CONTROL_END = [12, 70, 12];
+function vibrate(pattern: number | number[]) {
+  try { navigator.vibrate?.(pattern); } catch { /* Blocked by the browser or no user activation yet. */ }
+}
 
 function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
   const customKey = useRef<HTMLInputElement>(null);
@@ -112,6 +119,11 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
     return () => { window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
   }, [keysOpen, compose]);
   const controlling = state.phase === 'controlling';
+  const wasControlling = useRef(false);
+  useEffect(() => {
+    if (controlling !== wasControlling.current) vibrate(controlling ? CONTROL_START : CONTROL_END);
+    wasControlling.current = controlling;
+  }, [controlling]);
   const ready = controlling || state.phase === 'watching';
   const switching = state.phase === 'connecting' || state.phase === 'requesting-control';
   const armed = modifierOrder.filter(modifier => state.modifiers.includes(modifier));
