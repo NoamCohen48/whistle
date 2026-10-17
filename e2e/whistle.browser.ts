@@ -515,3 +515,33 @@ test('pictures upload into the draft as paths and are only sent with it', async 
   await expect(page.locator('#attach-error')).toHaveText('This file is not a picture Whistle can read.');
   expect((await messages(page)).filter(upload)).toHaveLength(2);
 });
+
+test('changes can be reviewed read-only without touching the terminal', async ({ page }) => {
+  await open(page);
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-changes').click();
+  const sheet = page.locator('#changes');
+  await expect(sheet.locator('.changes-summary [role=status]')).toHaveText(/feature\/review\s*4 files\s*\+52 −11/);
+  await expect(sheet.locator('.change-path')).toHaveText(['assets/logo.png', 'src/old.ts', 'web/App.tsx', 'web/components/Changes.tsx']);
+  await expect(sheet.locator('.change-status')).toHaveText(['M', 'D', 'M', 'U']);
+
+  await sheet.locator('.change-file', { hasText: 'App.tsx' }).click();
+  await expect(sheet.locator('.diff [data-line=add]')).toHaveText(['+  const [changesFor, setChangesFor] = useState<string>();', '+  const [review, setReview] = useState(false);']);
+  await expect(sheet.locator('.diff [data-line=del]')).toHaveText(['-  const [old, setOld] = useState();']);
+  await sheet.locator('.change-file', { hasText: 'logo.png' }).click();
+  await expect(sheet.locator('.diff')).toHaveCount(0);
+  await expect(sheet.getByText('Binary file, not shown')).toBeVisible();
+
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  const log = await messages(page);
+  expect(log.filter(message => message.type === 'connect')).toHaveLength(1);
+  expect(log.filter(message => ['resize', 'input', 'key'].includes(message.type))).toHaveLength(0);
+
+  // A folder outside Git says so.
+  await page.locator('#agent-switcher [data-pane="w2:p1"]').click();
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-changes').click();
+  await expect(page.locator('#changes .sheet-error')).toHaveText('This folder is not a Git repository.');
+});

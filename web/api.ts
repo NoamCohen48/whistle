@@ -1,7 +1,8 @@
 import type { Action, ActionResult, WorktreeChoice } from '../src/actions.ts';
+import type { Changes, FileDiff } from '../src/changes.ts';
 import type { Snapshot } from '../src/herdr.ts';
 
-export type { Action, WorktreeChoice };
+export type { Action, Changes, FileDiff, WorktreeChoice };
 
 export class PairingRequired extends Error {
   constructor() { super('Pair this browser first'); }
@@ -46,4 +47,10 @@ export async function loadAgentKinds(): Promise<string[]> {
 export async function loadWorktrees(workspaceId: string): Promise<WorktreeChoice[]> {
   return (await json<{ worktrees: WorktreeChoice[] }>(
     await fetch(`/api/worktrees?workspace=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' }))).worktrees;
+}
+export async function loadChanges(paneId: string): Promise<Changes> {
+  return json(await fetch(`/api/changes?pane=${encodeURIComponent(paneId)}`, { cache: 'no-store' }));
+}
+export async function loadFileDiff(paneId: string, path: string): Promise<FileDiff> {
+  return json(await fetch(`/api/changes/file?pane=${encodeURIComponent(paneId)}&path=${encodeURIComponent(path)}`, { cache: 'no-store' }));
 }
