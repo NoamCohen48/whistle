@@ -430,3 +430,25 @@ test('a long pane list can be searched and cleared', async ({ page, request }) =
   await page.locator('#clear-search').click();
   await expect(page.locator('#search-results')).toHaveCount(0);
 });
+
+test('taking and losing control vibrate differently', async ({ page, request }) => {
+  await page.addInitScript(() => {
+    const calls: unknown[] = [];
+    (window as unknown as { vibrations: unknown[] }).vibrations = calls;
+    Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (pattern: unknown) => { calls.push(pattern); return true; } });
+  });
+  const vibrations = () => page.evaluate(() => (window as unknown as { vibrations: unknown[] }).vibrations);
+  await open(page);
+  expect(await vibrations()).toEqual([]); // Watching alone is silent.
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await expect.poll(vibrations).toEqual([18]);
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect.poll(vibrations).toEqual([18, [12, 70, 12]]);
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await request.post(fixtureUrl('/__test/disconnect'));
+  await expect(page.locator('#connection')).toHaveText('Disconnected');
+  await expect.poll(vibrations).toEqual([18, [12, 70, 12], 18, [12, 70, 12]]);
+});
