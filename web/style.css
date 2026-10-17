@@ -1,8 +1,329 @@
-:root{color-scheme:dark;--bg:#141819;--panel:#1c2223;--line:#354041;--text:#e5ebea;--muted:#a5b4b1;--accent:#bad7a1;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
-*{box-sizing:border-box}body{margin:0}button,input,textarea{font:inherit}button{min-height:44px;padding:9px 13px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer;white-space:nowrap}button:active{background:#35413c}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.primary{background:var(--accent);border-color:var(--accent);color:#19221a;font-weight:650}.primary:active{background:#a1c985}[hidden]{display:none!important}h1{font-size:30px;letter-spacing:-1px;line-height:1.15;margin:0 0 12px}p{color:var(--muted);line-height:1.5}header{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 16px;border-bottom:1px solid var(--line)}header strong{font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#connection{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}#app{height:var(--app-height,100dvh);display:flex;flex-direction:column;max-width:1500px;margin:auto;overflow:hidden}#panes{overflow:auto;padding:32px 20px}.intro{margin:0 0 32px}.workspace{margin:26px 0 8px;color:var(--muted);font-size:13px;font-weight:500}.pane{display:flex;width:100%;align-items:center;text-align:left;gap:14px;min-height:84px;border-width:0 0 1px;border-radius:0;background:transparent}.pane-copy{flex:1;min-width:0}.pane-copy strong{display:block;font-size:16px;margin-bottom:6px}.pane-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}.state{font-size:12px;color:var(--accent);min-width:52px}.pane-arrow{color:var(--muted)}#session{flex:1;min-height:0;display:flex;flex-direction:column}.session-bar{display:flex;align-items:center;gap:8px;padding:8px 12px}#pane-info{flex:1;color:var(--muted);font:12px monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#notice{padding:0 12px 8px;color:var(--muted);font-size:12px;min-height:24px}#terminal-viewport{flex:1;min-height:60px;overflow:auto;background:#141819;padding:4px 8px;overscroll-behavior:contain}#terminal{height:100%;min-height:40px}.xterm{padding:0}.xterm-viewport{overscroll-behavior:contain}#keyboard{position:relative;flex-shrink:0;padding:6px 8px 0;border-top:1px solid var(--line)}.keys{display:flex;gap:5px;overflow-x:auto;padding-bottom:5px;scrollbar-width:none}.keys button{flex:1;padding:7px 10px;min-width:44px;font-size:13px}#keyboard{padding-bottom:max(4px,env(safe-area-inset-bottom))}button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#19221a}#armed-keys{padding:3px 0 8px;color:var(--accent);font-size:12px}/* Layer 1: transient key drawer above the one-row toolbar, never part of PTY sizing. */
-#keypad{position:absolute;z-index:1;bottom:100%;left:0;right:0;max-height:min(360px,calc(var(--app-height,100dvh)*.5));overflow:auto;padding:12px;background:var(--panel);border:1px solid var(--line);overscroll-behavior:contain}#key-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:4px;margin-bottom:12px}#key-grid button{padding:7px 4px;font-size:12px}.key-entry{display:flex;gap:6px}.key-entry input{min-width:0}#compose{padding:8px 12px;border-top:1px solid var(--line);max-height:40%;overflow:auto;flex-shrink:0}label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}input,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--text);padding:12px;font-size:16px}textarea{resize:vertical;max-height:25dvh}.compose-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}#error{padding:12px 16px;color:#ffd5b6;background:#35271f;border-top:1px solid #765b46;font-size:13px;max-height:100px;overflow:auto}.pair{min-height:100dvh;display:grid;place-items:center;padding:24px}.pair form{width:min(100%,420px)}.pair h1{font-size:44px;line-height:1.1;margin:52px 0 20px}.brand{color:var(--text);font-weight:700;font-size:22px}.brand span{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:4px}.hint{font-size:12px;overflow-wrap:anywhere}.pair button{width:100%;margin-top:12px}#pair-error{color:#ffd5b6}
-#agent-switcher{display:flex;gap:6px;overflow-x:auto;flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--line);scrollbar-width:thin;overscroll-behavior-x:contain}#agent-switcher button{flex-shrink:0;max-width:260px;text-align:left;font-size:12px;padding:7px 10px}#agent-switcher span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#agent-switcher small{display:block;margin-top:3px;color:var(--muted);font-size:11px}#agent-switcher [aria-current=true]{border-color:var(--accent);box-shadow:inset 0 -2px var(--accent)}
-.worktree-group{margin:12px 0 20px 12px;padding-left:12px;border-left:2px solid var(--line)}.worktree-group .workspace{margin-top:18px}.worktree-badge{display:inline-block;font-size:11px;font-weight:400;border:1px solid var(--line);border-radius:4px;padding:2px 6px;margin-left:5px}
-.short-viewport header{min-height:46px;padding:0 8px;flex-shrink:0}.short-viewport #agent-switcher{padding:4px 8px}.short-viewport #agent-switcher small{display:none}.short-viewport .session-bar{padding:4px 8px;flex-wrap:nowrap;flex-shrink:0}.short-viewport #pane-info{flex-basis:0}.short-viewport #notice{display:none}
-@media(min-width:768px){#panes{max-width:900px;width:100%;margin:auto}header{padding-inline:24px}.session-bar{padding-inline:20px}#terminal-viewport{padding-inline:20px}.keys{max-width:850px;margin:auto}#keyboard{padding-top:10px}.pair h1{font-size:52px}}
-@media(max-width:420px){header{gap:8px;padding-inline:10px}header strong{max-width:105px}.session-bar{flex-wrap:wrap}#pane-info{flex-basis:80px}.session-bar button{padding-inline:9px;font-size:12px}.keys button{padding-inline:8px}#sizing{min-width:75px}}
+/* Tokens. --bg must match the xterm theme in terminal/session.ts and the manifest theme color. */
+:root {
+  color-scheme: dark;
+  --bg: #141819;
+  --surface: #1b2122;
+  --surface-2: #232b2c;
+  --line: #2c3637;
+  --line-strong: #3f4c4d;
+  --text: #e5ebea;
+  --muted: #9db0ac;
+  --faint: #73857f;
+  --accent: #bad7a1;      /* primary actions, busy agents */
+  --accent-ink: #172014;
+  --live: #e9b35b;        /* controlling: input reaches the real terminal */
+  --live-ink: #241a08;
+  --live-wash: rgba(233, 179, 91, .12);
+  --watch: #8fb3c9;       /* read-only */
+  --alert: #ef9483;       /* disconnected, needs attention, errors */
+  --alert-wash: #33211e;
+  --radius: 10px;
+  --radius-sm: 7px;
+  --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  --toolbar: 56px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg) }
+/* Desktop browsers draw classic scrollbars; keep them thin and in-palette. Android uses overlays. */
+#panes, #terminal-viewport, #keypad, #compose { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent }
+button, input, textarea { font: inherit; color: inherit }
+code { font-family: var(--mono); font-size: .9em }
+[hidden] { display: none !important }
+h1, h2, h3, p { margin: 0 }
+p { color: var(--muted); line-height: 1.5 }
+label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px }
+.icon { flex-shrink: 0 }
+
+/* Buttons */
+button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 44px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  background: var(--surface); font-size: 15px; cursor: pointer; white-space: nowrap; touch-action: manipulation;
+  transition: background-color .12s, border-color .12s, color .12s, transform .08s;
+}
+@media (hover: hover) { button:not(:disabled):hover { background: var(--surface-2) } }
+button:not(:disabled):active { transform: scale(.97) }
+button:disabled { opacity: .38; cursor: not-allowed }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650 }
+@media (hover: hover) { .primary:not(:disabled):hover { background: #c9e2b3 } }
+.release { border-color: var(--live); color: var(--live); background: transparent; font-weight: 600 }
+.quiet { border-color: transparent; background: transparent; color: var(--muted) }
+.icon-button { width: 44px; padding: 0; border-color: transparent; background: transparent; color: var(--muted) }
+@media (hover: hover) { .icon-button:not(:disabled):hover { color: var(--text) } }
+
+input, textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 11px 12px; font-size: 16px; /* 16px avoids mobile focus zoom */
+}
+input::placeholder, textarea::placeholder { color: var(--faint) }
+textarea { display: block; resize: vertical; max-height: 25dvh; line-height: 1.45 }
+
+/* App shell */
+#app {
+  height: var(--app-height, 100dvh); display: flex; flex-direction: column;
+  max-width: 1500px; margin: auto; overflow: hidden;
+}
+header {
+  display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+  min-height: 52px; padding: env(safe-area-inset-top) 6px 0; border-bottom: 1px solid var(--line);
+}
+header .title { flex: 1; min-width: 0; padding-left: 2px }
+header .title strong, header .title small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+header .title strong { font-size: 16px; font-weight: 650; line-height: 1.25 }
+header .title small { font-size: 12px; color: var(--muted); line-height: 1.35 }
+header .title code { color: var(--faint); font-size: 11.5px }
+.wordmark { flex: 1; padding-left: 10px; font-size: 18px; font-weight: 750; letter-spacing: -.02em }
+#refresh { margin-left: auto }
+
+/* Agent strip */
+#agent-switcher {
+  display: flex; gap: 6px; flex-shrink: 0; overflow-x: auto; padding: 6px 10px;
+  border-bottom: 1px solid var(--line); scrollbar-width: none; overscroll-behavior-x: contain;
+}
+#agent-switcher::-webkit-scrollbar { display: none }
+#agent-switcher button {
+  flex-shrink: 0; max-width: 240px; min-height: 40px; gap: 7px; padding: 0 12px; font-size: 14px;
+  border-color: var(--line); background: transparent;
+}
+#agent-switcher span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.chip-workspace { color: var(--muted); flex-shrink: 1; max-width: 96px }
+.chip-name { font-weight: 550 }
+.chip-name::before { content: '/'; margin-right: 7px; font-weight: 400; color: var(--faint) }
+#agent-switcher [aria-current=true] { background: var(--surface-2); border-color: var(--line-strong); box-shadow: inset 0 -2px var(--accent) }
+
+/* Status dots */
+.dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--faint) }
+.dot[data-tone=busy] { background: var(--accent); box-shadow: 0 0 0 0 rgba(186, 215, 161, .5); animation: pulse 1.8s ease-out infinite }
+.dot[data-tone=attention] { background: var(--alert) }
+.dot[data-tone=shell] { background: transparent; border: 1.5px solid var(--faint) }
+@keyframes pulse { 70% { box-shadow: 0 0 0 6px rgba(186, 215, 161, 0) } 100% { box-shadow: 0 0 0 0 rgba(186, 215, 161, 0) } }
+
+/* Inventory */
+#panes { flex: 1; overflow: auto; padding: 24px 16px calc(32px + env(safe-area-inset-bottom)); overscroll-behavior: contain }
+.intro { margin: 0 4px 24px }
+.intro h1 { font-size: 30px; font-weight: 750; letter-spacing: -.025em; line-height: 1.15; margin-bottom: 6px }
+.workspace-group + .workspace-group { margin-top: 24px }
+.workspace { display: flex; align-items: center; gap: 8px; margin: 0 4px 6px; font-size: 13px; font-weight: 600; color: var(--muted) }
+.workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.workspace-count { margin-left: auto; font: 12px var(--mono); color: var(--faint) }
+.worktree-badge { flex-shrink: 0; font-size: 11px; font-weight: 500; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 5px; padding: 1px 6px }
+.pane-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface) }
+.pane-list li + li { border-top: 1px solid var(--line) }
+.pane {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
+  width: 100%; min-height: 64px; padding: 10px 12px 10px 16px; text-align: left;
+  border: 0; border-radius: 0; background: transparent; font-size: 15px;
+}
+.pane-list li:first-child .pane { border-radius: var(--radius) var(--radius) 0 0 }
+.pane-list li:last-child .pane { border-radius: 0 0 var(--radius) var(--radius) }
+.pane:not(:disabled):active { transform: none; background: var(--surface-2) }
+.pane-copy strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.pane-copy small { display: flex; gap: 6px; margin-top: 3px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden }
+.pane-copy small > span + span::before { content: '·'; margin-right: 6px; color: var(--faint) }
+.pane-copy .cwd { overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 12px; line-height: 1.6 }
+.pane .state { color: var(--text) }
+.pane-id { font-size: 11.5px; color: var(--faint) }
+.pane > .icon { color: var(--faint) }
+.worktree-group { position: relative; margin: 14px 0 0 14px; padding-left: 14px; border-left: 1px solid var(--line-strong) }
+.worktree-group .workspace { margin-left: 0 }
+.worktree-group .workspace .icon { color: var(--faint) }
+.skeleton { display: grid; gap: 1px; border-radius: var(--radius); overflow: hidden }
+.skeleton span { height: 64px; background: linear-gradient(90deg, var(--surface) 30%, var(--surface-2) 50%, var(--surface) 70%) 0 0 / 300% 100%; animation: shimmer 1.4s linear infinite }
+@keyframes shimmer { to { background-position: -150% 0 } }
+.empty { padding: 28px 20px; border: 1px dashed var(--line-strong); border-radius: var(--radius) }
+.empty strong { display: block; margin-bottom: 4px }
+.empty p { font-size: 14px }
+
+/* Error banner: inline on the inventory, overlaid on the terminal so it never resizes the PTY. */
+#error {
+  display: flex; align-items: flex-start; gap: 4px; padding: 4px 4px 4px 14px;
+  background: var(--alert-wash); border: 1px solid #6f4038; border-radius: var(--radius);
+  color: #ffd9d0; font-size: 14px; line-height: 1.45;
+}
+#error > span { flex: 1; padding: 8px 0; max-height: 96px; overflow: auto }
+#error .icon-button { color: #ffd9d0 }
+#panes > #error { margin-bottom: 20px }
+.terminal-frame > #error { position: absolute; z-index: 3; top: 8px; left: 8px; right: 8px; box-shadow: 0 8px 24px rgba(5, 8, 8, .55) }
+
+/* Session */
+#session { flex: 1; min-height: 0; display: flex; flex-direction: column }
+/* Bottom dock: state, control and input live together within thumb reach. Overlays anchor to its top edge. */
+.dock { position: relative; flex-shrink: 0; background: var(--bg) }
+.session-bar { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 4px 8px 4px 12px; border-top: 1px solid var(--line) }
+.session-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px }
+#connection {
+  --tone: var(--muted);
+  display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; height: 28px; padding: 0 10px 0 9px;
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent); border-radius: 14px;
+  color: var(--tone); font-size: 13px; font-weight: 650;
+}
+#connection::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor }
+#notice { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 12.5px; line-height: 1.3; color: var(--muted) }
+[data-phase=watching] #connection { --tone: var(--watch) }
+[data-phase=controlling] #connection { --tone: var(--live); background: var(--live-wash) }
+[data-phase=disconnected] #connection { --tone: var(--alert) }
+[data-phase=connecting] #connection::before, [data-phase=requesting-control] #connection::before { animation: blink 1s ease-in-out infinite }
+@keyframes blink { 50% { opacity: .25 } }
+#control { min-width: 128px; transition: none }
+#jump-input { flex-shrink: 0 }
+[data-phase=controlling] #notice { display: none }
+#sizing { padding: 0 10px; font-size: 14px }
+
+.terminal-frame { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column }
+/* The ring eases in when control starts but disappears instantly when it ends. */
+.terminal-frame::after { content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none }
+[data-phase=controlling] .terminal-frame::after { box-shadow: inset 0 0 0 2px var(--live), inset 0 18px 24px -20px var(--live); transition: box-shadow .2s }
+[data-phase=disconnected] .terminal-frame::after, [data-phase=paused] .terminal-frame::after { box-shadow: inset 0 2px var(--alert) }
+#terminal-viewport { flex: 1; min-height: 60px; overflow: auto; background: var(--bg); padding: 4px 8px; overscroll-behavior: contain }
+#terminal { height: 100%; min-height: 40px }
+.xterm { padding: 0 }
+.xterm-viewport { overscroll-behavior: contain }
+
+/* Compose */
+#compose { max-height: calc(var(--app-height, 100dvh) * .4); overflow: auto; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface) }
+.compose-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px }
+#clear-draft { margin-left: auto; min-height: 36px; padding: 0 10px; font-size: 14px }
+.compose-head label { margin: 0 }
+.compose-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px }
+
+/* Toolbar */
+#keyboard { padding: 2px 8px max(6px, env(safe-area-inset-bottom)) }
+#compose:not([hidden]) + #keyboard { padding-top: 6px }
+.keys { display: flex; gap: 6px }
+.main-keys { align-items: stretch; gap: 8px }
+.tool-group { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px }
+.tool {
+  flex-direction: column; gap: 3px; min-width: 0; height: var(--toolbar); padding: 0 2px;
+  border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; font-weight: 550;
+}
+.tool span { max-width: 100%; overflow: hidden; text-overflow: ellipsis }
+.tool:not(:disabled):active { background: var(--surface-2) }
+.tool[aria-pressed=true], .tool[aria-expanded=true] { background: var(--surface-2); color: var(--text); border-color: var(--line-strong) }
+.tool[data-armed=true] { color: var(--live) }
+.key-pair { display: flex; gap: 6px }
+.keycap { height: var(--toolbar); min-width: 58px; padding: 0 12px; font: 600 14px var(--mono); border-bottom-width: 2px }
+.keycap.primary { min-width: 76px; border-bottom-color: #93b47a }
+
+#armed-keys {
+  position: absolute; z-index: 4; right: 10px; bottom: calc(100% + 8px);
+  padding: 7px 12px; border-radius: 16px; background: var(--live); color: var(--live-ink);
+  font-size: 13px; box-shadow: 0 6px 18px rgba(5, 8, 8, .5);
+}
+.armed-chord { font: 700 13px var(--mono); margin-right: 4px }
+
+/* Key drawer: a transient layer above the toolbar, never part of PTY sizing. */
+#keypad {
+  position: absolute; z-index: 5; bottom: 100%; left: 0; right: 0;
+  max-height: min(400px, calc(var(--app-height, 100dvh) * .55)); overflow: auto; overscroll-behavior: contain;
+  padding: 0 12px 12px; background: var(--surface); border-top: 1px solid var(--line-strong);
+  border-radius: 14px 14px 0 0; box-shadow: 0 -12px 32px rgba(5, 8, 8, .5);
+}
+.keypad-head { position: sticky; top: 0; z-index: 1; padding: 12px 0 8px; background: var(--surface) }
+.modifiers button { flex: 1; font-weight: 600 }
+.modifiers #clear-modifiers { flex: 0 0 auto; color: var(--text) }
+.modifiers #clear-modifiers:disabled { color: var(--muted) }
+.modifiers button[aria-pressed=true] { background: var(--live); border-color: var(--live); color: var(--live-ink) }
+.extra-keys { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 4px 0 14px }
+.extra-keys button { padding: 0 4px; font: 600 14px var(--mono) }
+#custom-key-form { margin-bottom: 14px }
+.key-entry { display: flex; gap: 6px }
+.key-entry input { min-width: 0; font-family: var(--mono) }
+.key-group + .key-group { margin-top: 14px }
+.group-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px }
+.key-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 5px }
+.key-group:first-child .key-cells { grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)) }
+.key-cells button { min-width: 0; padding: 0 2px; font: 13px var(--mono); background: var(--surface-2); border-color: var(--line) }
+
+/* Pairing */
+.pair {
+  min-height: 100dvh; display: flex; flex-direction: column; gap: 32px;
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+}
+.brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap }
+.brand .wordmark { flex: 0; padding: 0; color: var(--text) }
+.pair form { width: min(100%, 440px); margin-block: auto }
+.pair h1 { font-size: 34px; font-weight: 750; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 20px; text-wrap: balance }
+.steps { list-style: none; margin: 0 0 24px; padding: 0; counter-reset: step }
+.steps li { position: relative; counter-increment: step; padding: 0 0 18px 44px; line-height: 1.45 }
+.steps li::before {
+  content: counter(step); position: absolute; left: 0; top: -3px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; font: 600 13px var(--mono); color: var(--accent); border: 1px solid var(--line-strong);
+}
+.steps li:not(:last-child)::after { content: ''; position: absolute; left: 14px; top: 29px; bottom: 2px; border-left: 1px solid var(--line) }
+.steps code { padding: 2px 6px; border-radius: 5px; background: var(--surface-2) }
+.pair-status { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 14px }
+.pair-status .icon { color: var(--accent); animation: blink 1.4s ease-in-out infinite }
+.pair-problem { margin-bottom: 16px; padding: 12px 14px; border: 1px solid #6f4038; border-radius: var(--radius); background: var(--alert-wash) }
+#pair-error { color: #ffd9d0; font-size: 14px; overflow-wrap: anywhere }
+.pair-problem button { width: 100%; margin-top: 10px }
+.pair details { border-top: 1px solid var(--line); padding-top: 4px }
+.pair summary { display: flex; align-items: center; min-height: 44px; color: var(--muted); font-size: 14px; cursor: pointer; list-style: none }
+.pair summary::-webkit-details-marker { display: none }
+.pair summary::after { content: '+'; margin-left: auto; font: 18px var(--mono); color: var(--faint) }
+.pair details[open] summary::after { content: '−' }
+.pair details[open] summary { margin-bottom: 8px }
+.pair details button { width: 100%; margin-top: 14px }
+
+/* Short visual viewports: landscape phones and portrait with the keyboard open. */
+.short-viewport header { min-height: 44px }
+.short-viewport header .title small { display: none }
+.short-viewport #agent-switcher { padding: 4px 8px }
+.short-viewport #agent-switcher button { min-height: 36px }
+.short-viewport .session-bar { min-height: 44px; padding-block: 2px }
+.short-viewport #notice { display: none }
+.short-viewport #control, .short-viewport #sizing { min-height: 38px }
+.short-viewport { --toolbar: 44px }
+.short-viewport .tool { gap: 1px; font-size: 11px }
+.short-viewport .tool .icon { width: 18px; height: 18px }
+.short-viewport #keyboard { padding-top: 0 }
+@media (orientation: landscape) {
+  .short-viewport #app { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) }
+  .short-viewport header { grid-column: 1; max-width: 42vw; padding-left: max(6px, env(safe-area-inset-left)) }
+  .short-viewport #agent-switcher { grid-column: 2; border-left: 1px solid var(--line) }
+  .short-viewport .tool { flex-direction: row; gap: 8px; font-size: 13px }
+  .short-viewport .dock { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line) }
+  .short-viewport .session-bar { grid-row: 2; border-top: 0; padding-right: 4px }
+  .short-viewport #compose { grid-column: 1 / -1; border-top: 0 }
+  .short-viewport #keyboard { grid-row: 2; grid-column: 2; padding-top: 4px }
+  .short-viewport #panes, .short-viewport #session { grid-column: 1 / -1 }
+  .short-viewport #panes { padding-top: 16px }
+  .short-viewport .intro { margin-bottom: 14px }
+  .short-viewport .intro h1 { font-size: 22px }
+}
+@media (orientation: portrait) {
+  /* Typing with the keyboard open: keep the terminal, drop the switcher until control is released. */
+  .short-viewport #app[data-phase=controlling] #agent-switcher { display: none }
+}
+
+@media (max-width: 380px) {
+  #control { min-width: 0; padding-inline: 10px }
+  #notice { display: none }
+  .keycap { min-width: 50px; padding-inline: 8px }
+  .keycap.primary { min-width: 64px }
+}
+
+@media (min-width: 768px) {
+  header { padding-inline: 14px }
+  #panes { max-width: 760px; width: 100%; margin: 0 auto; padding-top: 40px }
+  .intro h1 { font-size: 36px }
+  #terminal-viewport { padding-inline: 20px }
+  .main-keys, #compose > * { max-width: 760px; margin-inline: auto }
+  .session-bar { padding-inline: max(20px, calc((100% - 760px) / 2)) }
+  #keypad { left: 50%; right: auto; width: min(760px, 100%); transform: translateX(-50%) }
+  .tool { flex-direction: row; gap: 8px; font-size: 14px }
+  .pair { align-items: center; justify-content: center }
+  .pair .brand, .pair form { width: min(100%, 440px) }
+  .pair form { margin-top: 0 }
+  .pair h1 { font-size: 44px }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important }
+}

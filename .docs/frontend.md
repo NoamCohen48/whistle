@@ -4,7 +4,14 @@
 
 The production frontend stack is React + Vite + TypeScript. The vanilla `web/app.ts` entry point has been replaced; the Bun host's HTTP/WebSocket API is unchanged. The host now persists/revokes browser pairings; see [host authentication](host.md). The host also includes an explicitly installed, checkout-based user-service CLI. Building/testing does not install it. Multi-session discovery and an installable/offline PWA are still separate work.
 
-The existing terminal controls and CSS remain the functional baseline. Visual refinement belongs to the separate UI/UX pass.
+## Layout
+
+The top of the screen is navigation (back, pane name/workspace/id, refresh, agent chips); the bottom **dock** is action, within thumb reach and directly above the Android keyboard: state pill, jump-to-input, width and Take/Release control, then the toolbar (Type, Compose, Keys | Esc, Enter). The toolbar appears only while controlling; watch mode shows no dead controls.
+
+- **State** is never colour-only: a labelled pill (Watching = steel, Controlling = amber, Disconnected = rose). Controlling also draws an amber ring around the terminal; it eases in and disappears instantly when control is lost.
+- **Overlays never resize the PTY**: the Keys drawer, the armed-modifier chip and error banners are positioned layers. The Keys drawer is height-capped so it covers only the terminal, never the agent switcher. Compose is the one panel that deliberately takes layout space.
+- **Short viewports** (`.short-viewport`, set by the engine): landscape puts the header and chips on one row and the dock status and toolbar on one row; portrait with the keyboard open hides the chips while controlling.
+- Errors are dismissible; the inventory has loading, empty and nested-worktree states; the pairing screen is a three-step sequence with the token fallback collapsed.
 
 ## Boundaries
 
@@ -15,7 +22,8 @@ The existing terminal controls and CSS remain the functional baseline. Visual re
 - `web/components/Inventory.tsx`: agent strip, workspace list and metadata-based worktree nesting. React renders pane names as text, not HTML.
 - `web/components/TerminalPanel.tsx`: UI controls and the terminal host element. Connect effects depend on pane/terminal identity, not refreshed metadata objects.
 - `web/terminal/session.ts`: imperative xterm instance, ordered WebSocket writes/ACK tracking, generation guards, reconnects, modifiers, paste, cursor-follow and local/remote scrolling. React receives only discrete UI transitions/errors. Terminal frames, typed terminal bytes and scroll positions do not enter React state.
-- `web/style.css`: retained baseline styling and compact visual-viewport rules.
+- `web/components/Icon.tsx`: inline decorative SVG icons (no icon font or extra assets).
+- `web/style.css`: token-based styling and compact visual-viewport rules. `--bg` must match the xterm theme and manifest theme color.
 - `vite.config.ts`: production output compatible with the host's explicit asset allowlist, plus a loopback-only development server with API/WebSocket proxies.
 
 React creates the terminal host element; xterm exclusively owns its contents. The terminal controller is disposed on unmount, including socket, timers, ResizeObserver and event listeners. Inventory refreshes, draft edits and opening Keys must not recreate xterm or reconnect a terminal stream.
