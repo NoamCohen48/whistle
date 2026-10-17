@@ -6,11 +6,15 @@ import { ChangesSheet } from './components/Changes.tsx';
 import { AlertsSheet } from './components/AlertsSheet.tsx';
 import { PictureViewer, type PictureRequest } from './components/PictureViewer.tsx';
 import { Icon } from './components/Icon.tsx';
-import { AgentSwitcher, Inventory, paneName, workspaceName } from './components/Inventory.tsx';
+import { AgentSwitcher, Inventory, needsYou, paneName, statusTone, workspaceName } from './components/Inventory.tsx';
 import { Pairing } from './components/Pairing.tsx';
 import { TerminalPanel } from './components/TerminalPanel.tsx';
 import { INITIAL_SESSION, TerminalSession } from './terminal/session.ts';
 import { alertState, disableAlerts, enableAlerts, type AlertState } from './push.ts';
+
+// Per-browser memory for home-screen shortcuts; blocked storage just means no shortcut target.
+const remember = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* Not remembered. */ } };
+const recall = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
 
 const paneKey = (pane: Pane) => `${pane.pane_id}:${pane.terminal_id}`;
 
@@ -40,8 +44,11 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     void startup.then(result => {
       if (!active) return;
       setSnapshot(result.snapshot); setPaired(Boolean(result.snapshot)); setError(result.error); setLoading(false);
-      const previous = sessionStorage.getItem('whistle-pane');
+      const shortcut = sessionStorage.getItem('whistle-shortcut');
+      sessionStorage.removeItem('whistle-shortcut');
+      const previous = shortcut ? undefined : sessionStorage.getItem('whistle-pane');
       if (previous && result.snapshot) setSelection(result.snapshot.panes.find(pane => pane.pane_id === previous));
+      if (shortcut && result.snapshot) startFrom(shortcut, result.snapshot);
     });
     return () => { active = false; };
   }, [startup]);
@@ -114,7 +121,22 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     if (selection && paneKey(selection) === paneKey(pane)) return;
     clearError(); engine?.close(); setSelection(pane); sessionStorage.setItem('whistle-pane', pane.pane_id);
     sessionStorage.setItem('whistle-workspace', pane.workspace_id);
+    remember('whistle-last-pane', pane.pane_id); remember('whistle-last-workspace', pane.workspace_id);
   };
+  // Home-screen shortcuts. Every pane they open starts watch-only, like any other way of opening it.
+  const startFrom = useEffectEvent((shortcut: string, state: Snapshot) => {
+    const find = (paneId: string | null) => state.panes.find(pane => pane.pane_id === paneId);
+    if (shortcut === 'last') {
+      const pane = find(recall('whistle-last-pane'));
+      if (pane) select(pane); else setError('The last pane you opened is closed. Choose another.');
+    } else if (shortcut === 'needs-you') {
+      const waiting = state.panes.filter(needsYou).sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
+      if (waiting[0]) select(waiting[0]);
+    } else if (shortcut === 'new-agent') {
+      const workspaceId = recall('whistle-last-workspace');
+      setCreateRequest({ kind: 'agent', workspaceId: state.workspaces.some(item => item.workspace_id === workspaceId) ? workspaceId! : undefined });
+    }
+  });
   // New panes open like any other: watch-only, without focusing the desktop.
   const created = async (paneId?: string, warning?: string) => {
     const next = await loadPanes(); setSnapshot(next);

@@ -12,7 +12,7 @@ export function workspaceName(snapshot: Snapshot | undefined, pane: Pane) {
 // Herdr reports idle, working, blocked, done or unknown; older builds used free-form strings,
 // so map loosely to a few visual tones without parsing agent output.
 type Tone = 'busy' | 'attention' | 'done' | 'idle' | 'shell';
-function statusTone(pane: Pane): Tone {
+export function statusTone(pane: Pane): Tone {
   const status = pane.agent_status?.toLowerCase() || '';
   if (!pane.agent) return 'shell';
   if (status === 'done') return 'done';

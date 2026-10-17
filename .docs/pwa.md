@@ -65,3 +65,7 @@ Tested/deployed clean native build: `033b1c1`, SHA-256 `72e48b09cd44b916dc9a0734
 Live verification used normal trusted HTTPS and a fresh Android-emulated browser, with **no certificate-ignore flags**: the actual CLI-generated QR decoded and redeemed once, its fragment disappeared, its Secure cookie/device survived reload, installability passed, WSS remained watch-only, and persistent cache/storage stayed empty. All 14 original pane/terminal identities, watched desktop rows, PC token and pre-existing authorizations were preserved; only independent test devices were revoked. The existing :443 Serve root was unchanged. A fresh private phone QR is available via `~/.local/bin/whistle pair`.
 
 See [live deployment evidence](deployment.md). Physical Android camera scanning, installation/standalone launch, IME and lifecycle remain operator validations; browser emulation does not establish those.
+
+## Home-screen shortcuts
+
+Long-pressing the installed icon offers three manifest shortcuts: **Last pane** (`/#open=last`), **Needs you** (`/#open=needs-you`, the first agent asking for input, else one that finished, else the pane list) and **New agent** (`/#open=new-agent`, the New sheet for the last workspace). The fragment is checked against that fixed list and stripped before any request. Panes open **watch-only**, exactly like any other way of opening them. The last pane and workspace are remembered in this browser's `localStorage` only; unknown values are ignored.

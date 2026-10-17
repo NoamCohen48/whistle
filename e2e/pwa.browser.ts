@@ -8,6 +8,7 @@ test('install manifest has a stable clean launch URL and real any/maskable PNGs'
   const response = await page.request.get('/manifest.webmanifest');
   const manifest = await response.json();
   expect(manifest).toMatchObject({ id: '/', start_url: '/', scope: '/', display: 'standalone', short_name: 'Whistle' });
+  expect(manifest.shortcuts.map((item: { url: string }) => item.url)).toEqual(['/#open=last', '/#open=needs-you', '/#open=new-agent']);
   for (const icon of manifest.icons) {
     const image = await page.request.get(icon.src);
     expect(image.headers()['content-type']).toContain('image/png');
