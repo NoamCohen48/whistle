@@ -9,14 +9,23 @@ export function workspaceName(snapshot: Snapshot | undefined, pane: Pane) {
   return workspace?.label || workspace?.name || pane.workspace_id;
 }
 
-// Herdr status strings are free-form; map them to a few visual tones without parsing agent output.
-type Tone = 'busy' | 'attention' | 'idle' | 'shell';
+// Herdr reports idle, working, blocked, done or unknown; older builds used free-form strings,
+// so map loosely to a few visual tones without parsing agent output.
+type Tone = 'busy' | 'attention' | 'done' | 'idle' | 'shell';
 function statusTone(pane: Pane): Tone {
   const status = pane.agent_status?.toLowerCase() || '';
   if (!pane.agent) return 'shell';
+  if (status === 'done') return 'done';
   if (/work|run|busy|think|stream|generat/.test(status)) return 'busy';
   if (/block|wait|input|attention|approv|error|fail|ask/.test(status)) return 'attention';
   return 'idle';
+}
+// Blocked agents wait for an answer; done agents finished a turn nobody has looked at yet.
+export function needsYou(pane: Pane) { const tone = statusTone(pane); return tone === 'attention' || tone === 'done'; }
+function statusText(pane: Pane) {
+  if (!pane.agent) return 'shell';
+  const tone = statusTone(pane);
+  return tone === 'attention' ? 'needs you' : tone === 'done' ? 'finished' : pane.agent_status || 'unknown';
 }
 function StatusDot({ pane }: { pane: Pane }) {
   return <i className="dot" data-tone={statusTone(pane)} aria-hidden="true" />;
@@ -42,6 +51,19 @@ export function AgentSwitcher({ snapshot, selected, onSelect }: {
   </nav>;
 }
 
+function PaneRow({ pane, detail, onSelect }: { pane: Pane; detail?: string; onSelect: (pane: Pane) => void }) {
+  return <button type="button" className="pane" onClick={() => onSelect(pane)}>
+    <StatusDot pane={pane} />
+    <span className="pane-copy">
+      <strong>{paneName(pane)}</strong>
+      <small><span className="state" data-tone={statusTone(pane)}>{statusText(pane)}</span>
+        <span>{detail ?? (pane.agent || 'terminal')}</span>{pane.cwd && detail === undefined ? <span className="cwd">{pane.cwd}</span> : null}</small>
+    </span>
+    <code className="pane-id">{pane.pane_id}</code>
+    <Icon name="forward" size={18} />
+  </button>;
+}
+
 function WorkspaceGroup({ workspace, snapshot, nested = false, children, onSelect }: {
   workspace: Workspace; snapshot: Snapshot; nested?: boolean; children?: ReactNode; onSelect: (pane: Pane) => void;
 }) {
@@ -55,16 +77,7 @@ function WorkspaceGroup({ workspace, snapshot, nested = false, children, onSelec
       <span className="workspace-count">{panes.length}</span>
     </Heading>
     {panes.length ? <ul className="pane-list">{panes.map(pane => <li key={pane.pane_id}>
-      <button type="button" className="pane" onClick={() => onSelect(pane)}>
-        <StatusDot pane={pane} />
-        <span className="pane-copy">
-          <strong>{paneName(pane)}</strong>
-          <small><span className="state">{pane.agent ? pane.agent_status || 'unknown' : 'shell'}</span>
-            <span>{pane.agent || 'terminal'}</span>{pane.cwd ? <span className="cwd">{pane.cwd}</span> : null}</small>
-        </span>
-        <code className="pane-id">{pane.pane_id}</code>
-        <Icon name="forward" size={18} />
-      </button>
+      <PaneRow pane={pane} onSelect={onSelect} />
     </li>)}</ul> : null}
     {children}
   </section>;
@@ -74,9 +87,19 @@ export function Inventory({ snapshot, hidden, banner, onSelect }: {
   snapshot?: Snapshot; hidden: boolean; banner?: ReactNode; onSelect: (pane: Pane) => void;
 }) {
   const count = snapshot?.panes.length || 0;
+  // Blocked agents are waiting on an answer, so they come before finished ones.
+  const waiting = (snapshot?.panes.filter(needsYou) || [])
+    .sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
   return <main id="panes" hidden={hidden} aria-busy={!snapshot}>
     {banner}
     <div className="intro"><h1>Your herd</h1></div>
+    {snapshot && waiting.length ? <section id="needs-you" className="workspace-group" aria-labelledby="needs-you-heading">
+      <h2 className="workspace" id="needs-you-heading"><span className="workspace-name">Needs you</span>
+        <span className="workspace-count">{waiting.length}</span></h2>
+      <ul className="pane-list">{waiting.map(pane => <li key={pane.pane_id}>
+        <PaneRow pane={pane} detail={workspaceName(snapshot, pane)} onSelect={onSelect} />
+      </li>)}</ul>
+    </section> : null}
     <div id="pane-list">{!snapshot ? <div className="skeleton" role="status" aria-label="Loading panes…">
       {[0, 1, 2].map(row => <span key={row} />)}</div>
       : count ? groupWorkspaces(snapshot.workspaces).map(group =>

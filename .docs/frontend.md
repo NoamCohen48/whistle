@@ -12,6 +12,7 @@ The top of the screen is navigation (back, pane name/workspace/id, refresh, agen
 - **Overlays never resize the PTY**: the Keys drawer, the armed-modifier chip and error banners are positioned layers. The Keys drawer is height-capped so it covers only the terminal, never the agent switcher. Compose is the one panel that deliberately takes layout space.
 - **Short viewports** (`.short-viewport`, set by the engine): landscape puts the header and chips on one row and the dock status and toolbar on one row; portrait with the keyboard open hides the chips while controlling.
 - **New** (inventory, bottom right) opens a bottom sheet for an agent, a terminal tab, a workspace or a worktree (new branch or existing checkout). The ⋯ menu in the terminal header adds an agent/terminal to the current workspace, closes the pane or removes the current linked worktree; destructive items need a confirm step. Created panes open watch-only like any other. A failed close/remove reopens the pane watch-only.
+- **Needs you**: agents Herdr reports as `blocked` (waiting for an answer, rose) or `done` (finished a turn, blue) are listed first in their own section, blocked before done. They stay in their workspace too. The agent strip keeps its order so chips never jump while you are in a terminal.
 - Errors are dismissible; the inventory has loading, empty and nested-worktree states; the pairing screen is a three-step sequence with the token fallback collapsed.
 
 ## Boundaries
