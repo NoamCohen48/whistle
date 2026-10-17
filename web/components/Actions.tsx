@@ -29,6 +29,23 @@ function Sheet({ open, title, onClose, children, id }: { open: boolean; title: s
   </dialog>;
 }
 
+// Parent folders of the projects already open, most used first: a new project usually sits beside them.
+// Labels shorten the home folder to ~ for display only; the input receives the absolute path.
+export function folderSuggestions(snapshot?: Snapshot, limit = 4) {
+  const counts = new Map<string, number>();
+  for (const workspace of snapshot?.workspaces || []) {
+    if (workspace.worktree?.is_linked_worktree) continue; // Herdr-managed checkouts, not project folders.
+    const cwd = snapshot!.panes.find(pane => pane.workspace_id === workspace.workspace_id && pane.cwd?.startsWith('/'))?.cwd;
+    const parent = cwd?.replace(/\/+$/, '').replace(/\/[^/]+$/, '');
+    if (parent) counts.set(parent, (counts.get(parent) || 0) + 1);
+  }
+  const home = [...counts.keys()].map(path => /^\/(home|Users)\/[^/]+/.exec(path)?.[0]).find(Boolean);
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([path]) => ({
+    path: `${path}/`,
+    label: `${home && (path === home || path.startsWith(`${home}/`)) ? `~${path.slice(home.length)}` : path}/`,
+  }));
+}
+
 export interface CreateRequest { kind: CreateKind; workspaceId?: string }
 
 export function CreateSheet({ request, snapshot, onClose, onCreated }: {
@@ -38,6 +55,7 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   const workspaces = snapshot?.workspaces || [];
   // Herdr reports Git metadata only once a repository has worktrees, so offer every main workspace.
   const repositories = workspaces.filter(workspace => !workspace.worktree?.is_linked_worktree);
+  const folders = folderSuggestions(snapshot);
   const [kind, setKind] = useState<CreateKind>('agent');
   const [workspaceId, setWorkspaceId] = useState('');
   const [repositoryId, setRepositoryId] = useState('');
@@ -127,6 +145,14 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
         <label className="field">Folder on your PC
           <input id="new-folder" ref={folder} required disabled={busy} placeholder="~/Work/project"
             autoCapitalize="off" autoComplete="off" autoCorrect="off" spellCheck={false} maxLength={1024} /></label>
+        {folders.length ? <div className="choice-chips folder-chips" role="group" aria-label="Start from a folder">
+          {folders.map(item => <button type="button" key={item.path} data-folder={item.path} title={item.path} disabled={busy}
+            onClick={() => {
+              const input = folder.current;
+              if (!input) return;
+              input.value = item.path; input.focus(); input.setSelectionRange(item.path.length, item.path.length);
+            }}><Icon name="folder" size={16} />{item.label}</button>)}
+        </div> : null}
         <label className="field">Name <span className="optional">optional</span>
           <input id="new-label" ref={name} disabled={busy} placeholder="Folder name" autoComplete="off" maxLength={64} /></label>
       </> : null}
