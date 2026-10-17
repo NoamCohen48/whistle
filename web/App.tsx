@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Pane, Snapshot } from '../src/herdr.ts';
 import { loadPanes, pairBrowser, PairingRequired, type Startup } from './api.ts';
-import { AgentSwitcher, Inventory } from './components/Inventory.tsx';
+import { Icon } from './components/Icon.tsx';
+import { AgentSwitcher, Inventory, paneName, workspaceName } from './components/Inventory.tsx';
 import { Pairing } from './components/Pairing.tsx';
 import { TerminalPanel } from './components/TerminalPanel.tsx';
-import { INITIAL_SESSION, TerminalSession, type SessionState } from './terminal/session.ts';
+import { INITIAL_SESSION, TerminalSession } from './terminal/session.ts';
 
-const phaseLabels: Record<SessionState['phase'], string> = {
-  idle: 'Connected', connecting: 'Connecting', 'requesting-control': 'Connecting',
-  watching: 'Watching', controlling: 'Controlling', disconnected: 'Disconnected', paused: 'Paused',
-};
 const paneKey = (pane: Pane) => `${pane.pane_id}:${pane.terminal_id}`;
 
 export function App({ startup }: { startup: Promise<Startup> }) {
@@ -76,22 +73,30 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     } catch (cause) { setError((cause as Error).message); }
   };
   const draftKey = selected ? paneKey(selected) : '';
+  const message = error || session.error;
+  const banner = <div id="error" role="alert" hidden={!message}>
+    <span>{message}</span>
+    <button type="button" className="icon-button" aria-label="Dismiss" onClick={clearError}><Icon name="close" size={18} /></button>
+  </div>;
   return <>
     <Pairing hidden={paired} loading={loading} error={error} onPair={pair} onRetry={() => { setError(''); void refresh(); }} />
-    <div id="app" hidden={!paired}>
+    <div id="app" hidden={!paired} data-view={selected ? 'terminal' : 'inventory'} data-phase={selected ? session.phase : undefined}>
       <header>
-        <button type="button" id="back" hidden={!selected} onClick={() => {
+        {selected ? <button type="button" id="back" className="icon-button" aria-label="Back to panes" onClick={() => {
           engine?.close(); setSelection(undefined); sessionStorage.removeItem('whistle-pane'); void refresh();
-        }}>‹ Panes</button>
-        <strong id="heading">{selected ? selected.agent || 'Terminal' : 'whistle'}</strong>
-        <span id="connection" role="status">{selected ? phaseLabels[session.phase] : 'Connected'}</span>
-        <button type="button" id="refresh" onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}>Refresh</button>
+        }}><Icon name="back" /></button> : null}
+        {selected ? <div className="title">
+          <strong id="heading">{paneName(selected)}</strong>
+          <small>{workspaceName(snapshot, selected)} · {selected.agent || 'terminal'} · <code id="pane-info">{selected.pane_id}</code></small>
+        </div> : <strong id="heading" className="wordmark">whistle</strong>}
+        <button type="button" id="refresh" className="icon-button" aria-label="Refresh"
+          onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}><Icon name="refresh" /></button>
       </header>
       <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} />
-      <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select} />
+      <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select} banner={selected ? null : banner} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
+        banner={selected ? banner : null}
         draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) setDrafts(previous => ({ ...previous, [draftKey]: value })); }} />
-      <div id="error" role="alert" hidden={!error && !session.error}>{error || session.error}</div>
     </div>
   </>;
 }

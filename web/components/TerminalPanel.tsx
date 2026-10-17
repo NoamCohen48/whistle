@@ -1,24 +1,30 @@
-import { useEffect, useEffectEvent, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import type { Pane } from '../../src/herdr.ts';
 import { modifierOrder, namedKeys } from '../../src/keys.ts';
 import { TerminalSession, type SessionState } from '../terminal/session.ts';
+import { Icon } from './Icon.tsx';
 
-const allKeys = [...namedKeys, ...Array.from({ length: 24 }, (_, i) => `f${i + 1}`),
-  ...'abcdefghijklmnopqrstuvwxyz0123456789', ...'`~!@#$%^&*()_={}[]|\\:;"\',.<>/?'];
-const extraKeys = [
-  ['Tab', 'Tab'], ['Backspace', '⌫'], ['Interrupt', 'Ctrl+C'], ['EOF', 'Ctrl+D'],
+const keyGroups = [
+  ['Editing and navigation', namedKeys],
+  ['Letters and digits', [...'abcdefghijklmnopqrstuvwxyz0123456789']],
+  ['Symbols', [...'`~!@#$%^&*()_={}[]|\\:;"\',.<>/?']],
+  ['Function keys', Array.from({ length: 24 }, (_, i) => `f${i + 1}`)],
+] as const;
+const quickKeys = [
+  ['Tab', 'Tab'], ['Backspace', '⌫'], ['Interrupt', '^C'], ['EOF', '^D'],
   ['Up', '↑'], ['Down', '↓'], ['Left', '←'], ['Right', '→'],
 ] as const;
-const notices: Record<SessionState['phase'], string> = {
-  idle: '', connecting: 'Watching. Your desktop is unchanged.',
-  'requesting-control': 'Requesting control. No takeover of another controller.',
-  watching: 'Watching. Your desktop is unchanged.',
-  controlling: 'Live input. Edits and Enter go directly to this pane.',
-  disconnected: 'Disconnected. Control released; reconnecting in watch mode.',
-  paused: 'Paused. Control released; resume in watch mode.',
+const phaseLabels: Record<SessionState['phase'], string> = {
+  idle: 'Connected', connecting: 'Connecting', 'requesting-control': 'Connecting',
+  watching: 'Watching', controlling: 'Controlling', disconnected: 'Disconnected', paused: 'Paused',
 };
+const notices: Record<SessionState['phase'], string> = {
+  idle: '', connecting: '', 'requesting-control': '', watching: '', controlling: '',
+  disconnected: 'Reconnecting…', paused: '',
+};
+const title = (modifier: string) => modifier[0].toUpperCase() + modifier.slice(1);
 
-function KeyPicker({ engine, state, open }: { engine?: TerminalSession; state: SessionState; open: boolean }) {
+function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
   const customKey = useRef<HTMLInputElement>(null);
   const disabled = state.phase !== 'controlling';
   const sendKey = (key: string) => {
@@ -26,41 +32,51 @@ function KeyPicker({ engine, state, open }: { engine?: TerminalSession; state: S
     else if (key === 'EOF') engine?.shortcut('ctrl+d');
     else engine?.sendKey(key);
   };
-  return <div id="keypad" hidden={!open}>
-    <div className="keys modifiers" aria-label="Modifiers">
-      {modifierOrder.map(modifier => <button type="button" key={modifier} data-modifier={modifier} disabled={disabled}
-        aria-pressed={state.modifiers.includes(modifier)} onPointerDown={event => event.preventDefault()}
-        onClick={() => engine?.toggleModifier(modifier)}>{modifier[0].toUpperCase() + modifier.slice(1)}</button>)}
-      <button type="button" id="clear-modifiers" disabled={disabled} onClick={() => engine?.clearModifiers()}>Clear</button>
+  return <div id="keypad" hidden={!open} role="group" aria-label="Keys" style={{ maxHeight }}>
+    <div className="keypad-head">
+      <div className="keys modifiers" aria-label="Modifiers">
+        {modifierOrder.map(modifier => <button type="button" key={modifier} data-modifier={modifier} disabled={disabled}
+          aria-pressed={state.modifiers.includes(modifier)} onPointerDown={event => event.preventDefault()}
+          onClick={() => engine?.toggleModifier(modifier)}>{title(modifier)}</button>)}
+        <button type="button" id="clear-modifiers" className="quiet" disabled={disabled || !state.modifiers.length}
+          onClick={() => engine?.clearModifiers()}>Clear</button>
+      </div>
     </div>
-    <p className="hint">Modifiers apply to one key, then reset. The app decides what a shortcut does.</p>
-    <div id="key-grid" aria-label="All terminal keys">
-      {allKeys.map(key => <button type="button" key={key} data-key={key} disabled={disabled}
-        onPointerDown={event => event.preventDefault()} onClick={() => sendKey(key)}>{key}</button>)}
-    </div>
-    <form id="custom-key-form" onSubmit={event => { event.preventDefault(); engine?.sendKey(customKey.current?.value || ''); }}>
-      <label htmlFor="custom-key">Key or chord (e.g. ctrl+shift+p)</label>
-      <div className="key-entry"><input id="custom-key" ref={customKey} autoComplete="off" autoCapitalize="off"
-        spellCheck={false} maxLength={80} disabled={disabled} /><button type="submit" disabled={disabled}>Send key</button></div>
-    </form>
-    <div className="keys extra-keys">
-      {extraKeys.map(([key, label]) => <button type="button" key={key} data-key={key} disabled={disabled}
-        aria-label={['Up', 'Down', 'Left', 'Right'].includes(key) ? `Arrow ${key.toLowerCase()}` : undefined}
+    <div className="keys extra-keys" aria-label="Common keys">
+      {quickKeys.map(([key, label]) => <button type="button" key={key} data-key={key} disabled={disabled}
+        aria-label={['Up', 'Down', 'Left', 'Right'].includes(key) ? `Arrow ${key.toLowerCase()}`
+          : key === 'Interrupt' ? 'Ctrl+C' : key === 'EOF' ? 'Ctrl+D' : undefined}
         onPointerDown={event => event.preventDefault()} onClick={() => sendKey(key)}>{label}</button>)}
       <button type="button" id="scroll-up" aria-label="Scroll terminal up" disabled={disabled} onClick={() => engine?.scroll('up')}>PgUp</button>
       <button type="button" id="scroll-down" aria-label="Scroll terminal down" disabled={disabled} onClick={() => engine?.scroll('down')}>PgDn</button>
     </div>
+    <form id="custom-key-form" onSubmit={event => { event.preventDefault(); engine?.sendKey(customKey.current?.value || ''); }}>
+      <label htmlFor="custom-key">Key or chord</label>
+      <div className="key-entry"><input id="custom-key" ref={customKey} autoComplete="off" autoCapitalize="off"
+        placeholder="ctrl+shift+p" spellCheck={false} maxLength={80} disabled={disabled} />
+        <button type="submit" disabled={disabled}>Send</button></div>
+    </form>
+    <div id="key-grid" aria-label="All terminal keys">
+      {keyGroups.map(([heading, keys]) => <div className="key-group" key={heading} role="group" aria-label={heading}>
+        <p className="group-label">{heading}</p>
+        <div className="key-cells">{keys.map(key => <button type="button" key={key} data-key={key} disabled={disabled}
+          onPointerDown={event => event.preventDefault()} onClick={() => sendKey(key)}>{key}</button>)}</div>
+      </div>)}
+    </div>
   </div>;
 }
 
-export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft }: {
+export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner }: {
   pane?: Pane; state: SessionState; onState: Dispatch<SetStateAction<SessionState>>;
   engine?: TerminalSession; onEngine: Dispatch<SetStateAction<TerminalSession | undefined>>;
-  draft: string; onDraft: (value: string) => void;
+  draft: string; onDraft: (value: string) => void; banner?: ReactNode;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
+  const section = useRef<HTMLElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
+  const [keypadMax, setKeypadMax] = useState<number>();
   const [compose, setCompose] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   useEffect(() => {
@@ -82,44 +98,73 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
     engine?.resize();
     if (compose) editor.current?.focus();
   }, [compose, engine]);
+  // The Keys drawer overlays only the terminal: it must never cover the agent switcher or header.
+  useLayoutEffect(() => {
+    if (!keysOpen) return;
+    const measure = () => {
+      if (!section.current || !dock.current) return;
+      const room = dock.current.getBoundingClientRect().top - section.current.getBoundingClientRect().top - 8;
+      setKeypadMax(Math.max(140, Math.min(400, room)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.visualViewport?.addEventListener('resize', measure);
+    return () => { window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure); };
+  }, [keysOpen, compose]);
   const controlling = state.phase === 'controlling';
   const ready = controlling || state.phase === 'watching';
   const switching = state.phase === 'connecting' || state.phase === 'requesting-control';
-  return <section id="session" hidden={!pane} aria-label="Terminal session">
-    <div className="session-bar">
-      <span id="pane-info">{pane?.pane_id}</span>
-      <button type="button" id="control" className="primary" disabled={switching || !engine}
-        onClick={() => engine?.toggleControl()}>{controlling ? 'Release control' : 'Take control'}</button>
-      <button type="button" id="sizing" hidden={!controlling} onClick={() => engine?.toggleWidth()}>
-        {state.fitWidth ? 'Width: fit' : 'Width: original'}</button>
+  const armed = modifierOrder.filter(modifier => state.modifiers.includes(modifier));
+  return <section id="session" ref={section} hidden={!pane} aria-label="Terminal session" data-phase={state.phase}>
+    <div className="terminal-frame">
+      <div id="terminal-viewport" ref={viewport}><div id="terminal" ref={host} /></div>
+      {banner}
     </div>
-    <div id="notice" role="status">{notices[state.phase]}</div>
-    <div id="terminal-viewport" ref={viewport}><div id="terminal" ref={host} /></div>
-    <div id="compose" hidden={!compose}>
-      <label htmlFor="draft">Compose · local draft, not sent yet</label>
-      <textarea id="draft" ref={editor} rows={3} spellCheck={false} autoCapitalize="off" value={draft}
-        onChange={event => onDraft(event.target.value)} />
-      <div className="compose-actions">
-        <button type="button" id="paste" disabled={!controlling} onClick={() => engine?.paste(draft, false)}>Paste</button>
-        <button type="button" id="submit" className="primary" disabled={!controlling} onClick={() => engine?.paste(draft, true)}>Paste + Enter</button>
+    <div className="dock" ref={dock}>
+      <div className="session-bar">
+        <div className="session-state" role="status">
+          <span id="connection">{phaseLabels[state.phase]}</span>
+          <span id="notice">{notices[state.phase]}</span>
+        </div>
+        <button type="button" id="sizing" className="quiet" hidden={!controlling} aria-label={state.fitWidth ? 'Width: fit' : 'Width: original'}
+          onClick={() => engine?.toggleWidth()}><Icon name="width" size={18} />{state.fitWidth ? 'Fit' : 'Full'}</button>
+        <button type="button" id="jump-input" className="icon-button" aria-label="Jump to input"
+          disabled={!ready} onClick={() => engine?.jumpToInput()}><Icon name="cursor" /></button>
+        <button type="button" id="control" className={controlling ? 'release' : 'primary'} disabled={switching || !engine}
+          onClick={() => engine?.toggleControl()}>{controlling ? 'Release control' : 'Take control'}</button>
       </div>
-    </div>
-    <div id="keyboard" aria-label="Terminal controls">
-      <div id="armed-keys" role="status" hidden={!state.modifiers.length}>
-        {modifierOrder.filter(modifier => state.modifiers.includes(modifier)).join(' + ')} · next key only
+      <div id="compose" hidden={!compose}>
+        <div className="compose-head"><label htmlFor="draft">Draft</label>
+          <button type="button" id="clear-draft" className="quiet" disabled={!draft} onClick={() => { onDraft(''); editor.current?.focus(); }}>Clear</button></div>
+        <textarea id="draft" ref={editor} rows={3} spellCheck={false} autoCapitalize="off" value={draft}
+          placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)} />
+        <div className="compose-actions">
+          <button type="button" id="paste" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, false)}>Paste</button>
+          <button type="button" id="submit" className="primary" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, true)}>Paste + Enter</button>
+        </div>
       </div>
-      <KeyPicker engine={engine} state={state} open={keysOpen} />
-      <div className="keys main-keys">
-        <button type="button" id="jump-input" disabled={!ready} onClick={() => engine?.jumpToInput()}>Input</button>
-        <button type="button" id="focus-keyboard" aria-label="Keyboard" disabled={!controlling} onClick={() => engine?.focusKeyboard()}>Type</button>
-        <button type="button" id="compose-toggle" disabled={!controlling} onClick={() => {
-          engine?.clearModifiers(); setKeysOpen(false); setCompose(value => !value);
-        }}>Compose</button>
-        <button type="button" id="more-keys" aria-label="More keys" aria-expanded={keysOpen} disabled={!ready}
-          onClick={() => setKeysOpen(value => !value)}>Keys</button>
-        {['Escape', 'Enter'].map(key => <button type="button" key={key} data-key={key}
-          className={key === 'Enter' ? 'primary' : undefined} disabled={!controlling}
-          onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey(key)}>{key === 'Escape' ? 'Esc' : key}</button>)}
+      <div id="keyboard" aria-label="Terminal controls" hidden={!controlling}>
+        <div id="armed-keys" role="status" hidden={!armed.length}>
+          <span className="armed-chord">{armed.map(title).join(' + ')} + …</span>
+        </div>
+        <KeyPicker engine={engine} state={state} open={keysOpen} maxHeight={keypadMax} />
+        <div className="keys main-keys">
+          <div className="tool-group">
+            <button type="button" id="focus-keyboard" className="tool" aria-label="Keyboard" disabled={!controlling}
+              onClick={() => engine?.focusKeyboard()}><Icon name="keyboard" /><span>Type</span></button>
+            <button type="button" id="compose-toggle" className="tool" aria-pressed={compose} disabled={!controlling} onClick={() => {
+              engine?.clearModifiers(); setKeysOpen(false); setCompose(value => !value);
+            }}><Icon name="compose" /><span>Compose</span></button>
+            <button type="button" id="more-keys" className="tool" aria-label="More keys" aria-expanded={keysOpen}
+              data-armed={armed.length > 0} disabled={!controlling}
+              onClick={() => setKeysOpen(value => !value)}><Icon name="keys" /><span>Keys</span></button>
+          </div>
+          <div className="key-pair">
+            {['Escape', 'Enter'].map(key => <button type="button" key={key} data-key={key}
+              className={key === 'Enter' ? 'primary keycap' : 'keycap'} disabled={!controlling}
+              onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey(key)}>{key === 'Escape' ? 'Esc' : key}</button>)}
+          </div>
+        </div>
       </div>
     </div>
   </section>;

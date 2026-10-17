@@ -201,3 +201,25 @@ test('short viewports and touch scrolling retain usable terminal controls', asyn
   await page.locator('#jump-input').click();
   await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
 });
+
+test('errors and armed modifiers overlay the terminal without resizing the PTY', async ({ page }) => {
+  await control(page);
+  const viewport = page.locator('#terminal-viewport');
+  await page.waitForTimeout(250);
+  const resized = (await messages(page)).filter(message => message.type === 'resize').length;
+  const height = await viewport.evaluate(node => node.clientHeight);
+  await page.locator('#more-keys').click();
+  await page.locator('[data-modifier="ctrl"]').click();
+  await page.locator('#more-keys').click();
+  await expect(page.locator('#armed-keys')).toBeVisible();
+  await page.locator('#more-keys').click();
+  await page.locator('#custom-key').fill('meta+x'); // Rejected locally: unsupported modifier.
+  await page.locator('#custom-key-form button').click();
+  await expect(page.locator('.terminal-frame > #error')).toBeVisible();
+  expect(await viewport.evaluate(node => node.clientHeight)).toBe(height);
+  await page.waitForTimeout(300);
+  expect((await messages(page)).filter(message => message.type === 'resize').length).toBe(resized);
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.locator('#error')).toBeHidden();
+  expect((await messages(page)).filter(message => ['input', 'key'].includes(message.type))).toEqual([]);
+});
