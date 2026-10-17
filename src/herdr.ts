@@ -49,12 +49,12 @@ export class HerdrError extends Error {
   constructor(public readonly code: string, message: string) { super(message); }
 }
 
-export function rpc<T = any>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+export function rpc<T = any>(method: string, params: Record<string, unknown> = {}, timeoutMs = 5000): Promise<T> {
   return new Promise((resolve, reject) => {
     const socket = createConnection(socketPath);
     let buffer = '';
     const fail = (error: Error) => { socket.destroy(); reject(error); };
-    socket.setTimeout(5000, () => fail(new Error('Herdr request timed out')));
+    socket.setTimeout(timeoutMs, () => fail(new Error('Herdr request timed out')));
     socket.on('error', fail);
     socket.on('connect', () => socket.write(JSON.stringify({ id: crypto.randomUUID(), method, params }) + '\n'));
     socket.on('data', chunk => {

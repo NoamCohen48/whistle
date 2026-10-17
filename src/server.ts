@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import type { ServerWebSocket } from 'bun';
 import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts';
+import { agentKinds, parseAction, runAction, worktrees } from './actions.ts';
 import { dimensions, parseCommand } from './protocol.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
@@ -140,6 +141,18 @@ const server = Bun.serve<Peer>({
         if (!current) return new Response('Pair this browser first', { status: 401, headers });
         if (url.pathname === '/api/panes' && request.method === 'GET') {
           return Response.json(await snapshot(), { headers });
+        }
+        if (url.pathname === '/api/agents' && request.method === 'GET') {
+          return Response.json({ kinds: await agentKinds() }, { headers });
+        }
+        if (url.pathname === '/api/worktrees' && request.method === 'GET') {
+          const workspaceId = url.searchParams.get('workspace') || '';
+          if (!/^[A-Za-z0-9:_.-]{1,128}$/.test(workspaceId)) return new Response('Invalid workspace', { status: 400, headers });
+          return Response.json({ worktrees: await worktrees(workspaceId) }, { headers });
+        }
+        if (url.pathname === '/api/actions' && request.method === 'POST') {
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
+          return Response.json(await runAction(parseAction(await request.json())), { headers });
         }
         if (url.pathname === '/terminal') {
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });

@@ -94,6 +94,23 @@ Only the source-mode QR CLI can still use the original `.runtime/server-url` and
 
 Revocation commits before live streams close. The host releases every controller/observer belonging to that device. It checks validity at WebSocket open, on every message, before queued input executes, and periodically for idle streams. Other devices are not revoked. Already accepted writes cannot be undone; nothing is replayed.
 
+## Pane and worktree API
+
+Paired-cookie only (the PC token is not accepted). `src/actions.ts` reduces each request to fixed, validated fields; the browser never supplies commands, agent arguments or environment variables.
+
+- `POST /api/actions` (exact Origin required) with `type`:
+  - `terminal` (`workspaceId`) → `tab.create`.
+  - `agent` (`workspaceId`, `kind`) → `tab.create`, then `agent.start` (30 s readiness wait). If the agent fails to start, the new shell is kept and a warning is returned.
+  - `workspace` (`cwd`: absolute or `~/…`, optional `label`) → `workspace.create`.
+  - `worktree-create` (`workspaceId`, `branch`, optional `base`; conservative ref names only) / `worktree-open` (`workspaceId`, `path`).
+  - `close-pane` (`paneId`) → `pane.close`.
+  - `remove-worktree` (`workspaceId`) → `worktree.remove` with `force: false`, refused for anything that is not a linked worktree.
+  Every create call passes `focus: false`, so the desktop's focused pane does not change. The response carries the new `paneId`, which the phone opens watch-only.
+- `GET /api/agents`: agent kinds from Herdr's detection manifests whose executable is on the service `PATH` (plus `~/.local/bin`, `~/.bun/bin`); all kinds if none are found.
+- `GET /api/worktrees?workspace=ID`: linked, non-bare, non-prunable worktrees of that repository, with the pane to go to when one is already open.
+
+Phone-side close and removal are behind a confirm step. Removal is never forced (`force: false`): Herdr refuses a checkout with modified or untracked files (`dirty_worktree_requires_force`, shown as a plain message). A successful removal closes the worktree's workspace and panes and deletes the checkout; the branch is kept. Herdr reports a repository's Git metadata only once it has worktrees, so the phone offers every main workspace as a repository and reports non-Git ones (`not_git_worktree`) on submit.
+
 ## Checks
 
 Unit/process tests cover restart persistence, hash-only storage, permissions, expiry, throttled last-seen writes, scoped revocation, config precedence, XDG paths, safe quoting and the real systemd unit parser. CLI tests use a fake `systemctl` and temporary home to exercise install, repeat install, explicit start, stop/restart/status, foreign-file refusal, launcher execution, device administration and uninstall with preserved state. They do not install a real service. The separate artifact suite tests the copied native binary, hidden-checkout operation, real systemd parsing with unusual paths, repeat/self-installation, removal of the original download, and source-to-binary cookie/device retention. Release unit tests cover private permissions, concurrent publication and foreign-file/symlink refusal.

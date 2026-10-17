@@ -12,13 +12,19 @@ const paths = {
   branch: 'M6 4v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 0c0 4-8 3-8 6',
   close: 'M5.5 5.5l9 9m0-9-9 9',
   scan: 'M3.5 7V4.5a1 1 0 0 1 1-1H7m6 0h2.5a1 1 0 0 1 1 1V7m0 6v2.5a1 1 0 0 1-1 1H13m-6 0H4.5a1 1 0 0 1-1-1V13M6.5 10h7',
+  plus: 'M10 4v12M4 10h12',
+  more: 'M10 4.5v.01M10 10v.01M10 15.5v.01',
+  terminal: 'M3.5 4.5h13v11h-13zM6.5 8l2.5 2-2.5 2M10.5 12.5h3',
+  agent: 'M10 3v3m0 8v3M3 10h3m8 0h3M5.5 5.5l2 2m5 5 2 2m0-9-2 2m-5 5-2 2',
+  folder: 'M3 6a1 1 0 0 1 1-1h3.5L9 7h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
+  trash: 'M4.5 6h11M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6',
 } as const;
 
 export type IconName = keyof typeof paths;
 
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   return <svg className="icon" width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor"
-    strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    strokeWidth={name === 'more' ? 3 : 1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
     <path d={paths[name]} />
   </svg>;
 }

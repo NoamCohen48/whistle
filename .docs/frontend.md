@@ -11,6 +11,7 @@ The top of the screen is navigation (back, pane name/workspace/id, refresh, agen
 - **State** is never colour-only: a labelled pill (Watching = steel, Controlling = amber, Disconnected = rose). Controlling also draws an amber ring around the terminal; it eases in and disappears instantly when control is lost.
 - **Overlays never resize the PTY**: the Keys drawer, the armed-modifier chip and error banners are positioned layers. The Keys drawer is height-capped so it covers only the terminal, never the agent switcher. Compose is the one panel that deliberately takes layout space.
 - **Short viewports** (`.short-viewport`, set by the engine): landscape puts the header and chips on one row and the dock status and toolbar on one row; portrait with the keyboard open hides the chips while controlling.
+- **New** (inventory, bottom right) opens a bottom sheet for an agent, a terminal tab, a workspace or a worktree (new branch or existing checkout). The ⋯ menu in the terminal header adds an agent/terminal to the current workspace, closes the pane or removes the current linked worktree; destructive items need a confirm step. Created panes open watch-only like any other. A failed close/remove reopens the pane watch-only.
 - Errors are dismissible; the inventory has loading, empty and nested-worktree states; the pairing screen is a three-step sequence with the token fallback collapsed.
 
 ## Boundaries
@@ -22,6 +23,7 @@ The top of the screen is navigation (back, pane name/workspace/id, refresh, agen
 - `web/components/Inventory.tsx`: agent strip, workspace list and metadata-based worktree nesting. React renders pane names as text, not HTML.
 - `web/components/TerminalPanel.tsx`: UI controls and the terminal host element. Connect effects depend on pane/terminal identity, not refreshed metadata objects.
 - `web/terminal/session.ts`: imperative xterm instance, ordered WebSocket writes/ACK tracking, generation guards, reconnects, modifiers, paste, cursor-follow and local/remote scrolling. React receives only discrete UI transitions/errors. Terminal frames, typed terminal bytes and scroll positions do not enter React state.
+- `web/components/Actions.tsx`: create sheet and pane menu on native modal `<dialog>` bottom sheets.
 - `web/components/Icon.tsx`: inline decorative SVG icons (no icon font or extra assets).
 - `web/style.css`: token-based styling and compact visual-viewport rules. `--bg` must match the xterm theme and manifest theme color.
 - `vite.config.ts`: production output compatible with the host's explicit asset allowlist, plus a loopback-only development server with API/WebSocket proxies.

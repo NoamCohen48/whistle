@@ -32,7 +32,7 @@
 body { margin: 0; background: var(--bg) }
 /* Desktop browsers draw classic scrollbars; keep them thin and in-palette. Android uses overlays. */
 #panes, #terminal-viewport, #keypad, #compose { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent }
-button, input, textarea { font: inherit; color: inherit }
+button, input, textarea, select { font: inherit; color: inherit }
 code { font-family: var(--mono); font-size: .9em }
 [hidden] { display: none !important }
 h1, h2, h3, p { margin: 0 }
@@ -277,6 +277,68 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .short-viewport #agent-switcher { padding: 4px 8px }
 .short-viewport #agent-switcher button { min-height: 36px }
 .short-viewport .session-bar { min-height: 44px; padding-block: 2px }
+/* Create and pane actions */
+#app { position: relative }
+#app[data-view=inventory] #panes { padding-bottom: calc(96px + env(safe-area-inset-bottom)) }
+.fab {
+  position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom));
+  min-height: 52px; padding: 0 20px 0 16px; border-radius: 26px; font-size: 16px;
+  box-shadow: 0 6px 20px rgba(6, 10, 9, .55);
+}
+.sheet {
+  width: 100%; max-width: 560px; max-height: 88dvh; margin: auto auto 0; padding: 0;
+  border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 16px 16px 0 0;
+  background: var(--surface); color: var(--text); overflow: auto; overscroll-behavior: contain;
+}
+.sheet[open] { animation: sheet-in .2s cubic-bezier(.2, .8, .2, 1) }
+.sheet::backdrop { background: rgba(6, 10, 9, .6) }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0 } }
+.sheet-body { padding: 6px 16px calc(20px + env(safe-area-inset-bottom)) }
+.sheet-head { display: flex; align-items: center; gap: 8px; margin-right: -10px }
+.sheet-head h2:focus { outline: none }
+.sheet-head h2 { flex: 1; min-width: 0; font-size: 19px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.segments { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 0 20px }
+.segments button { flex-direction: column; gap: 4px; min-height: 64px; padding: 0 4px; font-size: 13px; color: var(--muted); background: transparent; border-color: var(--line) }
+.segments button[aria-pressed=true] { color: var(--text); background: var(--surface-2); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent) }
+.segments button[aria-pressed=true] .icon { color: var(--accent) }
+.sheet-form { display: flex; flex-direction: column; gap: 18px }
+.field { margin: 0; padding: 0; border: 0; min-width: 0 }
+.field legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600 }
+.field input, .field select { margin-top: 8px }
+.optional { font-weight: 400; color: var(--faint) }
+select {
+  width: 100%; min-height: 46px; padding: 0 40px 0 12px; font: inherit; font-size: 16px; color: var(--text);
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%239db0ac' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid var(--line-strong); border-radius: var(--radius); appearance: none;
+}
+.choice-chips { display: flex; flex-wrap: wrap; gap: 8px }
+.choice-chips button { min-height: 40px; padding: 0 14px; font: 14px var(--mono); background: transparent; border-color: var(--line-strong) }
+.choice-chips button[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650 }
+.toggle { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; gap: 3px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg) }
+.toggle button { min-height: 38px; border: 0; background: transparent; color: var(--muted); font-size: 14px }
+.toggle button[aria-pressed=true] { background: var(--surface-2); color: var(--text); font-weight: 600 }
+.worktree-choices ul, .menu { list-style: none; margin: 0; padding: 0 }
+.worktree-choice {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; width: 100%; min-height: 56px;
+  text-align: left; border: 0; border-radius: var(--radius-sm); background: transparent;
+}
+.worktree-choice span { min-width: 0 }
+.worktree-choice strong, .worktree-choice small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.worktree-choice small { font: 12px var(--mono); color: var(--faint) }
+.worktree-choice em { font-style: normal; font-size: 14px; font-weight: 600; color: var(--accent) }
+.worktree-choices li + li { border-top: 1px solid var(--line) }
+.sheet-status { font-size: 14px; color: var(--muted) }
+.sheet-error { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--alert-wash); color: #ffd9d0; font-size: 14px }
+.sheet-form > .primary { min-height: 50px; font-size: 16px }
+.menu { margin: 4px -8px 0 }
+.menu button { width: 100%; justify-content: flex-start; gap: 14px; min-height: 52px; padding: 0 12px; border: 0; background: transparent; font-size: 16px }
+.menu .icon { color: var(--muted) }
+.menu li:not(.danger) + .danger { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px }
+.menu .danger button, .menu .danger .icon { color: var(--alert) }
+.confirm { display: flex; flex-direction: column; gap: 16px; padding-top: 6px }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+button.danger { background: var(--alert); border-color: var(--alert); color: #2a0f0a; font-weight: 650 }
+
 .short-viewport #notice { display: none }
 .short-viewport #control, .short-viewport #sizing { min-height: 38px }
 .short-viewport { --toolbar: 44px }
