@@ -185,7 +185,7 @@ export class TerminalSession {
       }
     };
   }
-  private send(command: { type: 'input'; text: string } | { type: 'key'; key: string }) {
+  private send(command: { type: 'input'; text: string; submit?: boolean } | { type: 'key'; key: string }) {
     if (this.state.phase !== 'controlling' || this.socket?.readyState !== WebSocket.OPEN) {
       this.fail('Not controlling this pane. Input was not sent.'); return;
     }
@@ -205,13 +205,15 @@ export class TerminalSession {
     } catch (error) { this.fail((error as Error).message); }
   }
   shortcut(key: string) { this.clearModifiers(); this.sendKey(key); }
-  paste(value: string, submit: boolean) {
+  // Herdr frames are rendered screens, so a mirror attached mid-session may never see the program
+  // turn bracketed paste on. Coding agents always accept it; the caller says when the pane is one.
+  paste(value: string, submit: boolean, agent = false) {
     if (!value || this.state.phase !== 'controlling') return;
     this.clearModifiers();
     const text = value.replace(/\r?\n/g, '\r');
-    const bracketed = this.terminal.modes.bracketedPasteMode;
-    if (!bracketed && /[\r\n]/.test(text)) { this.fail('Multiline paste requires bracketed-paste support; nothing was sent.'); return; }
-    this.send({ type: 'input', text: (bracketed ? '\x1b[200~' + text.replace(/\x1b/g, '') + '\x1b[201~' : text) + (submit ? '\r' : '') });
+    const bracketed = this.terminal.modes.bracketedPasteMode || agent;
+    if (!bracketed && /[\r\n]/.test(text)) { this.fail('This terminal did not say it accepts pasted lines, so nothing was sent. Send one line at a time.'); return; }
+    this.send({ type: 'input', text: bracketed ? '\x1b[200~' + text.replace(/\x1b/g, '') + '\x1b[201~' : text, ...(submit ? { submit: true } : {}) });
   }
   private fittedSize() {
     const size = this.fit.proposeDimensions();

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type Message = { type: string; pane?: string; control?: boolean; height?: number; rows?: number; id?: number; key?: string; text?: string;
+type Message = { type: string; pane?: string; control?: boolean; height?: number; rows?: number; id?: number; key?: string; text?: string; submit?: boolean;
   contentType?: string; jpeg?: boolean; size?: number; path?: string };
 const fixtureUrl = (path: string) => `http://127.0.0.1:8792${path}`;
 async function messages(page: Page): Promise<Message[]> { return (await page.request.get(fixtureUrl('/__test/messages'))).json(); }
@@ -81,13 +81,37 @@ test('live text, chords and compose stay in one ordered input lane', async ({ pa
   const pasted = '\x1b[200~line one\rline two\x1b[201~';
   await expect.poll(async () => (await messages(page)).filter(message => ['input', 'key'].includes(message.type)).length).toBe(8);
   const writes = (await messages(page)).filter(message => ['input', 'key'].includes(message.type));
-  expect(writes.map(({ type, key, text }) => ({ type, ...(key ? { key } : { text }) }))).toEqual([
+  expect(writes.map(({ type, key, text, submit }) => ({ type, ...(key ? { key } : { text }), ...(submit ? { submit } : {}) }))).toEqual([
     { type: 'input', text: 'a' }, { type: 'input', text: 'b' }, { type: 'input', text: 'c' },
     { type: 'key', key: 'enter' }, { type: 'key', key: 'ctrl+p' }, { type: 'key', key: 'ctrl+shift+k' },
-    { type: 'input', text: pasted }, { type: 'input', text: pasted + '\r' },
+    { type: 'input', text: pasted }, { type: 'input', text: pasted, submit: true },
   ]);
   expect(writes.map(message => message.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   await expect(page.locator('#draft')).toHaveValue('line one\nline two');
+});
+
+test('multiline paste reaches agents even when frames never report bracketed paste', async ({ page, request }) => {
+  await request.post(fixtureUrl('/__test/no-bracketed'));
+  await control(page);
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('line one\nline two');
+  await page.locator('#submit').click();
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(({ text, submit }) => ({ text, submit })))
+    .toEqual([{ text: '\x1b[200~line one\rline two\x1b[201~', submit: true }]);
+
+  // A plain terminal that never said it accepts pasted lines still refuses rather than running each line.
+  await page.locator('#control').click();
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-new-terminal').click();
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('ls\nrm -rf build');
+  await page.locator('#submit').click();
+  await expect(page.getByText('This terminal did not say it accepts pasted lines')).toBeVisible();
+  expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(1);
 });
 
 test('switching agents preserves separate drafts and drops control/modifiers', async ({ page }) => {
@@ -526,8 +550,8 @@ test('pictures upload into the draft as paths and are only sent with it', async 
   await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png ');
   await expect(page.locator('#attachments li')).toHaveCount(1);
   await page.locator('#submit').click();
-  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(message => message.text))
-    .toEqual(['\x1b[200~what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png \x1b[201~\r']);
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(({ text, submit }) => ({ text, submit })))
+    .toEqual([{ text: '\x1b[200~what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png \x1b[201~', submit: true }]);
 
   // Files that are not readable pictures are refused on the phone with a reason.
   await page.locator('#picture-input').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') });

@@ -6,6 +6,10 @@ describe('terminal command boundary', () => {
     const text = 'hello\x7f\x1b[D\rשלום🙂';
     expect(parseCommand(JSON.stringify({ type: 'input', id: 1, text }))).toEqual({ type: 'input', id: 1, text });
   });
+  test('a paste can ask for Enter after it; anything but true is ignored', () => {
+    expect(parseCommand('{"type":"input","id":2,"text":"hi","submit":true}')).toEqual({ type: 'input', id: 2, text: 'hi', submit: true });
+    expect(parseCommand('{"type":"input","id":2,"text":"hi","submit":"yes"}')).toEqual({ type: 'input', id: 2, text: 'hi' });
+  });
   test('accepts terminal resize and scroll', () => {
     expect(parseCommand('{"type":"resize","cols":45,"rows":18}')).toEqual({ type: 'resize', cols: 45, rows: 18 });
     expect(parseCommand('{"type":"scroll","direction":"up","lines":8}').type).toBe('scroll');

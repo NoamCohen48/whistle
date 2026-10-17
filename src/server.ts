@@ -19,6 +19,8 @@ import { ensureToken } from './credentials.ts';
 
 const paths = resolvePaths();
 const config = loadHostConfig(paths);
+// Pause between a pasted draft and its Enter, so the program has taken the paste in first.
+const SUBMIT_DELAY_MS = 250;
 const tokenPath = join(paths.stateDir, 'access-token');
 const accessToken = await ensureToken(paths);
 const devices = new DeviceStore(join(paths.stateDir, 'devices.sqlite'));
@@ -303,8 +305,16 @@ const server = Bun.serve<Peer>({
             // All text and chords use this one serial RPC lane. Mixing CLI stdin
             // and key RPCs could let a shortcut overtake previously typed text.
             try {
-              if (command.type === 'input') await rpc('pane.send_text', { pane_id: peer.paneId, text: command.text });
-              else await rpc('pane.send_keys', { pane_id: peer.paneId, keys: [command.key] });
+              if (command.type === 'input') {
+                await rpc('pane.send_text', { pane_id: peer.paneId, text: command.text });
+                // Enter in the same write as a paste is read as part of it (Claude Code just pastes), so it
+                // follows as its own key once the paste has landed, still inside this serial lane.
+                if (command.submit) {
+                  await Bun.sleep(SUBMIT_DELAY_MS);
+                  if (peer.closed || !stream.controlled) throw new Error('Control ended before Enter; the text was pasted but not submitted');
+                  await rpc('pane.send_keys', { pane_id: peer.paneId, keys: ['enter'] });
+                }
+              } else await rpc('pane.send_keys', { pane_id: peer.paneId, keys: [command.key] });
               message(ws, { type: 'ack', id: command.id });
             } catch (error) {
               if (command.type === 'key' && error instanceof HerdrError && error.code === 'invalid_key') {
