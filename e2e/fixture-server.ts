@@ -74,6 +74,11 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/messages') return Response.json(messages);
     if (path === '/__test/pairings') return Response.json(pairings);
     if (path === '/__test/disconnect') { for (const peer of peers) peer.close(); return new Response('closed'); }
+    if (path === '/__test/status') {
+      const pane = inventory.panes.find(item => item.pane_id === url.searchParams.get('pane'));
+      if (pane) pane.agent_status = url.searchParams.get('status') || 'idle';
+      return new Response(pane ? 'updated' : 'missing', { status: pane ? 200 : 404 });
+    }
     if (path === '/__test/replace') {
       inventory.panes[0].terminal_id = 'replacement'; return new Response('replaced');
     }

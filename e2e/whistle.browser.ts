@@ -337,3 +337,26 @@ test('closing a pane and removing a worktree need confirmation; failures return 
     { action: 'remove-worktree', workspaceId: 'w2' },
   ]);
 });
+
+test('agents that need you are listed first and open watch-only', async ({ page, request }) => {
+  await pair(page);
+  await expect(page.locator('#needs-you')).toHaveCount(0);
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=blocked'));
+  await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=done'));
+  await page.locator('#refresh').click();
+  const waiting = page.locator('#needs-you .pane');
+  await expect(waiting).toHaveCount(2);
+  await expect(waiting.first()).toContainText('Second agentneeds you');
+  await expect(page.locator('#needs-you')).toContainText('app-explorer');
+  await expect(page.locator('#needs-you')).toContainText('finished');
+  await expect(page.locator('#needs-you .dot[data-tone="attention"]')).toHaveCount(1);
+  await waiting.filter({ hasText: 'Second agent' }).click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect((await messages(page)).filter(message => message.type === 'connect')).toEqual([
+    expect.objectContaining({ pane: 'w2:p1', control: false })]);
+  await page.locator('#back').click();
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=working'));
+  await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=idle'));
+  await page.locator('#refresh').click();
+  await expect(page.locator('#needs-you')).toHaveCount(0);
+});
