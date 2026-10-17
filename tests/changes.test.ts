@@ -35,6 +35,7 @@ test('lists committed-against changes, renames, binaries and untracked files', a
 
     const result = await changes(join(root));
     expect(result.branch).toBe('feature/review');
+    expect(result.root).toBe(root);
     expect(result.truncated).toBe(false);
     expect(result.files).toEqual([
       { path: '.gitignore', status: 'untracked', added: 1, removed: 0, binary: false },

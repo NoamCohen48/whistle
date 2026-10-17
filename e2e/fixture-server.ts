@@ -1,6 +1,7 @@
 // Isolated browser fixture. Never imports the Herdr adapter or opens a real pane.
 import type { ServerWebSocket } from 'bun';
 import type { Snapshot } from '../src/herdr.ts';
+import { deflateSync } from 'node:zlib';
 import { assetResponse } from '../src/assets.ts';
 
 const initial: Snapshot = {
@@ -14,6 +15,23 @@ const initial: Snapshot = {
     { pane_id: 'w2:p1', terminal_id: 't2', workspace_id: 'w2', tab_id: 'tab2', label: 'Second agent', agent: 'pi', agent_status: 'working', cwd: '/home/dev/.herdr/worktrees/tap/explorer' },
   ],
 };
+// A real PNG so pictures render: a striped test card.
+const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc = (bytes: Buffer) => { let c = 0xffffffff; for (const byte of bytes) c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+function chunk(type: string, data: Buffer) {
+  const body = Buffer.concat([Buffer.from(type), data]), out = Buffer.alloc(body.length + 8);
+  out.writeUInt32BE(data.length, 0); body.copy(out, 4); out.writeUInt32BE(crc(body), body.length + 4); return out;
+}
+function testCard(width: number, height: number) {
+  const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
+  const rows = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = y * (width * 3 + 1) + 1 + x * 3, band = Math.floor(x / (width / 6));
+    rows.set(y < height * .7 ? [[186, 215, 161], [233, 179, 91], [96, 140, 200], [220, 110, 90], [160, 120, 200], [230, 230, 230]][band] ?? [0, 0, 0] : [35, 43, 44], i);
+  }
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
+}
+const picture = testCard(360, 240);
 interface Peer { pane: string; control: boolean; width: number; height: number; timer?: ReturnType<typeof setInterval> }
 let inventory = structuredClone(initial);
 let messages: Record<string, unknown>[] = [];
@@ -27,8 +45,9 @@ const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString(
 let created = 0;
 let uploads = 0;
 // Review data for w1:p1 only; any other pane reports a folder outside Git.
-const changes = { branch: 'feature/review', truncated: false, files: [
+const changes = { root: '/home/dev/Work/tap', branch: 'feature/review', truncated: false, files: [
   { path: 'assets/logo.png', status: 'modified', added: 0, removed: 0, binary: true },
+  { path: 'docs/home-screen.png', status: 'untracked', added: 0, removed: 0, binary: true },
   { path: 'src/old.ts', status: 'deleted', added: 0, removed: 8, binary: false },
   { path: 'web/App.tsx', status: 'modified', added: 12, removed: 3, binary: false },
   { path: 'web/components/Changes.tsx', status: 'untracked', added: 40, removed: 0, binary: false },
@@ -119,7 +138,7 @@ const server = Bun.serve<Peer>({
     }
     if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
       || path === '/api/push' || path === '/api/push/test' || path === '/api/uploads'
-      || path === '/api/changes' || path === '/api/changes/file') {
+      || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
@@ -136,6 +155,12 @@ const server = Bun.serve<Peer>({
         if (request.method === 'DELETE') pushSubscribed = false;
         if (path === '/api/push/test' && failPushTest) return new Response('Could not reach the push service: Push service answered 500', { status: 502 });
         return new Response('ok');
+      }
+      if (path === '/api/picture') {
+        const file = url.searchParams.get('path') || '';
+        messages.push({ type: 'picture', pane: url.searchParams.get('pane'), path: file });
+        if (!file.startsWith('/home/dev/Work/tap/') && !/^[^/]/.test(file)) return new Response('Only pictures inside this pane’s project can be shown.', { status: 403 });
+        return new Response(picture, { headers: { 'Content-Type': 'image/png' } });
       }
       if (path.startsWith('/api/changes')) {
         const pane = url.searchParams.get('pane');

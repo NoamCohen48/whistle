@@ -382,6 +382,20 @@ select {
 .diff [data-line=del] { background: color-mix(in srgb, var(--alert) 16%, transparent) }
 .diff [data-line=hunk] { color: var(--muted); background: var(--surface-2) }
 .diff [data-line=note] { color: var(--muted) }
+.change-picture { display: block; width: calc(100% - 16px); margin: 4px 8px 12px; padding: 0; min-height: 0; border: 1px solid var(--line); background: var(--bg) repeating-conic-gradient(var(--surface) 0 25%, transparent 0 50%) 0 0 / 16px 16px; overflow: hidden }
+.change-picture img { display: block; width: 100%; max-height: 50dvh; object-fit: contain }
+/* Picture viewer */
+#picture-viewer { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 0; border: 0; background: #070a0a; color: var(--text) }
+#picture-viewer[open] { display: flex; flex-direction: column }
+#picture-viewer::backdrop { background: #070a0a }
+.viewer-head { display: flex; align-items: center; gap: 4px; padding: max(6px, env(safe-area-inset-top)) 6px 6px 16px }
+.viewer-head strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600 }
+.viewer-head a.icon-button { display: inline-grid; place-items: center; height: 44px; color: inherit }
+.viewer-body { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 0 0 env(safe-area-inset-bottom); overscroll-behavior: contain }
+.viewer-body img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in }
+.viewer-body[data-full=true] { place-items: start }
+.viewer-body[data-full=true] img { max-width: none; max-height: none; cursor: zoom-out }
+.viewer-body .sheet-error { margin: 16px }
 .menu button { width: 100%; justify-content: flex-start; gap: 14px; min-height: 52px; padding: 0 12px; border: 0; background: transparent; font-size: 16px }
 .menu .icon { color: var(--muted) }
 .menu li:not(.danger) + .danger, .menu .separated { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px }
