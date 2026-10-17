@@ -8,6 +8,7 @@ import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSettings, parseSubsc
 import { dimensions, parseCommand } from './protocol.ts';
 import { ChangesError, changes, fileDiff } from './changes.ts';
 import { PictureError, readPicture } from './pictures.ts';
+import { panePreviews } from './previews.ts';
 import { FolderError, listFolders } from './folders.ts';
 import { MAX_UPLOAD_BYTES, UploadError, saveUpload, sweepUploads } from './uploads.ts';
 import { PairingTickets } from './pairing.ts';
@@ -159,6 +160,9 @@ const server = Bun.serve<Peer>({
         if (!current) return new Response('Pair this browser first', { status: 401, headers });
         if (url.pathname === '/api/panes' && request.method === 'GET') {
           return Response.json(await snapshot(), { headers });
+        }
+        if (url.pathname === '/api/previews' && request.method === 'GET') {
+          return Response.json(await panePreviews((await snapshot()).panes), { headers });
         }
         if (url.pathname === '/api/agents' && request.method === 'GET') {
           return Response.json({ kinds: await agentKinds() }, { headers });

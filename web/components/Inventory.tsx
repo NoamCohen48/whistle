@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Pane, Snapshot, Workspace } from '../../src/herdr.ts';
 import { groupWorkspaces } from '../../src/workspaces.ts';
+import { loadPreviews } from '../api.ts';
 import { Icon } from './Icon.tsx';
 
 export function paneName(pane: Pane) { return pane.label || pane.terminal_title_stripped || pane.agent || pane.pane_id; }
@@ -51,7 +52,7 @@ export function AgentSwitcher({ snapshot, selected, onSelect }: {
   </nav>;
 }
 
-function PaneRow({ pane, detail, onSelect }: { pane: Pane; detail?: string; onSelect: (pane: Pane) => void }) {
+function PaneRow({ pane, detail, preview, onSelect }: { pane: Pane; detail?: string; preview?: string; onSelect: (pane: Pane) => void }) {
   return <button type="button" className="pane" onClick={() => onSelect(pane)}>
     <StatusDot pane={pane} />
     <span className="pane-copy">
@@ -59,14 +60,15 @@ function PaneRow({ pane, detail, onSelect }: { pane: Pane; detail?: string; onSe
       <small><span className="state" data-tone={statusTone(pane)}>{statusText(pane)}</span>
         <span>{pane.agent || 'terminal'}</span>
         {detail !== undefined ? <span>{detail}</span> : pane.cwd ? <span className="cwd">{pane.cwd}</span> : null}</small>
+      {preview ? <span className="pane-preview">{Array.from(preview).slice(0, 120).join('')}</span> : null}
     </span>
     <code className="pane-id">{pane.pane_id}</code>
     <Icon name="forward" size={18} />
   </button>;
 }
 
-function WorkspaceGroup({ workspace, snapshot, nested = false, children, onSelect }: {
-  workspace: Workspace; snapshot: Snapshot; nested?: boolean; children?: ReactNode; onSelect: (pane: Pane) => void;
+function WorkspaceGroup({ workspace, snapshot, previews, nested = false, children, onSelect }: {
+  workspace: Workspace; snapshot: Snapshot; previews: Record<string, string>; nested?: boolean; children?: ReactNode; onSelect: (pane: Pane) => void;
 }) {
   const Heading = nested ? 'h3' : 'h2';
   const panes = snapshot.panes.filter(pane => pane.workspace_id === workspace.workspace_id);
@@ -78,7 +80,7 @@ function WorkspaceGroup({ workspace, snapshot, nested = false, children, onSelec
       <span className="workspace-count">{panes.length}</span>
     </Heading>
     {panes.length ? <ul className="pane-list">{panes.map(pane => <li key={pane.pane_id}>
-      <PaneRow pane={pane} onSelect={onSelect} />
+      <PaneRow pane={pane} preview={previews[pane.pane_id]} onSelect={onSelect} />
     </li>)}</ul> : null}
     {children}
   </section>;
@@ -86,8 +88,8 @@ function WorkspaceGroup({ workspace, snapshot, nested = false, children, onSelec
 
 // Search appears once the list is long enough to need it.
 export const SEARCH_THRESHOLD = 6;
-function matches(snapshot: Snapshot, pane: Pane, words: string[]) {
-  const text = [paneName(pane), workspaceName(snapshot, pane), pane.agent, statusText(pane), pane.cwd, pane.pane_id]
+function matches(snapshot: Snapshot, pane: Pane, words: string[], preview?: string) {
+  const text = [paneName(pane), workspaceName(snapshot, pane), pane.agent, statusText(pane), pane.cwd, pane.pane_id, preview]
     .filter(Boolean).join(' ').toLowerCase();
   return words.every(word => text.includes(word));
 }
@@ -95,11 +97,31 @@ function matches(snapshot: Snapshot, pane: Pane, words: string[]) {
 export function Inventory({ snapshot, hidden, banner, onSelect }: {
   snapshot?: Snapshot; hidden: boolean; banner?: ReactNode; onSelect: (pane: Pane) => void;
 }) {
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (hidden || !snapshot) return;
+    const controller = new AbortController();
+    let busy = false;
+    const refresh = async () => {
+      if (document.hidden || busy) return;
+      busy = true;
+      try {
+        const next = await loadPreviews(controller.signal);
+        if (!controller.signal.aborted) setPreviews(next);
+      } catch { /* PairingRequired is handled centrally; transient failures keep the list usable. */ }
+      finally { busy = false; }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 10_000);
+    const visible = () => { void refresh(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { controller.abort(); clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+  }, [hidden, Boolean(snapshot)]);
   const count = snapshot?.panes.length || 0;
   const [query, setQuery] = useState('');
   const words = useDeferredValue(query).toLowerCase().split(/\s+/).filter(Boolean);
   const searchable = count >= SEARCH_THRESHOLD;
-  const results = snapshot && searchable && words.length ? snapshot.panes.filter(pane => matches(snapshot, pane, words)) : undefined;
+  const results = snapshot && searchable && words.length ? snapshot.panes.filter(pane => matches(snapshot, pane, words, previews[pane.pane_id])) : undefined;
   // Blocked agents are waiting on an answer, so they come before finished ones.
   const waiting = (snapshot?.panes.filter(needsYou) || [])
     .sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
@@ -119,22 +141,22 @@ export function Inventory({ snapshot, hidden, banner, onSelect }: {
       <h2 className="workspace"><span className="workspace-name">
         {results.length ? `${results.length} ${results.length === 1 ? 'match' : 'matches'}` : 'No matches'}</span></h2>
       {results.length ? <ul className="pane-list">{results.map(pane => <li key={pane.pane_id}>
-        <PaneRow pane={pane} detail={workspaceName(snapshot!, pane)} onSelect={onSelect} />
+        <PaneRow pane={pane} preview={previews[pane.pane_id]} detail={workspaceName(snapshot!, pane)} onSelect={onSelect} />
       </li>)}</ul> : null}
     </section> : null}
     {!results && snapshot && waiting.length ? <section id="needs-you" className="workspace-group" aria-labelledby="needs-you-heading">
       <h2 className="workspace" id="needs-you-heading"><span className="workspace-name">Needs you</span>
         <span className="workspace-count">{waiting.length}</span></h2>
       <ul className="pane-list">{waiting.map(pane => <li key={pane.pane_id}>
-        <PaneRow pane={pane} detail={workspaceName(snapshot, pane)} onSelect={onSelect} />
+        <PaneRow pane={pane} preview={previews[pane.pane_id]} detail={workspaceName(snapshot, pane)} onSelect={onSelect} />
       </li>)}</ul>
     </section> : null}
     <div id="pane-list" hidden={Boolean(results)}>{!snapshot ? <div className="skeleton" role="status" aria-label="Loading panes…">
       {[0, 1, 2].map(row => <span key={row} />)}</div>
       : count ? groupWorkspaces(snapshot.workspaces).map(group =>
-        <WorkspaceGroup key={group.workspace.workspace_id} workspace={group.workspace} snapshot={snapshot} onSelect={onSelect}>
+        <WorkspaceGroup key={group.workspace.workspace_id} workspace={group.workspace} snapshot={snapshot} previews={previews} onSelect={onSelect}>
           {group.children.map(workspace => <WorkspaceGroup key={workspace.workspace_id} workspace={workspace}
-            nested snapshot={snapshot} onSelect={onSelect} />)}
+            nested snapshot={snapshot} previews={previews} onSelect={onSelect} />)}
         </WorkspaceGroup>)
       : <div className="empty"><strong>No panes</strong></div>}</div>
   </main>;
