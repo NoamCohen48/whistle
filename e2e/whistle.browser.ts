@@ -597,3 +597,32 @@ test('home-screen shortcuts open the last pane, the agent that needs you, or New
   await expect(page.locator('#control')).toHaveText('Take control');
   expect((await messages(page)).filter(message => message.type === 'connect').every(message => message.control === false)).toBe(true);
 });
+
+test('terminal text can be read, copied and its picture paths opened, without touching the terminal', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page);
+  await page.locator('#terminal-text').click();
+  const text = page.locator('#terminal-text-sheet pre');
+  await expect(text).toContainText('Whistle fixture w1:p1');
+  await expect(text).toContainText('input>');
+
+  await text.getByRole('button', { name: 'docs/home-screen.png' }).click();
+  const viewer = page.locator('#picture-viewer');
+  await expect(viewer.locator('img')).toHaveJSProperty('naturalWidth', 360);
+  expect((await messages(page)).filter(message => message.type === 'picture').map(({ pane, path }) => ({ pane, path })))
+    .toEqual([{ pane: 'w1:p1', path: 'docs/home-screen.png' }]);
+  await viewer.getByRole('button', { name: 'Close' }).click();
+
+  await page.locator('#copy-text').click();
+  await expect(page.locator('#terminal-text-sheet [role=status]')).toHaveText('Copied');
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied.split('\n').slice(0, 2)).toEqual(['Whistle fixture w1:p1', 'Saved screenshot to docs/home-screen.png']);
+  expect(copied).toContain('\ninput>');
+  expect(copied).not.toMatch(/ +\n/); // Trailing blanks are trimmed.
+
+  await page.locator('#terminal-text-sheet').getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  const log = await messages(page);
+  expect(log.filter(message => message.type === 'connect')).toHaveLength(1);
+  expect(log.filter(message => ['resize', 'input', 'key'].includes(message.type))).toHaveLength(0);
+});

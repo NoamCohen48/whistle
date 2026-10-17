@@ -5,6 +5,7 @@ import { CreateSheet, PaneMenu, type CreateRequest } from './components/Actions.
 import { ChangesSheet } from './components/Changes.tsx';
 import { AlertsSheet } from './components/AlertsSheet.tsx';
 import { PictureViewer, type PictureRequest } from './components/PictureViewer.tsx';
+import { TerminalTextSheet } from './components/TerminalText.tsx';
 import { Icon } from './components/Icon.tsx';
 import { AgentSwitcher, Inventory, needsYou, paneName, statusTone, workspaceName } from './components/Inventory.tsx';
 import { Pairing } from './components/Pairing.tsx';
@@ -31,6 +32,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [changesFor, setChangesFor] = useState<string>();
   const [picture, setPicture] = useState<PictureRequest>();
+  const [terminalText, setTerminalText] = useState<{ paneId: string; text: string }>();
   const [alerts, setAlerts] = useState<AlertState>('unsupported');
   const [alertsBusy, setAlertsBusy] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -191,7 +193,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} />
       <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select} banner={selected ? null : banner} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
-        banner={selected ? banner : null}
+        banner={selected ? banner : null} onText={text => { if (selected) setTerminalText({ paneId: selected.pane_id, text }); }}
         draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) setDrafts(previous => ({ ...previous, [draftKey]: value })); }} />
       {selected ? null : <button type="button" id="new" className="primary fab" aria-haspopup="dialog"
         onClick={() => setCreateRequest({ kind: 'agent', workspaceId: sessionStorage.getItem('whistle-workspace') || undefined })}>
@@ -204,6 +206,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
         onChanges={() => { setMenuOpen(false); setChangesFor(selected?.pane_id); }} />
       <ChangesSheet pane={selected} open={Boolean(selected) && changesFor === selected?.pane_id} onClose={() => setChangesFor(undefined)}
         onPicture={setPicture} />
+      <TerminalTextSheet text={terminalText?.paneId === selected?.pane_id ? terminalText?.text : undefined} paneId={selected?.pane_id}
+        onClose={() => setTerminalText(undefined)} onPicture={setPicture} />
       <PictureViewer picture={picture?.paneId === selected?.pane_id ? picture : undefined} onClose={() => setPicture(undefined)} />
     </div>
   </>;
