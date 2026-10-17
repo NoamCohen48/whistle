@@ -9,7 +9,7 @@ test('public output excludes private app and runtime assets', async () => {
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`mock works in ${colorScheme} mode without private connections`, async ({ page, baseURL }) => {
+  test(`site works in ${colorScheme} mode without private connections`, async ({ page, baseURL }) => {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     const failures: string[] = [];
     const requests: string[] = [];
@@ -19,17 +19,44 @@ for (const colorScheme of ['light', 'dark'] as const) {
     page.on('request', request => requests.push(request.url()));
     page.on('websocket', socket => sockets.push(socket.url()));
     await page.goto('./');
-    await expect(page).toHaveTitle('Whistle | Your terminals, within reach');
+    await expect(page).toHaveTitle('Whistle | Your coding agents, from your phone');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('figure', { name: 'Product image placeholder' })).toBeVisible();
-    const button = page.getByRole('link', { name: 'Get started' });
-    await expect(button).toBeVisible();
     expect(await page.locator('body').evaluate(node => getComputedStyle(node).fontSize)).toBe('16px');
-    expect(await button.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.keyboard.press('Tab');
+    const skip = page.getByRole('link', { name: 'Skip to content' });
+    await expect(skip).toBeFocused();
+    expect(await skip.evaluate(node => getComputedStyle(node).outlineStyle)).toBe('solid');
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => document.fonts.check('16px "Bricolage Grotesque"'))).toBe(true);
+
+    // The hero illustration is local navigation and state over sample data only.
+    const demo = page.getByRole('figure', { name: /with sample data\. Not a live terminal/ });
+    await expect(demo).toBeVisible();
+    await expect(demo.getByText('Your herd', { exact: true })).toBeVisible();
+    await expect(demo.getByRole('button', { name: 'Take control' })).toBeHidden();
+    await demo.getByRole('button', { name: /Checkout tests/ }).click();
+    const badge = demo.locator('[data-demo-badge]');
+    await expect(badge).toHaveText('Watching');
+    await expect(demo.getByRole('button', { name: 'Take control' })).toBeFocused();
+    await demo.getByRole('button', { name: 'Take control' }).click();
+    await expect(demo.getByRole('button', { name: 'Release control' })).toBeVisible();
+    await expect(badge).toHaveText('Controlling');
+    expect(await badge.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+    await demo.getByRole('button', { name: 'Simulate a dropped connection' }).click();
+    await expect(badge).toHaveText('Watching');
+    await expect(demo.getByText('Reconnected, watching. Nothing was resent.', { exact: true })).toBeVisible();
+    await expect(demo.getByRole('button', { name: 'Take control' })).toBeVisible();
+    await demo.getByRole('button', { name: 'Back to your herd' }).click();
+    await expect(demo.getByRole('button', { name: /Checkout tests/ })).toBeFocused();
+    await expect(demo.getByRole('button', { name: 'Simulate a dropped connection' })).toBeHidden();
+
+    const button = page.getByRole('link', { name: 'Set it up' });
+    await expect(button).toBeVisible();
+    expect(await button.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
     await button.click();
     await expect(page).toHaveURL(/#setup$/);
-    await expect(page.getByText('This website is a mock landing page.')).toBeVisible();
+    await expect(page.getByText('This website only describes Whistle.')).toBeVisible();
     expect(requests.every(url => url.startsWith(baseURL!))).toBe(true);
     expect(requests.some(url => /\/api\/|\/terminal(?:\?|$)|tailf888b6/.test(url))).toBe(false);
     expect(sockets).toEqual([]);

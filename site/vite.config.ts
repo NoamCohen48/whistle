@@ -9,6 +9,7 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL('../site-dist', import.meta.url)),
     emptyOutDir: true,
+    assetsInlineLimit: 0, // Keep every asset a same-origin file; no data: URLs.
   },
   server: { host: '127.0.0.1', port: 5175, strictPort: true },
   preview: { host: '127.0.0.1', strictPort: true },

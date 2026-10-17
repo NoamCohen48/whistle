@@ -3,44 +3,277 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Whistle is a terminal-first phone remote for existing Herdr panes. Watch first. Take control when you choose." />
+    <meta name="description" content="Whistle brings the coding agents running in Herdr on your PC to your phone. See which one needs you, answer it in its real terminal, and start new work from anywhere. Self-hosted." />
     <meta name="color-scheme" content="light dark" />
-    <title>Whistle | Your terminals, within reach</title>
+    <meta name="theme-color" content="#eef1f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141819" media="(prefers-color-scheme: dark)" />
+    <title>Whistle | Your coding agents, from your phone</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="./fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./demo.ts"></script>
   </head>
   <body>
+    <!-- Icons for the app illustrations, drawn to match the phone app's 20px stroke set. -->
+    <svg class="sprite" aria-hidden="true" focusable="false">
+      <symbol id="i-back" viewBox="0 0 20 20"><path d="M12.5 4.5 7 10l5.5 5.5" /></symbol>
+      <symbol id="i-forward" viewBox="0 0 20 20"><path d="M7.5 4.5 13 10l-5.5 5.5" /></symbol>
+      <symbol id="i-refresh" viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3h-3" /></symbol>
+      <symbol id="i-more" viewBox="0 0 20 20"><path d="M10 4.5v.01M10 10v.01M10 15.5v.01" stroke-width="3" /></symbol>
+      <symbol id="i-bell" viewBox="0 0 20 20"><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 2h-13zM8.5 17.5a1.6 1.6 0 0 0 3 0" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12" /></symbol>
+      <symbol id="i-width" viewBox="0 0 20 20"><path d="M3 10h14M6 7l-3 3 3 3M14 7l3 3-3 3" /></symbol>
+      <symbol id="i-text" viewBox="0 0 20 20"><path d="M4 5h12M4 8.5h12M4 12h8M4 15.5h5" /></symbol>
+      <symbol id="i-keyboard" viewBox="0 0 20 20"><path d="M3 5.5h14v9H3zM6 8.5h.01M9 8.5h.01M12 8.5h.01M14.5 8.5h.01M6.5 11.5h7" /></symbol>
+      <symbol id="i-compose" viewBox="0 0 20 20"><path d="M4 16h3.5L16 7.5 12.5 4 4 12.5zM11 5.5 14.5 9" /></symbol>
+      <symbol id="i-keys" viewBox="0 0 20 20"><path d="M7 7v6m6-6v6M7 7H5.5A1.5 1.5 0 1 1 7 5.5zm6 0h1.5A1.5 1.5 0 1 0 13 5.5zM7 13H5.5A1.5 1.5 0 1 0 7 14.5zm6 0h1.5a1.5 1.5 0 1 1-1.5 1.5zM7 7h6M7 13h6" /></symbol>
+      <symbol id="i-agent" viewBox="0 0 20 20"><path d="M10 3v3m0 8v3M3 10h3m8 0h3M5.5 5.5l2 2m5 5 2 2m0-9-2 2m-5 5-2 2" /></symbol>
+      <symbol id="i-terminal" viewBox="0 0 20 20"><path d="M3.5 4.5h13v11h-13zM6.5 8l2.5 2-2.5 2M10.5 12.5h3" /></symbol>
+      <symbol id="i-folder" viewBox="0 0 20 20"><path d="M3 6a1 1 0 0 1 1-1h3.5L9 7h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" /></symbol>
+      <symbol id="i-branch" viewBox="0 0 20 20"><path d="M6 4v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 0c0 4-8 3-8 6" /></symbol>
+    </svg>
+
     <a class="skip-link" href="#main">Skip to content</a>
-    <header class="shell">
-      <a class="wordmark" href="#main" aria-label="Whistle home">whistle</a>
-      <nav aria-label="Main navigation"><a href="#how-it-works">How it works</a><a href="#setup">Setup</a></nav>
+    <header class="shell site-header">
+      <a class="wordmark" href="#main">whistle</a>
+      <nav aria-label="Main navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#setup">Setup</a>
+      </nav>
     </header>
-    <main id="main" class="shell">
-      <section class="hero" aria-labelledby="headline">
-        <div>
-          <h1 id="headline">Your terminals,<br />within reach.</h1>
-          <p>Check your coding agents from your phone. Watch first, then take control when you choose.</p>
-          <a class="button" href="#setup">Get started</a>
+
+    <main id="main">
+      <section class="shell hero" aria-labelledby="headline">
+        <div class="hero-copy">
+          <h1 id="headline">Keep up with your coding agents from anywhere.</h1>
+          <p class="lede">Whistle puts the agents running in Herdr on your PC on your phone. See which one needs you, and answer it in its real terminal.</p>
+          <div class="hero-actions">
+            <a class="button" href="#setup">Set it up</a>
+            <a class="text-link" href="#how-it-works">See how it works</a>
+          </div>
         </div>
-        <figure class="visual-placeholder" aria-label="Product image placeholder">
-          <span>Product image</span>
-          <figcaption>Reserved for the next design pass.<br />No live terminal content.</figcaption>
+
+        <figure class="demo app-ui" aria-labelledby="demo-caption" data-screen="herd" data-phase="watching">
+          <div class="phone">
+            <div class="app">
+              <!-- Home screen: the herd. -->
+              <div class="app-screen screen-herd">
+                <div class="app-header" aria-hidden="true">
+                  <span class="app-wordmark">whistle</span>
+                  <svg class="i i-muted"><use href="#i-bell" /></svg>
+                  <svg class="i i-muted"><use href="#i-refresh" /></svg>
+                </div>
+                <div class="app-herd">
+                  <p class="app-h1" aria-hidden="true">Your herd</p>
+                  <p class="app-group is-strong" aria-hidden="true">Needs you <span>1</span></p>
+                  <div class="app-list">
+                    <button type="button" class="app-row" data-demo-open>
+                      <i class="dot is-attention" aria-hidden="true"></i>
+                      <span class="row-copy">
+                        <strong>Checkout tests</strong>
+                        <small><span class="is-attention">needs you</span><span>pi</span><span>shop</span></small>
+                        <span class="row-preview" aria-hidden="true">Commit the fix? (y/n)</span>
+                      </span>
+                      <svg class="i i-faint" aria-hidden="true"><use href="#i-forward" /></svg>
+                    </button>
+                  </div>
+                  <div aria-hidden="true">
+                    <p class="app-group">shop <span>2</span></p>
+                    <div class="app-list">
+                      <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Moving handlers into routes/</span></span><svg class="i i-faint"><use href="#i-forward" /></svg></span>
+                      <span class="app-row"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you</span><span>pi</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Commit the fix? (y/n)</span></span><svg class="i i-faint"><use href="#i-forward" /></svg></span>
+                    </div>
+                    <p class="app-group">docs <span>1</span></p>
+                    <div class="app-list">
+                      <span class="app-row"><i class="dot"></i><span class="row-copy"><strong>Release notes</strong><small><span>idle</span><span>pi</span><span class="cwd">~/code/docs</span></small><span class="row-preview">Draft saved to CHANGELOG.md</span></span><svg class="i i-faint"><use href="#i-forward" /></svg></span>
+                    </div>
+                  </div>
+                </div>
+                <span class="app-fab" aria-hidden="true"><svg class="i"><use href="#i-plus" /></svg>New</span>
+              </div>
+
+              <!-- Session screen: one pane's real terminal. -->
+              <div class="app-screen screen-session">
+                <div class="app-header">
+                  <button type="button" class="app-icon-button" data-demo-back aria-label="Back to your herd"><svg class="i" aria-hidden="true"><use href="#i-back" /></svg></button>
+                  <div class="app-title" aria-hidden="true"><strong>Checkout tests</strong><small>shop · pi · <code>w1:p2</code></small></div>
+                  <svg class="i i-muted" aria-hidden="true"><use href="#i-refresh" /></svg>
+                  <svg class="i i-muted" aria-hidden="true"><use href="#i-more" /></svg>
+                </div>
+                <div class="app-strip" aria-hidden="true">
+                  <span class="app-chip is-current"><i class="dot is-attention"></i><span class="ws">shop</span><span class="nm">Checkout tests</span></span>
+                  <span class="app-chip"><i class="dot is-busy"></i><span class="ws">shop</span><span class="nm">API refactor</span></span>
+                </div>
+                <div class="app-terminal">
+                  <pre aria-label="Sample agent session">  Updated the README with the new
+  CART_CURRENCY setting.
+
+<span class="t-prompt">&gt;</span> run the checkout tests and fix
+  anything that fails
+
+<span class="t-dim">  bun test tests/checkout.test.ts</span>
+  6 pass  <span class="t-fail">1 fail</span>
+  <span class="t-fail">x</span> rounds totals to cents
+
+  Fixed rounding in src/cart/total.ts
+<span class="t-dim">  bun test tests/checkout.test.ts</span>
+  <span class="t-pass">7 pass</span>  0 fail
+
+  All checkout tests pass.
+  Commit the fix? (y/n) <span class="t-cursor"></span></pre>
+                </div>
+                <div class="app-dock">
+                  <div class="app-session">
+                    <span class="app-pill" data-demo-badge aria-hidden="true">Watching</span>
+                    <span class="app-notice" aria-hidden="true">Reconnecting…</span>
+                    <span class="app-quiet" aria-hidden="true"><svg class="i i-sm"><use href="#i-width" /></svg>Fit</span>
+                    <svg class="i i-muted" aria-hidden="true"><use href="#i-text" /></svg>
+                    <button type="button" class="app-control" data-demo-toggle>Take control</button>
+                  </div>
+                  <div class="app-toolbar" aria-hidden="true">
+                    <span class="app-tool"><svg class="i"><use href="#i-keyboard" /></svg>Type</span>
+                    <span class="app-tool"><svg class="i"><use href="#i-compose" /></svg>Compose</span>
+                    <span class="app-tool"><svg class="i"><use href="#i-keys" /></svg>Keys</span>
+                    <span class="app-keycap">Esc</span>
+                    <span class="app-keycap is-enter">Enter</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="demo-note" role="status" data-demo-note>Your herd: every agent on your PC, with the one waiting on you first. Tap it to open.</p>
+          <figcaption id="demo-caption">
+            <span>Whistle on a phone, with sample data. Not a live terminal.</span>
+            <button type="button" class="text-button" data-demo-drop hidden>Simulate a dropped connection</button>
+          </figcaption>
         </figure>
       </section>
-      <section id="how-it-works" class="overview" aria-labelledby="overview-heading">
-        <h2 id="overview-heading">The work stays on your PC.</h2>
-        <dl>
-          <div><dt>Watch by default</dt><dd>Opening a pane does not focus or resize your desktop terminal. Control always needs an explicit tap.</dd></div>
-          <div><dt>Use your existing panes</dt><dd>Whistle connects to Herdr. Your agents and terminal sessions keep running on your computer.</dd></div>
-          <div><dt>Keep input intentional</dt><dd>Drafts stay separate per pane. Reconnecting never replays input or automatically takes control.</dd></div>
-        </dl>
+
+      <section id="how-it-works" class="premise" aria-labelledby="premise-heading">
+        <div class="shell">
+          <h2 id="premise-heading">Step away from the desk. Your agents come with you.</h2>
+          <p class="section-lede">Agents keep running in Herdr on your PC. Whistle is how you keep up with them from your phone.</p>
+          <div class="pillars">
+            <article class="pillar">
+              <div class="fragment app-ui" aria-hidden="true">
+                <p class="app-group is-strong">Needs you <span>1</span></p>
+                <div class="app-list">
+                  <span class="app-row"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you</span><span>pi</span><span>shop</span></small></span></span>
+                </div>
+                <p class="app-group">shop <span>2</span></p>
+                <div class="app-list">
+                  <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span></small></span></span>
+                  <span class="app-row"><i class="dot is-done"></i><span class="row-copy"><strong>Lint fixes</strong><small><span class="is-done">finished</span><span>pi</span></small></span></span>
+                </div>
+              </div>
+              <h3>See every agent at a glance</h3>
+              <p>Every pane in Herdr, grouped by workspace and worktree, with each agent's status and latest lines. The ones waiting on you come first.</p>
+            </article>
+
+            <article class="pillar">
+              <div class="fragment fragment-alert app-ui" aria-hidden="true">
+                <div class="notification">
+                  <span class="notification-icon"><svg class="i"><use href="#i-bell" /></svg></span>
+                  <span class="notification-copy"><strong>Checkout tests needs you</strong><span>shop · pi</span></span>
+                  <span class="notification-time">now</span>
+                </div>
+                <div class="notification is-quiet">
+                  <span class="notification-icon"><svg class="i"><use href="#i-bell" /></svg></span>
+                  <span class="notification-copy"><strong>Lint fixes finished</strong><span>shop · pi</span></span>
+                  <span class="notification-time">4m</span>
+                </div>
+              </div>
+              <h3>Get a nudge when you're needed</h3>
+              <p>Turn on alerts and your phone tells you when an agent is waiting for an answer, and, if you want, when one finishes. Tap the alert to land in that pane.</p>
+            </article>
+
+            <article class="pillar">
+              <div class="fragment app-ui" aria-hidden="true">
+                <pre class="fragment-terminal"><span class="t-dim">  Fixed rounding in applyDiscount()
+  bun test tests/checkout.test.ts</span>
+  <span class="t-pass">7 pass</span>  0 fail
+
+  Commit the fix? (y/n) <span class="t-cursor is-live"></span></pre>
+                <div class="app-toolbar is-shown">
+                  <span class="app-tool"><svg class="i"><use href="#i-keyboard" /></svg>Type</span>
+                  <span class="app-tool"><svg class="i"><use href="#i-compose" /></svg>Compose</span>
+                  <span class="app-tool"><svg class="i"><use href="#i-keys" /></svg>Keys</span>
+                  <span class="app-keycap">Esc</span>
+                  <span class="app-keycap is-enter">Enter</span>
+                </div>
+              </div>
+              <h3>Answer in its real terminal</h3>
+              <p>Open a pane and you're in the same session that runs on your PC. Type a reply, send Esc, Tab, arrows or Ctrl, or write something longer in Compose.</p>
+            </article>
+
+            <article class="pillar">
+              <div class="fragment app-ui" aria-hidden="true">
+                <div class="kinds">
+                  <span class="kind is-current"><svg class="i"><use href="#i-agent" /></svg>Agent</span>
+                  <span class="kind"><svg class="i"><use href="#i-terminal" /></svg>Terminal</span>
+                  <span class="kind"><svg class="i"><use href="#i-folder" /></svg>Workspace</span>
+                  <span class="kind"><svg class="i"><use href="#i-branch" /></svg>Worktree</span>
+                </div>
+                <span class="app-fab is-static"><svg class="i"><use href="#i-plus" /></svg>New</span>
+              </div>
+              <h3>Start new work from your phone</h3>
+              <p>Open a new agent or terminal, a workspace for another project, or a worktree for a new branch. It starts on your PC, ready to check on later.</p>
+            </article>
+          </div>
+        </div>
       </section>
-      <section id="setup" class="setup" aria-labelledby="setup-heading">
-        <h2 id="setup-heading">Run it on your own computer.</h2>
-        <p>The host needs Linux and Herdr. Build from the repository, or download the Linux x64 build from a successful main-branch Actions run.</p>
-        <p>Follow the repository README for installation and private network access. Pair your phone with the host you run, not this website.</p>
-        <aside><strong>This website is a mock landing page.</strong> It has no login, terminal connection, or access to your computer.</aside>
+
+      <section id="features" class="shell features" aria-labelledby="features-heading">
+        <h2 id="features-heading">What else Whistle does</h2>
+        <div class="feature-groups">
+          <div class="feature-group">
+            <h3>While you're working</h3>
+            <dl>
+              <div><dt>Drafts per pane</dt><dd>Each pane keeps its own unsent draft. Switch between agents and every reply waits where you left it.</dd></div>
+              <div><dt>Pictures</dt><dd>Attach a screenshot or photo while composing. The phone shrinks it and drops camera metadata before it goes to your PC.</dd></div>
+              <div><dt>Review changes</dt><dd>See what an agent changed in its checkout since the last commit, file by file, with the diff.</dd></div>
+              <div><dt>Terminal history</dt><dd>Swipe back through everything the pane printed, or copy it as plain text. Latest takes you back to the cursor.</dd></div>
+            </dl>
+          </div>
+          <div class="feature-group">
+            <h3>Safe by default</h3>
+            <dl>
+              <div><dt>Watching comes first</dt><dd>Opening a pane never resizes or focuses your desktop terminal. Typing starts only after you tap Take control, and a reconnect never resends anything.</dd></div>
+              <div><dt>Your existing sessions</dt><dd>Whistle works with the agents and panes you already run in Herdr. It adds no model calls of its own.</dd></div>
+              <div><dt>Runs on your computer</dt><dd>Whistle runs on your PC and reaches your phone over your private Tailscale network.</dd></div>
+              <div><dt>Paired phones only</dt><dd>Each phone pairs once by scanning a single-use QR code. You can list and revoke paired devices at any time.</dd></div>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <section id="setup" class="shell setup" aria-labelledby="setup-heading">
+        <h2 id="setup-heading">Set it up on your computer</h2>
+        <ol class="steps">
+          <li>
+            <h3>Get Whistle onto the PC</h3>
+            <p>The host needs Linux and Herdr. Build it from the repository with Bun, or download the Linux x64 build from a successful main-branch Actions run. That download needs GitHub access, and builds expire.</p>
+          </li>
+          <li>
+            <h3>Start it inside your Herdr session</h3>
+            <p>For phone access, bind it only to your PC's Tailscale address.</p>
+            <pre class="command"><code>HOST="$(tailscale ip -4)" PORT=8790 bun start</code></pre>
+          </li>
+          <li>
+            <h3>Pair your phone</h3>
+            <p>Run the pair command on the PC and scan the QR code with your phone. The code works once and expires after five minutes.</p>
+            <pre class="command"><code>bun run pair</code></pre>
+          </li>
+        </ol>
+        <p class="setup-more">The repository README covers the background service, upgrades and safety notes.</p>
+        <aside class="site-note"><strong>This website only describes Whistle.</strong> It has no login, no terminal connection and no access to your computer. Pair your phone with the host you run.</aside>
       </section>
     </main>
-    <footer class="shell"><span>whistle</span><span>Public information. Private sessions.</span></footer>
+
+    <footer class="shell site-footer">
+      <span class="wordmark">whistle</span>
+      <span>Your agents, on your computer, within reach.</span>
+    </footer>
   </body>
 </html>
