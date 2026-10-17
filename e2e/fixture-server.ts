@@ -21,6 +21,9 @@ let pairings = 0;
 let acknowledge = true;
 let workerRevision = 1;
 let failNextAction = '';
+let pushSubscribed = false;
+let failPushTest = false;
+const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString('base64url');
 let created = 0;
 const peers = new Set<ServerWebSocket<Peer>>();
 // Mirrors src/actions.ts results: new panes are reported back by id and open watch-only.
@@ -73,11 +76,12 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0;
+      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
     if (path === '/__test/fail-action') { failNextAction = url.searchParams.get('message') || 'Fixture action failed'; return new Response('armed'); }
+    if (path === '/__test/fail-push') { failPushTest = true; return new Response('armed'); }
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
     if (path === '/__test/messages') return Response.json(messages);
     if (path === '/__test/pairings') return Response.json(pairings);
@@ -104,7 +108,8 @@ const server = Bun.serve<Peer>({
       } else if (body.token !== 'test-token') return new Response('Incorrect access token', { status: 401 });
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
     }
-    if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions') {
+    if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
+      || path === '/api/push' || path === '/api/push/test') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
@@ -112,6 +117,16 @@ const server = Bun.serve<Peer>({
         { path: '/tap-worktrees/docs', label: 'docs', branch: 'docs' },
         { path: '/explorer', label: 'app-explorer', branch: 'explorer', openPaneId: 'w2:p1' },
       ] });
+      if (path === '/api/push' && request.method === 'GET') return Response.json({ publicKey: pushKey, subscribed: pushSubscribed });
+      if (path.startsWith('/api/push')) {
+        if (request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
+        const body = request.method === 'PUT' ? await request.json() : undefined;
+        messages.push({ type: 'push', method: request.method, path, ...(body ? { endpoint: body.endpoint } : {}) });
+        if (request.method === 'PUT') pushSubscribed = true;
+        if (request.method === 'DELETE') pushSubscribed = false;
+        if (path === '/api/push/test' && failPushTest) return new Response('Could not reach the push service: Push service answered 500', { status: 502 });
+        return new Response('ok');
+      }
       if (path === '/api/actions') {
         if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
         const body = await request.json();

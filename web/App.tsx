@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Pane, Snapshot } from '../src/herdr.ts';
 import { loadPanes, pairBrowser, PairingRequired, runAction, type Action, type Startup } from './api.ts';
 import { CreateSheet, PaneMenu, type CreateRequest } from './components/Actions.tsx';
@@ -7,6 +7,7 @@ import { AgentSwitcher, Inventory, paneName, workspaceName } from './components/
 import { Pairing } from './components/Pairing.tsx';
 import { TerminalPanel } from './components/TerminalPanel.tsx';
 import { INITIAL_SESSION, TerminalSession } from './terminal/session.ts';
+import { alertState, disableAlerts, enableAlerts, type AlertState } from './push.ts';
 
 const paneKey = (pane: Pane) => `${pane.pane_id}:${pane.terminal_id}`;
 
@@ -21,6 +22,9 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [createRequest, setCreateRequest] = useState<CreateRequest>();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [alerts, setAlerts] = useState<AlertState>('unsupported');
+  const [alertsBusy, setAlertsBusy] = useState(false);
+  const alertsGeneration = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const selected = paired && selection ? snapshot?.panes.find(pane =>
     pane.pane_id === selection.pane_id && pane.terminal_id === selection.terminal_id) : undefined;
@@ -62,6 +66,42 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       setError('This pane was closed or replaced. Choose another agent.');
     }
   }, [paired, selection, snapshot, selected]);
+
+  useEffect(() => {
+    if (!paired) return;
+    let active = true;
+    const generation = alertsGeneration.current;
+    alertState().then(state => { if (active && generation === alertsGeneration.current) setAlerts(state); }, () => {});
+    return () => { active = false; };
+  }, [paired]);
+  const toggleAlerts = async () => {
+    if (alertsBusy) return;
+    // A slow startup check must not overwrite the result of this tap.
+    alertsGeneration.current++;
+    setAlertsBusy(true); clearError();
+    try {
+      if (alerts === 'on') await disableAlerts(); else await enableAlerts();
+    } catch (cause) {
+      if (cause instanceof PairingRequired) setPaired(false); else setError((cause as Error).message);
+    } finally {
+      setAlerts(await alertState().catch(() => alerts)); setAlertsBusy(false);
+    }
+  };
+  // Tapping an alert while Whistle is open: the worker asks this page to show the pane (watch-only).
+  const openFromAlert = useEffectEvent((paneId: string) => {
+    const pane = snapshot?.panes.find(item => item.pane_id === paneId);
+    if (pane) select(pane); else void refresh();
+  });
+  useEffect(() => {
+    const worker = 'serviceWorker' in navigator ? navigator.serviceWorker : undefined;
+    if (!worker) return;
+    const listener = (event: MessageEvent) => {
+      if (event.data?.type === 'open-pane' && typeof event.data.paneId === 'string') openFromAlert(event.data.paneId);
+    };
+    worker.addEventListener('message', listener);
+    worker.startMessages();
+    return () => worker.removeEventListener('message', listener);
+  }, []);
 
   const clearError = () => { setError(''); engine?.clearError(); };
   const select = (pane: Pane) => {
@@ -111,6 +151,10 @@ export function App({ startup }: { startup: Promise<Startup> }) {
           <strong id="heading">{paneName(selected)}</strong>
           <small>{workspaceName(snapshot, selected)} · {selected.agent || 'terminal'} · <code id="pane-info">{selected.pane_id}</code></small>
         </div> : <strong id="heading" className="wordmark">whistle</strong>}
+        {!selected && alerts !== 'unsupported' ? <button type="button" id="alerts" className="icon-button" disabled={alertsBusy}
+          aria-pressed={alerts === 'on'} aria-label={alerts === 'on' ? 'Alerts on' : alerts === 'blocked' ? 'Alerts blocked' : 'Turn on alerts'}
+          title={alerts === 'on' ? 'Alerts on: tap to turn off' : 'Alert me when an agent needs me'}
+          onClick={() => void toggleAlerts()}><Icon name={alerts === 'on' ? 'bell' : 'bell-off'} /></button> : null}
         <button type="button" id="refresh" className="icon-button" aria-label="Refresh"
           onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}><Icon name="refresh" /></button>
         {selected ? <button type="button" id="pane-actions" className="icon-button" aria-label="Pane actions"

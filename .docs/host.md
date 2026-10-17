@@ -73,6 +73,7 @@ Multi-Herdr-session discovery also remains separate. The service currently uses 
 | Host config | `~/.config/whistle/config.json` |
 | Private state | `~/.local/state/whistle/` |
 | Cookie hashes / device metadata | `~/.local/state/whistle/devices.sqlite` |
+| Alert key / subscriptions | `push-vapid.json`, `push.sqlite` in private state |
 | PC access token / last URL / QR | `access-token`, `server-url`, `pair.png` in private state |
 | User unit | `~/.config/systemd/user/whistle.service` |
 | CLI launcher | `~/.local/bin/whistle` |
@@ -112,6 +113,16 @@ Paired-cookie only (the PC token is not accepted). `src/actions.ts` reduces each
 - `GET /api/worktrees?workspace=ID`: linked, non-bare, non-prunable worktrees of that repository, with the pane to go to when one is already open.
 
 Phone-side close and removal are behind a confirm step. Removal is never forced (`force: false`): Herdr refuses a checkout with modified or untracked files (`dirty_worktree_requires_force`, shown as a plain message). A successful removal closes the worktree's workspace and panes and deletes the checkout; the branch is kept. Herdr reports a repository's Git metadata only once it has worktrees, so the phone offers every main workspace as a repository and reports non-Git ones (`not_git_worktree`) on submit.
+
+## Needs-you alerts
+
+`src/push.ts` implements standard Web Push (RFC 8030 delivery, RFC 8291 `aes128gcm` encryption, RFC 8292 VAPID) with Node crypto; there is no extra dependency or third-party relay.
+
+- **Keys and state:** the VAPID P-256 key is created once in `push-vapid.json` and subscriptions live in `push.sqlite`, both `0600` in the state directory. The VAPID subject is the configured public origin. One subscription per paired device; revoking a device or its expiry removes it, and a push service answering 404/410 removes it too.
+- **Endpoints** (paired cookie; writes need the exact Origin): `GET /api/push` → `{publicKey, subscribed}`; `PUT /api/push` stores the browser subscription; `DELETE /api/push` removes it; `POST /api/push/test` sends "Alerts are on" and reports a delivery failure as 502.
+- **Allowed push services only:** subscription endpoints must be HTTPS on the browser vendors' push hosts (Google FCM, Mozilla, Microsoft WNS, Apple), with no port or credentials, and the keys must be well formed. The PC therefore never sends requests to arbitrary tailnet or local addresses on a browser's say-so.
+- **When alerts fire:** while at least one device is subscribed, the host polls `session.snapshot` every 3 s. An alert is sent when an agent pane *changes* into Herdr's `blocked` ("needs you") or `done` ("finished") status. Panes already waiting when polling starts, panes that appear already waiting and shells never alert, and a wait alerts once. A device that has that pane open in Whistle is skipped; a hidden or locked phone has no open stream, so it is alerted.
+- **What leaves the PC:** the payload is `{title, body, paneId}` (pane name, workspace, agent kind). It is encrypted for the phone, so the vendor's push service sees only ciphertext, the endpoint, size and timing. No terminal content is ever sent. The PC needs outbound HTTPS to the push service; delivery is best effort (`TTL` one hour, `Urgency: high`, one `Topic` per pane so undelivered alerts collapse).
 
 ## Checks
 
