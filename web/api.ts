@@ -2,11 +2,16 @@ import type { Action, ActionResult, WorktreeChoice } from '../src/actions.ts';
 import type { Changes, FileDiff } from '../src/changes.ts';
 import type { FolderList } from '../src/folders.ts';
 import type { Snapshot } from '../src/herdr.ts';
+import { clearDrafts } from './drafts.ts';
 
 export type { Action, Changes, FileDiff, FolderList, WorktreeChoice };
 
 export class PairingRequired extends Error {
-  constructor() { super('Pair this browser first'); }
+  constructor() {
+    super('Pair this browser first');
+    clearDrafts();
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('whistle-pairing-lost'));
+  }
 }
 export async function loadPanes(signal?: AbortSignal): Promise<Snapshot> {
   const response = await fetch('/api/panes', { signal, cache: 'no-store' });
