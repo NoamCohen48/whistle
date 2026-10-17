@@ -1,7 +1,7 @@
 import { validateChord } from './keys.ts';
 
 export type ClientCommand =
-  | { type: 'input'; id: number; text: string }
+  | { type: 'input'; id: number; text: string; submit?: boolean }
   | { type: 'key'; id: number; key: string }
   | { type: 'resize'; cols: number; rows: number }
   | { type: 'scroll'; direction: 'up' | 'down'; lines: number }
@@ -29,7 +29,7 @@ export function parseCommand(raw: string): ClientCommand {
     return { type: 'key', id: value.id, key: validateChord(value.key) };
   }
   if (value.type === 'input' && Number.isSafeInteger(value.id) && value.id > 0 && typeof value.text === 'string' && value.text.length <= 64 * 1024) {
-    return { type: 'input', id: value.id, text: value.text };
+    return { type: 'input', id: value.id, text: value.text, ...(value.submit === true ? { submit: true } : {}) };
   }
   throw new Error('Invalid command');
 }

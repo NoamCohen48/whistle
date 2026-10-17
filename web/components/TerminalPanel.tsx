@@ -176,14 +176,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
           onClick={() => engine?.toggleControl()}>{controlling ? 'Release control' : 'Take control'}</button>
       </div>
       <div id="compose" hidden={!compose}>
-        <div className="compose-head"><label htmlFor="draft">Draft</label>
-          <button type="button" id="attach" className="quiet" disabled={attaching} aria-busy={attaching}
-            onClick={() => picker.current?.click()}><Icon name="image" size={18} />{attaching ? 'Attaching…' : 'Picture'}</button>
-          <input type="file" id="picture-input" ref={picker} accept="image/*" multiple hidden onChange={event => {
-            void attach([...event.target.files || []]); event.target.value = '';
-          }} />
-          <button type="button" id="clear-draft" className="quiet" disabled={!draft} onClick={() => { onDraft(''); editor.current?.focus(); }}>Clear</button></div>
-        <textarea id="draft" ref={editor} rows={3} spellCheck={false} autoCapitalize="off" value={draft}
+        <textarea id="draft" ref={editor} rows={3} aria-label="Draft" spellCheck={false} autoCapitalize="off" value={draft}
           placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
           onPaste={event => {
             const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
@@ -199,8 +192,14 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
           </li>)}
         </ul> : null}
         <div className="compose-actions">
-          <button type="button" id="paste" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, false)}>Paste</button>
-          <button type="button" id="submit" className="primary" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, true)}>Paste + Enter</button>
+          <button type="button" id="attach" className="quiet" disabled={attaching} aria-busy={attaching}
+            onClick={() => picker.current?.click()}><Icon name="image" size={18} />{attaching ? 'Attaching…' : 'Picture'}</button>
+          <input type="file" id="picture-input" ref={picker} accept="image/*" multiple hidden onChange={event => {
+            void attach([...event.target.files || []]); event.target.value = '';
+          }} />
+          <button type="button" id="clear-draft" className="quiet" disabled={!draft} onClick={() => { onDraft(''); editor.current?.focus(); }}>Clear</button>
+          <button type="button" id="paste" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, false, Boolean(pane?.agent))}>Paste</button>
+          <button type="button" id="submit" className="primary" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, true, Boolean(pane?.agent))}>Paste + Enter</button>
         </div>
       </div>
       <div id="keyboard" aria-label="Terminal controls" hidden={!controlling}>

@@ -39,6 +39,8 @@ let pairings = 0;
 let acknowledge = true;
 let workerRevision = 1;
 let failNextAction = '';
+// Off: frames never turn bracketed paste on, like a Herdr render of a pane attached mid-session.
+let bracketedFrames = true;
 let pushSubscribed = false;
 let failPushTest = false;
 let pushSettings: Record<string, unknown> = { finished: true };
@@ -99,7 +101,7 @@ function applyAction(body: Record<string, string>): { paneId?: string; warning?:
 }
 function frame(ws: ServerWebSocket<Peer>) {
   const { width, height, pane } = ws.data;
-  const screen = '\x1b[?2004h\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` + 'Saved screenshot to docs/home-screen.png\r\n' +
+  const screen = (bracketedFrames ? '\x1b[?2004h' : '') + '\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` + 'Saved screenshot to docs/home-screen.png\r\n' +
     Array.from({ length: height - 3 }, (_, row) => `row ${row + 3}\r\n`).join('') +
     `\x1b[${Math.min(height - 2, 48)};1Hinput> `;
   ws.send(JSON.stringify({ type: 'terminal.frame', width, height, bytes: Buffer.from(screen).toString('base64') }));
@@ -113,11 +115,12 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0; uploads = 0;
+      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; bracketedFrames = true; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
     if (path === '/__test/fail-action') { failNextAction = url.searchParams.get('message') || 'Fixture action failed'; return new Response('armed'); }
+    if (path === '/__test/no-bracketed') { bracketedFrames = false; return new Response('off'); }
     if (path === '/__test/fail-push') { failPushTest = true; return new Response('armed'); }
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
     if (path === '/__test/messages') return Response.json(messages);

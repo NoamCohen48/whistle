@@ -202,16 +202,15 @@ header .title code { color: var(--faint); font-size: 11.5px }
 
 /* Compose */
 #compose { max-height: calc(var(--app-height, 100dvh) * .4); overflow: auto; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface) }
-.compose-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px }
 #clear-draft, #attach { min-height: 36px; padding: 0 10px; font-size: 14px }
-#attach { margin-left: auto; gap: 6px }
+#attach { gap: 6px; padding-left: 4px }
+#clear-draft { margin-right: auto }
 #attach-error { margin: 6px 0 0; color: var(--alert); font-size: 14px }
 #attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none }
 #attachments li { display: flex; align-items: center; gap: 8px; padding: 3px 2px 3px 3px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--bg); font-size: 14px }
 #attachments img, #attachments .no-preview { width: 40px; height: 40px; border-radius: 7px; object-fit: cover; display: grid; place-items: center; background: var(--surface); color: var(--muted) }
 #attachments button { min-height: 40px; min-width: 40px; padding: 0 }
-.compose-head label { margin: 0 }
-.compose-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px }
+.compose-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px }
 
 /* Toolbar */
 #keyboard { padding: 2px 8px max(6px, env(safe-area-inset-bottom)) }

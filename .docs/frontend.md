@@ -47,7 +47,7 @@ The development proxy matches `/api/` and exactly `/terminal`, not similarly nam
 - Read-only watch, explicit control, original-width or fitted-width sizing, and minimum 64-row controlled PTY.
 - Live text and logical chords in one ordered lane; no input replay after reconnect or switching.
 - One-shot modifiers and full key picker/custom chords.
-- Separate Compose with Paste / Paste + Enter and bracketed-paste safety. Drafts are never cleared just because a write was sent.
+- Separate Compose with Paste / Paste + Enter and bracketed-paste safety. Herdr frames are rendered screens, so a phone that attaches mid-session may never see a program turn bracketed paste on: multiline text is sent bracketed when the mirror saw the mode or Herdr reports the pane as an agent, and refused for other panes rather than risk running each line. Compose is one draft box plus a single row (Picture, Clear, Paste, Paste + Enter) so the terminal stays visible. Paste + Enter sends the text, then the host presses Enter as its own key 250 ms later in the same serial lane: an Enter in the same write as a paste is taken as part of the paste (Claude Code only pasted). Drafts are never cleared just because a write was sent.
 - Agent switching preserves separate drafts, clears modifiers, closes overlays and returns to watch mode.
 - Local-first wheel/touch scrolling, application history at edges, manual reading without snap-back and Input to return to the actual cursor.
 - Keys overlays do not resize the viewport/PTY; short visual viewports compact chrome.
