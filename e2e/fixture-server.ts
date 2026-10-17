@@ -10,8 +10,8 @@ const initial: Snapshot = {
   ],
   tabs: [],
   panes: [
-    { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'tab1', label: 'First agent', agent: 'pi', agent_status: 'idle', cwd: '/tap' },
-    { pane_id: 'w2:p1', terminal_id: 't2', workspace_id: 'w2', tab_id: 'tab2', label: 'Second agent', agent: 'pi', agent_status: 'working', cwd: '/explorer' },
+    { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'tab1', label: 'First agent', agent: 'pi', agent_status: 'idle', cwd: '/home/dev/Work/tap' },
+    { pane_id: 'w2:p1', terminal_id: 't2', workspace_id: 'w2', tab_id: 'tab2', label: 'Second agent', agent: 'pi', agent_status: 'working', cwd: '/home/dev/.herdr/worktrees/tap/explorer' },
   ],
 };
 interface Peer { pane: string; control: boolean; width: number; height: number; timer?: ReturnType<typeof setInterval> }

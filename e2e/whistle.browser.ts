@@ -360,3 +360,18 @@ test('agents that need you are listed first and open watch-only', async ({ page,
   await page.locator('#refresh').click();
   await expect(page.locator('#needs-you')).toHaveCount(0);
 });
+
+test('new workspaces can start from the folder beside open projects', async ({ page }) => {
+  await pair(page);
+  await page.locator('#new').click();
+  await page.locator('[data-kind="workspace"]').click();
+  // Herdr-managed worktree checkouts are not offered as project folders.
+  await expect(page.locator('.folder-chips button')).toHaveText(['~/Work/']);
+  await page.locator('.folder-chips button').click();
+  await expect(page.locator('#new-folder')).toHaveValue('/home/dev/Work/');
+  await expect(page.locator('#new-folder')).toBeFocused();
+  await page.keyboard.type('site');
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect(await actions(page)).toEqual([{ action: 'workspace', cwd: '/home/dev/Work/site' }]);
+});
