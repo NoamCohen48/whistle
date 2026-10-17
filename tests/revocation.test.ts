@@ -37,7 +37,8 @@ test('revocation and host shutdown release fake Herdr controllers without stoppi
   try {
     const bin = join(directory, 'bin'); await mkdir(bin);
     await writeFile(join(bin, 'herdr'), `#!${process.execPath}\nimport ${JSON.stringify(resolve('tests/fixtures/herdr.ts'))};\n`, { mode: 0o700 });
-    host = await startHost(directory, { HERDR_SOCKET_PATH: socketPath, PATH: `${bin}:${process.env.PATH}`, WHISTLE_TEST_RELEASE_FILE: released });
+    host = await startHost(directory, { HERDR_SOCKET_PATH: socketPath, WHISTLE_HERDR_BIN: join(bin, 'herdr'),
+      PATH: `${bin}:${process.env.PATH}`, WHISTLE_TEST_RELEASE_FILE: released });
     const login = await host.request('/api/login', { method: 'POST', body: JSON.stringify({ token: testToken }) });
     const cookie = login.headers.get('set-cookie')!.split(';')[0];
     const other = await host.request('/api/login', { method: 'POST', body: JSON.stringify({ token: testToken, deviceName: 'Other device' }) });

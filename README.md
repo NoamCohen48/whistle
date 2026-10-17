@@ -75,6 +75,24 @@ The temporary `whistle-poc-test` pane was closed after testing. The requested Sp
 
 The production build includes an online-only PWA manifest, icons and install support, deployed at **https://noam-pc.tailf888b6.ts.net:8443**. On the PC, run `~/.local/bin/whistle pair`, scan its QR with your Tailscale-connected phone, then choose **Install app** in Chrome. QR pairing is single-use, expires after five minutes, and needs no token copying. The existing HTTPS :443 site is preserved. See [PWA safety and cutover notes](.docs/pwa.md). Trusted HTTPS/QR/WSS and installability are browser-verified; physical Android installation and lifecycle checks remain pending.
 
+## CI and public website
+
+GitHub Actions validates types, unit/API tests, fake-server browser tests, the
+public site and standalone packaging on pull requests and `main`. Successful
+`main` runs retain a verified Linux x64 build artifact and publish only the
+separate landing-page mock to GitHub Pages. Nothing deploys to the PC.
+
+The mock lives in [`site/`](site/README.md), ready for the UI/UX design pass:
+
+```sh
+bun run dev:site       # public mock only, localhost:5175
+bun run test:site      # root/project-path, desktop/mobile, light/dark
+```
+
+See [CI/CD setup](.docs/ci.md) for GitHub activation, artifact downloads, safety
+boundaries and branch protection. The private repository's initial import is
+under PR review; Pages still needs configuration before the site can publish.
+
 ## Checks
 
 ```sh
