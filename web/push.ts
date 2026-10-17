@@ -1,4 +1,7 @@
 import { PairingRequired } from './api.ts';
+import type { AlertSettings } from '../src/push.ts';
+
+export type { AlertSettings };
 
 // "Needs you" alerts. Production builds only: they need the install-support service worker,
 // which Vite development deliberately never registers.
@@ -44,6 +47,13 @@ export async function enableAlerts() {
   await request('PUT', '/api/push', subscription.toJSON());
   // A real alert through the whole path, so a broken route shows up now rather than when it matters.
   await request('POST', '/api/push/test');
+}
+
+export async function loadAlertSettings(): Promise<AlertSettings> {
+  return ((await (await request('GET')).json()) as { settings: AlertSettings }).settings;
+}
+export async function saveAlertSettings(settings: AlertSettings) {
+  await request('PUT', '/api/push/settings', settings);
 }
 
 export async function disableAlerts() {

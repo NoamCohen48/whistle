@@ -351,6 +351,14 @@ select {
 .worktree-choice em { font-style: normal; font-size: 14px; font-weight: 600; color: var(--accent) }
 .worktree-choices li + li { border-top: 1px solid var(--line) }
 .sheet-status { font-size: 14px; color: var(--muted) }
+.sheet-status:empty { display: none }
+.sheet-note { color: var(--muted); font-size: 15px; line-height: 1.45 }
+.check { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; font-size: 16px; cursor: pointer }
+.check input { flex-shrink: 0; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent) }
+.check span { display: flex; flex-direction: column; gap: 2px }
+.check small { color: var(--muted); font-size: 13px; font-weight: 400 }
+.quiet-times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: -6px; padding-left: 34px }
+#alerts-off { min-height: 48px; margin-top: 4px; background: transparent; color: var(--alert) }
 .sheet-error { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--alert-wash); color: #ffd9d0; font-size: 14px }
 .sheet-form > .primary { min-height: 50px; font-size: 16px }
 .menu { margin: 4px -8px 0 }

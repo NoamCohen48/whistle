@@ -9,7 +9,29 @@ import type { Pane, Snapshot } from './herdr.ts';
 // browser vendor's push service. The push service sees only ciphertext, the endpoint and timing.
 
 export interface PushSubscriptionInput { endpoint: string; keys: { p256dh: string; auth: string } }
-export interface Alert { title: string; body: string; paneId: string }
+export interface Alert { title: string; body: string; paneId: string; quiet?: boolean }
+// Per device. Quiet hours deliver alerts without sound or vibration, in the phone's own time zone.
+export interface AlertSettings { finished: boolean; quiet?: { start: string; end: string; timeZone: string } }
+export const DEFAULT_SETTINGS: AlertSettings = { finished: true };
+
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+export function parseSettings(input: unknown): AlertSettings {
+  const body = input as Partial<AlertSettings> | null;
+  if (!body || typeof body !== 'object' || typeof body.finished !== 'boolean') throw new Error('Invalid alert settings');
+  if (body.quiet === undefined || body.quiet === null) return { finished: body.finished };
+  const { start, end, timeZone } = body.quiet;
+  if (typeof start !== 'string' || typeof end !== 'string' || !CLOCK.test(start) || !CLOCK.test(end) || start === end) throw new Error('Invalid quiet hours');
+  if (typeof timeZone !== 'string' || timeZone.length > 64) throw new Error('Invalid time zone');
+  try { new Intl.DateTimeFormat('en', { timeZone }); } catch { throw new Error('Invalid time zone'); }
+  return { finished: body.finished, quiet: { start, end, timeZone } };
+}
+export function isQuiet(settings: AlertSettings, now = new Date()) {
+  if (!settings.quiet) return false;
+  const { start, end, timeZone } = settings.quiet;
+  const clock = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
+  // Overnight ranges such as 22:00–07:00 wrap past midnight.
+  return start < end ? clock >= start && clock < end : clock >= start || clock < end;
+}
 
 const b64 = (value: Buffer | Uint8Array) => Buffer.from(value).toString('base64url');
 const unb64 = (value: string) => Buffer.from(value, 'base64url');
@@ -83,10 +105,24 @@ export class PushStore {
     this.db = new Database(path, { strict: true });
     this.db.exec(`PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS subscriptions (
       device_id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL)`);
+    // Added after the first release: older databases gain the column with defaults.
+    const columns = this.db.query<{ name: string }, []>('PRAGMA table_info(subscriptions)').all().map(column => column.name);
+    if (!columns.includes('settings')) this.db.exec(`ALTER TABLE subscriptions ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'`);
   }
+  // Re-subscribing (new key, new phone browser) keeps the device's settings.
   save(deviceId: string, subscription: PushSubscriptionInput) {
-    this.db.query('INSERT OR REPLACE INTO subscriptions VALUES (?, ?, ?, ?, ?)')
+    this.db.query(`INSERT INTO subscriptions (device_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(device_id) DO UPDATE SET endpoint=excluded.endpoint, p256dh=excluded.p256dh, auth=excluded.auth, created_at=excluded.created_at`)
       .run(deviceId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, Date.now());
+  }
+  settings(deviceId: string): AlertSettings {
+    const row = this.db.query<{ settings: string }, [string]>('SELECT settings FROM subscriptions WHERE device_id=?').get(deviceId);
+    try { return { ...DEFAULT_SETTINGS, ...parseSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(row?.settings || '{}') }) }; }
+    catch { return DEFAULT_SETTINGS; }
+  }
+  // Only for a subscribed device; returns false otherwise.
+  saveSettings(deviceId: string, settings: AlertSettings) {
+    return this.db.query('UPDATE subscriptions SET settings=? WHERE device_id=?').run(JSON.stringify(settings), deviceId).changes > 0;
   }
   get(deviceId: string): PushSubscriptionInput | undefined {
     const row = this.db.query<{ endpoint: string; p256dh: string; auth: string }, [string]>(
@@ -136,6 +172,7 @@ export class AgentWatcher {
     snapshot: () => Promise<Snapshot>; subscribers: () => string[]; send: Sender;
     isActive: (deviceId: string) => boolean; isWatching: (deviceId: string, paneId: string) => boolean;
     onGone: (deviceId: string) => void; onError?: (error: Error) => void;
+    settings?: (deviceId: string) => AlertSettings; now?: () => Date;
   }) {}
   async tick() {
     const devices = this.options.subscribers();
@@ -148,11 +185,14 @@ export class AgentWatcher {
     const alerts = state.panes.filter(pane => {
       const key = `${pane.pane_id}:${pane.terminal_id}`;
       return waiting(pane) && previous.has(key) && previous.get(key) !== waiting(pane);
-    }).map(pane => alertFor(state, pane));
+    }).map(pane => ({ alert: alertFor(state, pane), finished: waiting(pane) === 'done' }));
+    const now = this.options.now?.() ?? new Date();
     await Promise.all(devices.flatMap(deviceId => {
       if (!this.options.isActive(deviceId)) { this.options.onGone(deviceId); return []; }
-      return alerts.filter(alert => !this.options.isWatching(deviceId, alert.paneId)).map(alert =>
-        this.options.send(deviceId, alert).catch(error => {
+      const settings = this.options.settings?.(deviceId) ?? DEFAULT_SETTINGS;
+      const quiet = isQuiet(settings, now);
+      return alerts.filter(({ alert, finished }) => (settings.finished || !finished) && !this.options.isWatching(deviceId, alert.paneId)).map(({ alert }) =>
+        this.options.send(deviceId, quiet ? { ...alert, quiet } : alert).catch(error => {
           if (error instanceof PushGone) this.options.onGone(deviceId);
           else this.options.onError?.(error as Error);
         }));

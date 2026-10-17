@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { ServerWebSocket } from 'bun';
 import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts';
 import { agentKinds, parseAction, runAction, worktrees } from './actions.ts';
-import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSubscription, webPushSender } from './push.ts';
+import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSettings, parseSubscription, webPushSender } from './push.ts';
 import { dimensions, parseCommand } from './protocol.ts';
 import { ChangesError, changes, fileDiff } from './changes.ts';
 import { PictureError, readPicture } from './pictures.ts';
@@ -194,12 +194,18 @@ const server = Bun.serve<Peer>({
         }
         if (url.pathname === '/api/push') {
           if (request.method === 'GET') {
-            return Response.json({ publicKey: vapid.publicKey, subscribed: Boolean(pushStore.get(current.id)) }, { headers });
+            return Response.json({ publicKey: vapid.publicKey, subscribed: Boolean(pushStore.get(current.id)), settings: pushStore.settings(current.id) }, { headers });
           }
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
           if (request.method === 'PUT') { pushStore.save(current.id, parseSubscription(await request.json())); return new Response('Subscribed', { headers }); }
           if (request.method === 'DELETE') { pushStore.remove(current.id); return new Response('Unsubscribed', { headers }); }
           return new Response('Method not allowed', { status: 405, headers });
+        }
+        if (url.pathname === '/api/push/settings' && request.method === 'PUT') {
+          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
+          const settings = parseSettings(await request.json());
+          if (!pushStore.saveSettings(current.id, settings)) return new Response('Turn on alerts first', { status: 409, headers });
+          return Response.json({ settings }, { headers });
         }
         if (url.pathname === '/api/push/test' && request.method === 'POST') {
           if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
@@ -329,6 +335,7 @@ const watcher = new AgentWatcher({
   // A phone with the pane open is already looking at it.
   isWatching: (deviceId, paneId) => [...peers].some(peer => peer.data.deviceId === deviceId && peer.data.paneId === paneId && !peer.data.closed),
   onGone: deviceId => pushStore.remove(deviceId),
+  settings: deviceId => pushStore.settings(deviceId),
   onError: error => console.error(`Whistle alert not delivered: ${error.message}`),
 });
 let watching = false;

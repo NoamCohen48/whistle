@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Snapshot } from '../src/herdr.ts';
 import { startHost, testToken } from './helpers/host.ts';
-import { AgentWatcher, PushGone, PushStore, VapidKeys, encrypt, parseSubscription, webPushSender, type Alert } from '../src/push.ts';
+import { AgentWatcher, PushGone, PushStore, VapidKeys, encrypt, isQuiet, parseSettings, parseSubscription, webPushSender, type Alert } from '../src/push.ts';
 
 const unb64 = (value: string) => Buffer.from(value.replace(/\s+/g, ''), 'base64url');
 
@@ -136,7 +136,16 @@ test('push API: paired devices only, same-origin writes, and revocation drops th
       host!.request('/api/push', { method: 'PUT', headers: { Cookie: phone, ...extra }, body: JSON.stringify(body) });
     expect((await put(subscription, { Origin: 'https://evil.invalid' })).status).toBe(403);
     expect((await put({ ...subscription, endpoint: 'https://127.0.0.1:8790/api/actions' })).status).toBe(400);
+    const settings = (body: unknown, extra: Record<string, string> = {}) =>
+      host!.request('/api/push/settings', { method: 'PUT', headers: { Cookie: phone, ...extra }, body: JSON.stringify(body) });
+    const quiet = { finished: false, quiet: { start: '22:00', end: '07:00', timeZone: 'Europe/Berlin' } };
+    expect((await settings(quiet)).status).toBe(409); // Not subscribed yet.
     expect((await put(subscription)).status).toBe(200);
+    expect((await settings(quiet, { Origin: 'https://evil.invalid' })).status).toBe(403);
+    expect((await settings({ finished: 'no' })).status).toBe(400);
+    expect((await settings(quiet)).status).toBe(200);
+    expect((await (await host.request('/api/push', { headers: { Cookie: phone } })).json()).settings).toEqual(quiet);
+    expect((await (await host.request('/api/push', { headers: { Cookie: laptop } })).json()).settings).toEqual({ finished: true });
     expect((await (await host.request('/api/push', { headers: { Cookie: phone } })).json()).subscribed).toBe(true);
     expect((await (await host.request('/api/push', { headers: { Cookie: laptop } })).json()).subscribed).toBe(false);
     expect((await host.request('/api/push', { method: 'DELETE', headers: { Cookie: phone } })).status).toBe(200);
@@ -156,3 +165,67 @@ test('push API: paired devices only, same-origin writes, and revocation drops th
     await rm(directory, { recursive: true, force: true });
   }
 }, 15_000);
+
+test('alert settings: validation, overnight quiet hours in the phone time zone', () => {
+  expect(parseSettings({ finished: false })).toEqual({ finished: false });
+  const quiet = parseSettings({ finished: true, quiet: { start: '22:00', end: '07:30', timeZone: 'Asia/Jerusalem' }, extra: 1 });
+  expect(quiet).toEqual({ finished: true, quiet: { start: '22:00', end: '07:30', timeZone: 'Asia/Jerusalem' } });
+  for (const bad of [null, {}, { finished: 'yes' }, { finished: true, quiet: { start: '24:00', end: '07:00', timeZone: 'UTC' } },
+    { finished: true, quiet: { start: '9:00', end: '07:00', timeZone: 'UTC' } }, { finished: true, quiet: { start: '07:00', end: '07:00', timeZone: 'UTC' } },
+    { finished: true, quiet: { start: '22:00', end: '07:00', timeZone: 'Mars/Olympus' } }]) {
+    expect(() => parseSettings(bad)).toThrow();
+  }
+  // 21:59 and 07:30 are outside; 22:00, 03:00 and 07:29 are inside (Jerusalem is UTC+3 in October).
+  const at = (utc: string) => isQuiet(quiet, new Date(`2026-10-17T${utc}:00Z`));
+  expect([at('18:59'), at('19:00'), at('00:00'), at('04:29'), at('04:30')]).toEqual([false, true, true, true, false]);
+  const daytime = parseSettings({ finished: true, quiet: { start: '09:00', end: '17:00', timeZone: 'UTC' } });
+  expect([isQuiet(daytime, new Date('2026-10-17T08:59:00Z')), isQuiet(daytime, new Date('2026-10-17T12:00:00Z'))]).toEqual([false, true]);
+  expect(isQuiet({ finished: true })).toBe(false);
+});
+
+test('settings survive re-subscribing, older databases are migrated, and the watcher applies them', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'whistle-push-settings-'));
+  try {
+    const path = join(directory, 'push.sqlite');
+    const { Database } = await import('bun:sqlite');
+    const old = new Database(path);
+    old.exec(`CREATE TABLE subscriptions (device_id TEXT PRIMARY KEY, endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at INTEGER NOT NULL);
+      INSERT INTO subscriptions VALUES ('phone', 'https://fcm.googleapis.com/x', 'k', 'a', 1)`);
+    old.close();
+    const store = new PushStore(path);
+    expect(store.settings('phone')).toEqual({ finished: true });
+    const settings = parseSettings({ finished: false, quiet: { start: '22:00', end: '07:00', timeZone: 'UTC' } });
+    expect(store.saveSettings('phone', settings)).toBe(true);
+    expect(store.saveSettings('stranger', settings)).toBe(false);
+    store.save('phone', { endpoint: 'https://fcm.googleapis.com/y', keys: { p256dh: 'k2', auth: 'a2' } });
+    expect(store.settings('phone')).toEqual(settings);
+    expect(store.get('phone')?.endpoint).toBe('https://fcm.googleapis.com/y');
+
+    const panes = (status: string) => ({ workspaces: [{ workspace_id: 'w1', label: 'tap' }], tabs: [], panes: [
+      { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'a', agent: 'claude', agent_status: status },
+      { pane_id: 'w1:p2', terminal_id: 't2', workspace_id: 'w1', tab_id: 'b', agent: 'codex', agent_status: status === 'working' ? 'working' : 'done' },
+    ] }) as Snapshot;
+    let state = panes('working');
+    let now = new Date('2026-10-17T23:00:00Z');
+    const sent: [string, Alert][] = [];
+    const watcher = new AgentWatcher({
+      snapshot: async () => state, subscribers: () => ['phone', 'tablet'], send: async (deviceId, alert) => { sent.push([deviceId, alert]); },
+      isActive: () => true, isWatching: () => false, onGone: () => {}, now: () => now,
+      settings: deviceId => deviceId === 'phone' ? store.settings('phone') : { finished: true },
+    });
+    await watcher.tick();
+    state = panes('blocked');
+    await watcher.tick();
+    // The phone skips "finished" and gets a quiet "needs you" at night; the tablet gets both, with sound.
+    expect(sent).toEqual([
+      ['phone', { title: 'claude needs you', body: 'tap · claude', paneId: 'w1:p1', quiet: true }],
+      ['tablet', { title: 'claude needs you', body: 'tap · claude', paneId: 'w1:p1' }],
+      ['tablet', { title: 'codex finished', body: 'tap · codex', paneId: 'w1:p2' }],
+    ]);
+    sent.length = 0; now = new Date('2026-10-17T12:00:00Z');
+    state = panes('working'); await watcher.tick();
+    state = panes('blocked'); await watcher.tick();
+    expect(sent[0]).toEqual(['phone', { title: 'claude needs you', body: 'tap · claude', paneId: 'w1:p1' }]);
+    store.close();
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
