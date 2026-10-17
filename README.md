@@ -80,12 +80,12 @@ The production build includes an online-only PWA manifest, icons and install sup
 GitHub Actions validates types, unit/API tests, fake-server browser tests, the
 public site and standalone packaging on pull requests and `main`. Successful
 `main` runs retain a verified Linux x64 build artifact and publish only the
-separate landing-page mock to GitHub Pages. Nothing deploys to the PC.
+separate public landing page to GitHub Pages. Nothing deploys to the PC.
 
-The mock lives in [`site/`](site/README.md), ready for the UI/UX design pass:
+The landing page lives in [`site/`](site/README.md):
 
 ```sh
-bun run dev:site       # public mock only, localhost:5175
+bun run dev:site       # public site only, localhost:5175
 bun run test:site      # root/project-path, desktop/mobile, light/dark
 ```
 
