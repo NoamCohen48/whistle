@@ -11,6 +11,7 @@ import { AgentSwitcher, Inventory, needsYou, paneName, statusTone, workspaceName
 import { Pairing } from './components/Pairing.tsx';
 import { TerminalPanel } from './components/TerminalPanel.tsx';
 import { INITIAL_SESSION, TerminalSession } from './terminal/session.ts';
+import { readDrafts, saveDraft, flushDrafts } from './drafts.ts';
 import { alertState, disableAlerts, enableAlerts, type AlertState } from './push.ts';
 
 // Per-browser memory for home-screen shortcuts; blocked storage just means no shortcut target.
@@ -27,7 +28,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [error, setError] = useState('');
   const [engine, setEngine] = useState<TerminalSession>();
   const [session, setSession] = useState(INITIAL_SESSION);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>(readDrafts);
   const [createRequest, setCreateRequest] = useState<CreateRequest>();
   const [menuOpen, setMenuOpen] = useState(false);
   const [changesFor, setChangesFor] = useState<string>();
@@ -40,6 +41,20 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const inFlight = useRef<AbortController | null>(null);
   const selected = paired && selection ? snapshot?.panes.find(pane =>
     pane.pane_id === selection.pane_id && pane.terminal_id === selection.terminal_id) : undefined;
+
+  useEffect(() => {
+    const lost = () => { setDrafts({}); setPaired(false); };
+    const hidden = () => { if (document.hidden) flushDrafts(); };
+    window.addEventListener('whistle-pairing-lost', lost);
+    window.addEventListener('pagehide', flushDrafts);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      window.removeEventListener('whistle-pairing-lost', lost);
+      window.removeEventListener('pagehide', flushDrafts);
+      document.removeEventListener('visibilitychange', hidden);
+      flushDrafts();
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -164,7 +179,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       setSnapshot(await loadPanes()); setPaired(true);
     } catch (cause) { setError((cause as Error).message); }
   };
-  const draftKey = selected ? paneKey(selected) : '';
+  const draftKey = selected?.pane_id || '';
   const message = error || session.error;
   const banner = <div id="error" role="alert" hidden={!message}>
     <span>{message}</span>
@@ -194,7 +209,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select} banner={selected ? null : banner} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
         banner={selected ? banner : null} onText={text => { if (selected) setTerminalText({ paneId: selected.pane_id, text }); }}
-        draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) setDrafts(previous => ({ ...previous, [draftKey]: value })); }} />
+        draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) { saveDraft(draftKey, value); setDrafts(previous => ({ ...previous, [draftKey]: value })); } }} />
       {selected ? null : <button type="button" id="new" className="primary fab" aria-haspopup="dialog"
         onClick={() => setCreateRequest({ kind: 'agent', workspaceId: sessionStorage.getItem('whistle-workspace') || undefined })}>
         <Icon name="plus" />New</button>}

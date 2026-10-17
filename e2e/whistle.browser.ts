@@ -669,3 +669,40 @@ test('terminal text can be read, copied and its picture paths opened, without to
   expect(log.filter(message => message.type === 'connect')).toHaveLength(1);
   expect(log.filter(message => ['resize', 'input', 'key'].includes(message.type))).toHaveLength(0);
 });
+
+
+test('drafts survive reload without input and are erased on pairing loss', async ({ page, context }) => {
+  await control(page);
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('keep this /tmp/whistle-picture.png');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('whistle-draft:w1:p1'))).toContain('keep this');
+  await page.reload();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect((await messages(page)).filter(message => message.type === 'input')).toEqual([]);
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await expect(page.locator('#draft')).toHaveValue('keep this /tmp/whistle-picture.png');
+  await context.clearCookies();
+  await page.locator('#refresh').click();
+  await expect(page.locator('#pair')).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('whistle-draft:')))).toEqual([]);
+});
+
+test('expired drafts are removed and clearing a restored draft removes its key', async ({ page }) => {
+  await pair(page);
+  await page.evaluate(() => {
+    localStorage.setItem('whistle-draft:w1:p1', JSON.stringify({ text: 'expired', savedAt: Date.now() - 8 * 86400000 }));
+    localStorage.setItem('whistle-draft:w2:p1', JSON.stringify({ text: 'still here', savedAt: Date.now() }));
+  });
+  await page.reload();
+  await expect(page.locator('#app')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('whistle-draft:w1:p1'))).toBeNull();
+  await page.locator('#agent-switcher [data-pane="w2:p1"]').click();
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await expect(page.locator('#draft')).toHaveValue('still here');
+  await page.locator('#clear-draft').click();
+  expect(await page.evaluate(() => localStorage.getItem('whistle-draft:w2:p1'))).toBeNull();
+});
