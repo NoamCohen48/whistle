@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import type { Pane } from '../../src/herdr.ts';
 import { modifierOrder, namedKeys } from '../../src/keys.ts';
 import { TerminalSession, type SessionState } from '../terminal/session.ts';
@@ -35,6 +35,69 @@ function vibrate(pattern: number | number[]) {
 // Paths go at the end of the draft so the text written so far stays as it was.
 const withPath = (draft: string, path: string) => `${draft.trimEnd()}${draft.trim() ? ' ' : ''}${path} `;
 const withoutPath = (draft: string, path: string) => draft.split(path).join('').replace(/[ \t]{2,}/g, ' ').replace(/^ /, '');
+
+function TerminalHistory({ engine, active }: { engine?: TerminalSession; active: boolean }) {
+  const track = useRef<HTMLDivElement>(null);
+  const thumb = useRef<HTMLSpanElement>(null);
+  const drag = useRef<{ pointer: number; offset: number } | undefined>(undefined);
+  const fade = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [shown, setShown] = useState(false);
+  const [away, setAway] = useState(false);
+  const hideLater = useCallback(() => {
+    clearTimeout(fade.current);
+    if (!drag.current) fade.current = setTimeout(() => setShown(false), 1500);
+  }, []);
+  const sync = useCallback((reveal = true) => {
+    if (!engine || !track.current || !thumb.current) return;
+    const { top, max, viewportHeight, awayFromInput } = engine.scrollInfo();
+    setAway(active && awayFromInput);
+    const height = track.current.clientHeight;
+    const size = Math.min(height, Math.max(32, height * viewportHeight / (max + viewportHeight || 1)));
+    thumb.current.style.height = `${size}px`;
+    thumb.current.style.transform = `translateY(${max ? top / max * (height - size) : 0}px)`;
+    track.current.setAttribute('aria-valuenow', String(Math.round(max ? top / max * 100 : 0)));
+    if (!max || !active) setShown(false);
+    else if (reveal) { setShown(true); hideLater(); }
+  }, [engine, active, hideLater]);
+  useEffect(() => {
+    sync(false);
+    if (!active) return;
+    const unsubscribe = engine?.onScroll(() => sync());
+    const observer = new ResizeObserver(() => sync(false));
+    if (track.current) observer.observe(track.current);
+    return () => { unsubscribe?.(); observer.disconnect(); clearTimeout(fade.current); drag.current = undefined; };
+  }, [engine, active, sync]);
+  const move = (y: number) => {
+    if (!track.current || !thumb.current || !drag.current) return;
+    const rect = track.current.getBoundingClientRect();
+    const travel = rect.height - thumb.current.offsetHeight;
+    engine?.scrollToFraction(travel > 0 ? (y - rect.top - drag.current.offset) / travel : 0);
+    sync();
+  };
+  return <><div id="terminal-history" ref={track} role="scrollbar" aria-label="Terminal history" aria-controls="terminal-viewport"
+    aria-orientation="vertical" aria-valuemin={0} aria-valuemax={100} aria-hidden={!shown} tabIndex={shown ? 0 : -1} data-visible={shown}
+    onPointerDown={event => {
+      if (!shown || !thumb.current) return;
+      event.preventDefault(); event.stopPropagation(); clearTimeout(fade.current);
+      const rect = thumb.current.getBoundingClientRect();
+      drag.current = { pointer: event.pointerId, offset: event.clientY >= rect.top && event.clientY <= rect.bottom ? event.clientY - rect.top : rect.height / 2 };
+      event.currentTarget.setPointerCapture(event.pointerId); move(event.clientY);
+    }} onPointerMove={event => { if (drag.current?.pointer === event.pointerId) { event.preventDefault(); move(event.clientY); } }}
+    onLostPointerCapture={() => { drag.current = undefined; hideLater(); }}
+    onPointerUp={event => { if (drag.current?.pointer === event.pointerId) { drag.current = undefined; event.currentTarget.releasePointerCapture(event.pointerId); hideLater(); } }}
+    onPointerCancel={() => { drag.current = undefined; hideLater(); }}
+    onKeyDown={event => {
+      if (!engine) return;
+      const { top, max, viewportHeight } = engine.scrollInfo();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? max
+        : event.key === 'ArrowUp' ? top - 17 : event.key === 'ArrowDown' ? top + 17
+        : event.key === 'PageUp' ? top - viewportHeight : event.key === 'PageDown' ? top + viewportHeight : undefined;
+      if (next === undefined) return;
+      event.preventDefault(); engine.scrollToFraction(max ? next / max : 0); sync();
+    }}><span ref={thumb} /></div>
+    <button type="button" id="latest" hidden={!away} onClick={() => { engine?.jumpToInput(); sync(false); }}>↓ Latest</button>
+  </>;
+}
 
 function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
   const customKey = useRef<HTMLInputElement>(null);
@@ -158,6 +221,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   return <section id="session" ref={section} hidden={!pane} aria-label="Terminal session" data-phase={state.phase}>
     <div className="terminal-frame">
       <div id="terminal-viewport" ref={viewport}><div id="terminal" ref={host} /></div>
+      <TerminalHistory key={`${paneId}:${terminalId}`} engine={engine} active={ready} />
       {banner}
     </div>
     <div className="dock" ref={dock}>
@@ -170,8 +234,6 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
           onClick={() => engine?.toggleWidth()}><Icon name="width" size={18} />{state.fitWidth ? 'Fit' : 'Full'}</button>
         <button type="button" id="terminal-text" className="icon-button" aria-label="Terminal text" aria-haspopup="dialog"
           disabled={!ready} onClick={() => engine && onText(engine.text())}><Icon name="text" /></button>
-        <button type="button" id="jump-input" className="icon-button" aria-label="Jump to input"
-          disabled={!ready} onClick={() => engine?.jumpToInput()}><Icon name="cursor" /></button>
         <button type="button" id="control" className={controlling ? 'release' : 'primary'} disabled={switching || !engine}
           onClick={() => engine?.toggleControl()}>{controlling ? 'Release control' : 'Take control'}</button>
       </div>
