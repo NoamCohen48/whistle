@@ -15,6 +15,9 @@ const kinds = [
   { type: 'image/gif', ext: 'gif', magic: (b: Buffer) => /^GIF8[79]a$/.test(b.toString('latin1', 0, 6)) },
 ];
 
+// The picture type of these bytes, or undefined.
+export const sniffPicture = (bytes: Buffer) => kinds.find(item => item.magic(bytes));
+
 export class UploadError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
 }

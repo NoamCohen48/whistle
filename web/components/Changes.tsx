@@ -3,6 +3,7 @@ import type { Pane } from '../../src/herdr.ts';
 import { loadChanges, loadFileDiff, type Changes, type FileDiff } from '../api.ts';
 import { Sheet } from './Actions.tsx';
 import { Icon } from './Icon.tsx';
+import { isPicturePath, pictureUrl, type PictureRequest } from './PictureViewer.tsx';
 
 // Read-only: what the pane's working tree changed since the last commit, to decide what to tell
 // the agent next. Nothing here stages, commits or reverts.
@@ -23,7 +24,9 @@ function DiffLines({ diff }: { diff: FileDiff | string | undefined }) {
   </>;
 }
 
-export function ChangesSheet({ pane, open, onClose }: { pane?: Pane; open: boolean; onClose: () => void }) {
+export function ChangesSheet({ pane, open, onClose, onPicture }: {
+  pane?: Pane; open: boolean; onClose: () => void; onPicture: (picture: PictureRequest) => void;
+}) {
   const [changes, setChanges] = useState<Changes>();
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<string>();
@@ -40,11 +43,14 @@ export function ChangesSheet({ pane, open, onClose }: { pane?: Pane; open: boole
   const toggle = (file: FileChange) => {
     if (expanded === file.path) { setExpanded(undefined); return; }
     setExpanded(file.path);
-    if (!paneId || diffs[file.path] !== undefined) return;
+    if (!paneId || diffs[file.path] !== undefined || showsPicture(file)) return;
     loadFileDiff(paneId, file.path).then(
       diff => setDiffs(previous => ({ ...previous, [file.path]: diff })),
       cause => setDiffs(previous => ({ ...previous, [file.path]: (cause as Error).message })));
   };
+  // Changed pictures are shown as pictures, from the working tree.
+  const showsPicture = (file: FileChange) => isPicturePath(file.path) && file.status !== 'deleted';
+  const pictureOf = (file: FileChange): PictureRequest => ({ paneId: paneId!, path: `${changes!.root}/${file.path}` });
   const added = changes?.files.reduce((sum, file) => sum + file.added, 0) ?? 0;
   const removed = changes?.files.reduce((sum, file) => sum + file.removed, 0) ?? 0;
   return <Sheet id="changes" open={open} title="Changes" onClose={onClose}>
@@ -72,7 +78,10 @@ export function ChangesSheet({ pane, open, onClose }: { pane?: Pane; open: boole
             </span>
             <span className="counts">{file.binary ? 'binary' : <>{file.added ? <ins>+{file.added}</ins> : null} {file.removed ? <del>−{file.removed}</del> : null}</>}</span>
           </button>
-          {expanded === file.path ? <DiffLines diff={diffs[file.path]} /> : null}
+          {expanded === file.path ? showsPicture(file)
+            ? <button type="button" className="change-picture" aria-label={`Open ${file.path}`} onClick={() => onPicture(pictureOf(file))}>
+              <img src={pictureUrl(pictureOf(file))} alt="" loading="lazy" /></button>
+            : <DiffLines diff={diffs[file.path]} /> : null}
         </li>;
       })}
     </ul> : null}

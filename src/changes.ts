@@ -8,7 +8,7 @@ export interface FileChange {
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
   added: number; removed: number; binary: boolean;
 }
-export interface Changes { branch?: string; files: FileChange[]; truncated: boolean }
+export interface Changes { root: string; branch?: string; files: FileChange[]; truncated: boolean }
 export interface FileDiff { diff: string; binary: boolean; truncated: boolean }
 
 export const MAX_FILES = 300;
@@ -36,6 +36,12 @@ async function repository(cwd: string) {
   if (top.code !== 0) throw new ChangesError('This folder is not a Git repository.');
   const head = await git(cwd, ['rev-parse', '--verify', '-q', 'HEAD'], true);
   return { root: top.stdout.trim(), base: head.code === 0 ? 'HEAD' : EMPTY_TREE };
+}
+
+// The repository root, or the folder itself outside Git: the boundary for reading files.
+export async function projectRoot(cwd: string) {
+  const top = await git(cwd, ['rev-parse', '--show-toplevel'], true);
+  return top.code === 0 ? top.stdout.trim() : cwd;
 }
 
 const diffArgs = ['--no-ext-diff', '--no-textconv', '--no-color', '-M'];
@@ -69,7 +75,7 @@ export async function changes(cwd: string): Promise<Changes> {
     files.push({ path, status: 'untracked', added: content && !content.binary ? lineCount(content.text) : 0, removed: 0, binary: content?.binary ?? false });
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
-  return { branch, files: files.slice(0, MAX_FILES), truncated: files.length > MAX_FILES || untracked.length > MAX_FILES };
+  return { root, branch, files: files.slice(0, MAX_FILES), truncated: files.length > MAX_FILES || untracked.length > MAX_FILES };
 }
 
 const lineCount = (text: string) => text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0;

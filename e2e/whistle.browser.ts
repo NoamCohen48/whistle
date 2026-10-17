@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 type Message = { type: string; pane?: string; control?: boolean; height?: number; rows?: number; id?: number; key?: string; text?: string;
-  contentType?: string; jpeg?: boolean; size?: number };
+  contentType?: string; jpeg?: boolean; size?: number; path?: string };
 const fixtureUrl = (path: string) => `http://127.0.0.1:8792${path}`;
 async function messages(page: Page): Promise<Message[]> { return (await page.request.get(fixtureUrl('/__test/messages'))).json(); }
 async function pair(page: Page) {
@@ -521,16 +521,30 @@ test('changes can be reviewed read-only without touching the terminal', async ({
   await page.locator('#pane-actions').click();
   await page.locator('#menu-changes').click();
   const sheet = page.locator('#changes');
-  await expect(sheet.locator('.changes-summary [role=status]')).toHaveText(/feature\/review\s*4 files\s*\+52 −11/);
-  await expect(sheet.locator('.change-path')).toHaveText(['assets/logo.png', 'src/old.ts', 'web/App.tsx', 'web/components/Changes.tsx']);
-  await expect(sheet.locator('.change-status')).toHaveText(['M', 'D', 'M', 'U']);
+  await expect(sheet.locator('.changes-summary [role=status]')).toHaveText(/feature\/review\s*5 files\s*\+52 −11/);
+  await expect(sheet.locator('.change-path')).toHaveText(['assets/logo.png', 'docs/home-screen.png', 'src/old.ts', 'web/App.tsx', 'web/components/Changes.tsx']);
+  await expect(sheet.locator('.change-status')).toHaveText(['M', 'U', 'D', 'M', 'U']);
 
   await sheet.locator('.change-file', { hasText: 'App.tsx' }).click();
   await expect(sheet.locator('.diff [data-line=add]')).toHaveText(['+  const [changesFor, setChangesFor] = useState<string>();', '+  const [review, setReview] = useState(false);']);
   await expect(sheet.locator('.diff [data-line=del]')).toHaveText(['-  const [old, setOld] = useState();']);
-  await sheet.locator('.change-file', { hasText: 'logo.png' }).click();
-  await expect(sheet.locator('.diff')).toHaveCount(0);
-  await expect(sheet.getByText('Binary file, not shown')).toBeVisible();
+  await sheet.locator('.change-file', { hasText: 'old.ts' }).click();
+  await expect(sheet.locator('.diff')).toHaveCount(1);
+
+  // Changed pictures show as pictures and open full screen; closing returns to the list.
+  await sheet.locator('.change-file', { hasText: 'home-screen.png' }).click();
+  const thumbnail = sheet.locator('.change-picture img');
+  await expect(thumbnail).toHaveJSProperty('naturalWidth', 360);
+  await sheet.locator('.change-picture').click();
+  const viewer = page.locator('#picture-viewer');
+  await expect(viewer.locator('.viewer-head strong')).toHaveText('home-screen.png');
+  await expect(viewer.locator('img')).toHaveJSProperty('naturalWidth', 360);
+  await expect(viewer.getByRole('link', { name: 'Save to phone' })).toHaveAttribute('download', 'home-screen.png');
+  expect((await messages(page)).filter(message => message.type === 'picture').map(message => message.path))
+    .toContain('/home/dev/Work/tap/docs/home-screen.png');
+  await viewer.getByRole('button', { name: 'Close' }).click();
+  await expect(viewer).toBeHidden();
+  await expect(sheet).toBeVisible();
 
   await sheet.getByRole('button', { name: 'Close' }).click();
   await expect(sheet).toBeHidden();
