@@ -559,3 +559,41 @@ test('changes can be reviewed read-only without touching the terminal', async ({
   await page.locator('#menu-changes').click();
   await expect(page.locator('#changes .sheet-error')).toHaveText('This folder is not a Git repository.');
 });
+
+test('home-screen shortcuts open the last pane, the agent that needs you, or New agent', async ({ page, request }) => {
+  const launch = async (shortcut: string) => {
+    await page.goto('about:blank'); // A fresh launch from the home screen.
+    await page.goto(`/#open=${shortcut}`);
+    await expect(page).toHaveURL('/');
+  };
+  await pair(page);
+  await page.locator('#agent-switcher [data-pane="w2:p1"]').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+
+  await launch('last');
+  await expect(page.locator('#heading')).toHaveText('Second agent');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+
+  // "Needs you" prefers an agent asking for input over one that finished.
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=done'));
+  await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=blocked'));
+  await launch('needs-you');
+  await expect(page.locator('#heading')).toHaveText('First agent');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=idle'));
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=working'));
+  await launch('needs-you');
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+
+  await launch('new-agent');
+  await expect(page.locator('#create-sheet')).toBeVisible();
+  await expect(page.locator('#new-workspace')).toHaveValue('w1');
+  await page.keyboard.press('Escape');
+
+  // An unknown shortcut is a plain launch: this tab's pane comes back watch-only, nothing more.
+  await launch('control');
+  await expect(page.locator('#heading')).toHaveText('First agent');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect(page.locator('#control')).toHaveText('Take control');
+  expect((await messages(page)).filter(message => message.type === 'connect').every(message => message.control === false)).toBe(true);
+});
