@@ -3,6 +3,7 @@ import type { Pane, Snapshot } from '../src/herdr.ts';
 import { loadPanes, pairBrowser, PairingRequired, runAction, type Action, type Startup } from './api.ts';
 import { CreateSheet, PaneMenu, type CreateRequest } from './components/Actions.tsx';
 import { ChangesSheet } from './components/Changes.tsx';
+import { AlertsSheet } from './components/AlertsSheet.tsx';
 import { PictureViewer, type PictureRequest } from './components/PictureViewer.tsx';
 import { Icon } from './components/Icon.tsx';
 import { AgentSwitcher, Inventory, paneName, workspaceName } from './components/Inventory.tsx';
@@ -28,6 +29,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [picture, setPicture] = useState<PictureRequest>();
   const [alerts, setAlerts] = useState<AlertState>('unsupported');
   const [alertsBusy, setAlertsBusy] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const alertsGeneration = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
   const selected = paired && selection ? snapshot?.panes.find(pane =>
@@ -157,8 +159,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
         </div> : <strong id="heading" className="wordmark">whistle</strong>}
         {!selected && alerts !== 'unsupported' ? <button type="button" id="alerts" className="icon-button" disabled={alertsBusy}
           aria-pressed={alerts === 'on'} aria-label={alerts === 'on' ? 'Alerts on' : alerts === 'blocked' ? 'Alerts blocked' : 'Turn on alerts'}
-          title={alerts === 'on' ? 'Alerts on: tap to turn off' : 'Alert me when an agent needs me'}
-          onClick={() => void toggleAlerts()}><Icon name={alerts === 'on' ? 'bell' : 'bell-off'} /></button> : null}
+          title={alerts === 'on' ? 'Alert settings' : 'Alert me when an agent needs me'} aria-haspopup={alerts === 'on' ? 'dialog' : undefined}
+          onClick={() => { if (alerts === 'on') setAlertsOpen(true); else void toggleAlerts(); }}><Icon name={alerts === 'on' ? 'bell' : 'bell-off'} /></button> : null}
         <button type="button" id="refresh" className="icon-button" aria-label="Refresh"
           onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}><Icon name="refresh" /></button>
         {selected ? <button type="button" id="pane-actions" className="icon-button" aria-label="Pane actions"
@@ -172,6 +174,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       {selected ? null : <button type="button" id="new" className="primary fab" aria-haspopup="dialog"
         onClick={() => setCreateRequest({ kind: 'agent', workspaceId: sessionStorage.getItem('whistle-workspace') || undefined })}>
         <Icon name="plus" />New</button>}
+      <AlertsSheet open={alertsOpen && alerts === 'on'} onClose={() => setAlertsOpen(false)}
+        onTurnOff={async () => { await toggleAlerts(); setAlertsOpen(false); }} />
       <CreateSheet request={createRequest} snapshot={snapshot} onClose={() => setCreateRequest(undefined)} onCreated={created} />
       <PaneMenu open={menuOpen} pane={selected} snapshot={snapshot} onClose={() => setMenuOpen(false)}
         onNew={request => { setMenuOpen(false); setCreateRequest(request); }} onDone={destroy} onRename={rename}

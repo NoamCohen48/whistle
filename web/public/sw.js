@@ -3,16 +3,17 @@
 // IndexedDB, background sync, credentials, terminal state, skipWaiting or clients.claim.
 // Every navigation/asset/API request goes directly to the network. Offline
 // reloads fail closed; an update never reloads or takes over an active terminal.
-// Revision 2: change this revision when the worker's own behavior changes.
+// Revision 3: change this revision when the worker's own behavior changes.
 
-// Push payloads are encrypted end to end by the PC: { title, body, paneId }. Nothing is stored.
+// Push payloads are encrypted end to end by the PC: { title, body, paneId, quiet? }. Nothing is stored.
+// During the phone's quiet hours the PC marks alerts quiet: shown, without sound or vibration.
 self.addEventListener('push', event => {
   let alert = {};
   try { alert = event.data ? event.data.json() : {}; } catch { /* Show a generic alert instead. */ }
   const paneId = typeof alert.paneId === 'string' ? alert.paneId : '';
   event.waitUntil(self.registration.showNotification(typeof alert.title === 'string' ? alert.title : 'An agent needs you', {
     body: typeof alert.body === 'string' ? alert.body : '',
-    tag: paneId ? `pane:${paneId}` : 'whistle', renotify: true,
+    tag: paneId ? `pane:${paneId}` : 'whistle', renotify: alert.quiet !== true, silent: alert.quiet === true,
     icon: '/icon-192.png', data: { paneId },
   }));
 });

@@ -14,7 +14,7 @@ The worker never calls `skipWaiting` or `clients.claim`, and nothing automatical
 
 The bell on the pane list turns on Web Push alerts for this device. It appears only where they can work: a production build in a secure context with service worker, Push and Notification support (so HTTPS mode on a phone; not Vite development). Turning alerts on asks for notification permission, subscribes with the PC's VAPID key, stores the subscription on the PC and sends an "Alerts are on" message through the whole path; a delivery failure is shown at once.
 
-The worker's `push` handler only shows the notification (tagged per pane, so a newer alert replaces an older one). Tapping it sends an open message to an open Whistle window, or opens `/#pane=ID`, which is stripped from the URL before any request and opens that pane **watch-only**, exactly like a restored selection. Nothing is cached or stored by the worker. Host-side details are in [host authentication](host.md#needs-you-alerts).
+The worker's `push` handler only shows the notification (tagged per pane, so a newer alert replaces an older one; an alert marked quiet during the phone's quiet hours is shown with `silent: true`). Tapping it sends an open message to an open Whistle window, or opens `/#pane=ID`, which is stripped from the URL before any request and opens that pane **watch-only**, exactly like a restored selection. Nothing is cached or stored by the worker. Host-side details are in [host authentication](host.md#needs-you-alerts).
 
 All PWA files use the host's explicit static allowlist and are embedded in the standalone binary. PNGs use base64 only inside the executable metadata and are served as original binary bytes with `image/png`. No filesystem directory or credential file is served.
 

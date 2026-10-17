@@ -41,6 +41,7 @@ let workerRevision = 1;
 let failNextAction = '';
 let pushSubscribed = false;
 let failPushTest = false;
+let pushSettings: Record<string, unknown> = { finished: true };
 const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString('base64url');
 let created = 0;
 let uploads = 0;
@@ -104,7 +105,7 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0; uploads = 0;
+      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
@@ -137,7 +138,7 @@ const server = Bun.serve<Peer>({
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
     }
     if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
-      || path === '/api/push' || path === '/api/push/test' || path === '/api/uploads'
+      || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/uploads'
       || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
@@ -146,7 +147,13 @@ const server = Bun.serve<Peer>({
         { path: '/tap-worktrees/docs', label: 'docs', branch: 'docs' },
         { path: '/explorer', label: 'app-explorer', branch: 'explorer', openPaneId: 'w2:p1' },
       ] });
-      if (path === '/api/push' && request.method === 'GET') return Response.json({ publicKey: pushKey, subscribed: pushSubscribed });
+      if (path === '/api/push' && request.method === 'GET') return Response.json({ publicKey: pushKey, subscribed: pushSubscribed, settings: pushSettings });
+      if (path === '/api/push/settings') {
+        if (request.method !== 'PUT' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
+        pushSettings = await request.json();
+        messages.push({ type: 'push-settings', settings: pushSettings });
+        return Response.json({ settings: pushSettings });
+      }
       if (path.startsWith('/api/push')) {
         if (request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
         const body = request.method === 'PUT' ? await request.json() : undefined;
