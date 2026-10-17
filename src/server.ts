@@ -8,6 +8,7 @@ import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSettings, parseSubsc
 import { dimensions, parseCommand } from './protocol.ts';
 import { ChangesError, changes, fileDiff } from './changes.ts';
 import { PictureError, readPicture } from './pictures.ts';
+import { FolderError, listFolders } from './folders.ts';
 import { MAX_UPLOAD_BYTES, UploadError, saveUpload, sweepUploads } from './uploads.ts';
 import { PairingTickets } from './pairing.ts';
 import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
@@ -164,6 +165,14 @@ const server = Bun.serve<Peer>({
           const workspaceId = url.searchParams.get('workspace') || '';
           if (!/^[A-Za-z0-9:_.-]{1,128}$/.test(workspaceId)) return new Response('Invalid workspace', { status: 400, headers });
           return Response.json({ worktrees: await worktrees(workspaceId) }, { headers });
+        }
+        if (url.pathname === '/api/folders' && request.method === 'GET') {
+          try {
+            return Response.json(await listFolders(url.searchParams.get('path') || '~'), { headers });
+          } catch (error) {
+            if (error instanceof FolderError) return new Response(error.message, { status: error.status, headers });
+            throw error;
+          }
         }
         if (url.pathname === '/api/picture' && request.method === 'GET') {
           const pane = (await snapshot()).panes.find(item => item.pane_id === url.searchParams.get('pane'));

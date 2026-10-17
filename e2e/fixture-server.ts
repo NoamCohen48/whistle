@@ -46,6 +46,14 @@ const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString(
 let created = 0;
 let uploads = 0;
 // Review data for w1:p1 only; any other pane reports a folder outside Git.
+// Folders a fixture home contains; * marks a Git repository.
+const folderTree: Record<string, string[]> = {
+  '/home/dev': ['Documents', 'Downloads', 'Work'],
+  '/home/dev/Work': ['notes', 'site', 'tap*', 'whistle*'],
+  '/home/dev/Work/tap': ['docs', 'src', 'web'],
+  '/home/dev/Work/whistle': ['src', 'web'],
+  '/home/dev/Work/site': [], '/home/dev/Work/notes': [], '/home/dev/Documents': [], '/home/dev/Downloads': [],
+};
 const changes = { root: '/home/dev/Work/tap', branch: 'feature/review', truncated: false, files: [
   { path: 'assets/logo.png', status: 'modified', added: 0, removed: 0, binary: true },
   { path: 'docs/home-screen.png', status: 'untracked', added: 0, removed: 0, binary: true },
@@ -139,7 +147,7 @@ const server = Bun.serve<Peer>({
     }
     if (path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
       || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/uploads'
-      || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture') {
+      || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/folders') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
@@ -162,6 +170,16 @@ const server = Bun.serve<Peer>({
         if (request.method === 'DELETE') pushSubscribed = false;
         if (path === '/api/push/test' && failPushTest) return new Response('Could not reach the push service: Push service answered 500', { status: 502 });
         return new Response('ok');
+      }
+      if (path === '/api/folders') {
+        const asked = url.searchParams.get('path') || '~';
+        const full = asked.replace(/^~(?=\/|$)/, '/home/dev').replace(/\/+$/, '') || '/';
+        messages.push({ type: 'folders', path: asked });
+        if (!full.startsWith('/')) return new Response('Use an absolute path or ~/…', { status: 400 });
+        if (full !== '/home/dev' && !full.startsWith('/home/dev/')) return new Response('Only folders inside your home folder can be browsed.', { status: 403 });
+        const list = folderTree[full];
+        if (!list) return new Response('This folder does not exist.', { status: 404 });
+        return Response.json({ path: full, truncated: false, folders: list.map(name => ({ name: name.replace(/\*$/, ''), repo: name.endsWith('*') })) });
       }
       if (path === '/api/picture') {
         const file = url.searchParams.get('path') || '';

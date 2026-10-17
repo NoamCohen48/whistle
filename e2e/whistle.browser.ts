@@ -362,19 +362,38 @@ test('agents that need you are listed first and open watch-only', async ({ page,
   await expect(page.locator('#needs-you')).toHaveCount(0);
 });
 
-test('new workspaces can start from the folder beside open projects', async ({ page }) => {
+test('new workspaces pick a folder by browsing the PC', async ({ page }) => {
   await pair(page);
   await page.locator('#new').click();
   await page.locator('[data-kind="workspace"]').click();
-  // Herdr-managed worktree checkouts are not offered as project folders.
+  // Starts beside the open projects; Herdr-managed worktree checkouts are not offered.
   await expect(page.locator('.folder-chips button')).toHaveText(['~/Work/']);
+  await expect(page.locator('#new-folder')).toHaveValue('~/Work/');
+  await expect(page.locator('.crumbs button')).toHaveText(['~', 'Work']);
+  await expect(page.locator('.folder-row')).toHaveText(['notes', 'site', 'tapGit', 'whistleGit']);
+
+  // Typing narrows the list; tapping goes into a folder.
+  await page.locator('#new-folder').fill('~/Work/wh');
+  await expect(page.locator('.folder-row')).toHaveText(['whistleGit']);
+  await page.locator('.folder-row').click();
+  await expect(page.locator('#new-folder')).toHaveValue('~/Work/whistle/');
+  await expect(page.locator('#new-folder')).not.toBeFocused();
+  await expect(page.locator('.folder-row')).toHaveText(['src', 'web']);
+  await expect(page.locator('#new-label')).toHaveAttribute('placeholder', 'whistle');
+
+  // Breadcrumbs go back up; missing and outside folders explain themselves.
+  await page.locator('.crumbs button', { hasText: '~' }).click();
+  await expect(page.locator('.folder-row')).toHaveText(['Documents', 'Downloads', 'Work']);
+  await page.locator('#new-folder').fill('~/Nope/');
+  await expect(page.locator('.folder-browser')).toContainText('This folder does not exist.');
+  await page.locator('#new-folder').fill('/etc/');
+  await expect(page.locator('.folder-browser')).toContainText('Only folders inside your home folder can be browsed.');
+
   await page.locator('.folder-chips button').click();
-  await expect(page.locator('#new-folder')).toHaveValue('/home/dev/Work/');
-  await expect(page.locator('#new-folder')).toBeFocused();
-  await page.keyboard.type('site');
+  await page.locator('.folder-row', { hasText: 'tap' }).click();
   await page.locator('#create-submit').click();
   await expect(page.locator('#connection')).toHaveText('Watching');
-  expect(await actions(page)).toEqual([{ action: 'workspace', cwd: '/home/dev/Work/site' }]);
+  expect(await actions(page)).toEqual([{ action: 'workspace', cwd: '~/Work/tap' }]);
 });
 
 test('panes and workspaces can be renamed without leaving watch mode', async ({ page }) => {

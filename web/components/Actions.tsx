@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Pane, Snapshot, Workspace } from '../../src/herdr.ts';
 import { loadAgentKinds, loadWorktrees, runAction, type Action, type WorktreeChoice } from '../api.ts';
+import { FolderPicker, folderValue } from './FolderPicker.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { paneName } from './Inventory.tsx';
 
@@ -65,7 +66,7 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   const [choices, setChoices] = useState<WorktreeChoice[]>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const folder = useRef<HTMLInputElement>(null);
+  const [folder, setFolder] = useState('');
   const name = useRef<HTMLInputElement>(null);
   const branch = useRef<HTMLInputElement>(null);
   const base = useRef<HTMLInputElement>(null);
@@ -73,6 +74,7 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   useEffect(() => {
     if (!request) return;
     setKind(request.kind); setError(''); setBusy(false); setExisting(false); setChoices(undefined);
+    setFolder(folders[0]?.label || '~/');
     const preferred = request.workspaceId && workspaces.some(item => item.workspace_id === request.workspaceId)
       ? request.workspaceId : workspaces[0]?.workspace_id || '';
     setWorkspaceId(preferred);
@@ -113,7 +115,7 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   const create = () => {
     if (kind === 'terminal') return submit({ type: 'terminal', workspaceId });
     if (kind === 'agent') return submit({ type: 'agent', workspaceId, kind: agent });
-    if (kind === 'workspace') return submit({ type: 'workspace', cwd: folder.current?.value || '', label: name.current?.value || undefined });
+    if (kind === 'workspace') return submit({ type: 'workspace', cwd: folderValue(folder), label: name.current?.value || undefined });
     return submit({ type: 'worktree-create', workspaceId: repositoryId, branch: branch.current?.value || '', base: base.current?.value || undefined });
   };
   const verb = busy ? (kind === 'agent' ? `Starting ${agent}…` : 'Creating…')
@@ -143,18 +145,14 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
       </> : null}
       {kind === 'workspace' ? <>
         <label className="field">Folder on your PC
-          <input id="new-folder" ref={folder} required disabled={busy} placeholder="~/Work/project"
+          <input id="new-folder" value={folder} onChange={event => setFolder(event.target.value)} required disabled={busy} placeholder="~/Work/project"
             autoCapitalize="off" autoComplete="off" autoCorrect="off" spellCheck={false} maxLength={1024} /></label>
         {folders.length ? <div className="choice-chips folder-chips" role="group" aria-label="Start from a folder">
-          {folders.map(item => <button type="button" key={item.path} data-folder={item.path} title={item.path} disabled={busy}
-            onClick={() => {
-              const input = folder.current;
-              if (!input) return;
-              input.value = item.path; input.focus(); input.setSelectionRange(item.path.length, item.path.length);
-            }}><Icon name="folder" size={16} />{item.label}</button>)}
+          {folders.map(item => <button type="button" key={item.path} data-folder={item.path} title={item.path} disabled={busy} onClick={() => setFolder(item.label)}><Icon name="folder" size={16} />{item.label}</button>)}
         </div> : null}
+        <FolderPicker value={folder} disabled={busy} onChange={setFolder} />
         <label className="field">Name <span className="optional">optional</span>
-          <input id="new-label" ref={name} disabled={busy} placeholder="Folder name" autoComplete="off" maxLength={64} /></label>
+          <input id="new-label" ref={name} disabled={busy} placeholder={folderValue(folder).split('/').pop() || 'Folder name'} autoComplete="off" maxLength={64} /></label>
       </> : null}
       {kind === 'worktree' ? <>
         {repositories.length ? <label className="field">Repository
