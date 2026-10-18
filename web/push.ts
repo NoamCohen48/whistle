@@ -1,4 +1,4 @@
-import { PairingRequired } from './api.ts';
+import { request as httpRequest } from './request.ts';
 import type { AlertSettings } from '../src/push.ts';
 
 export type { AlertSettings };
@@ -13,11 +13,9 @@ export function alertsSupported() {
 }
 
 async function request(method: string, path = '/api/push', body?: unknown) {
-  const response = await fetch(path, {
+  const response = await httpRequest(path, {
     method, cache: 'no-store', ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
   });
-  if (response.status === 401) throw new PairingRequired();
-  if (!response.ok) throw new Error(await response.text());
   return response;
 }
 const sameKey = (subscription: PushSubscription, publicKey: string) => {

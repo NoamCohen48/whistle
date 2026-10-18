@@ -15,7 +15,8 @@ const paths = {
   plus: 'M10 4v12M4 10h12',
   more: 'M10 4.5v.01M10 10v.01M10 15.5v.01',
   terminal: 'M3.5 4.5h13v11h-13zM6.5 8l2.5 2-2.5 2M10.5 12.5h3',
-  agent: 'M10 3v3m0 8v3M3 10h3m8 0h3M5.5 5.5l2 2m5 5 2 2m0-9-2 2m-5 5-2 2',
+  // A four-point sparkle: the old eight-ray mark read as a loading spinner.
+  agent: 'M10 3c.5 3.5 3.5 6.5 7 7-3.5.5-6.5 3.5-7 7-.5-3.5-3.5-6.5-7-7 3.5-.5 6.5-3.5 7-7z',
   folder: 'M3 6a1 1 0 0 1 1-1h3.5L9 7h7a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z',
   search: 'M9 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm4.5-1.5L17 17',
   bell: 'M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 2h-13zM8.5 17.5a1.6 1.6 0 0 0 3 0',
@@ -25,7 +26,11 @@ const paths = {
   download: 'M10 3.5v8.5M6.5 8.5 10 12l3.5-3.5M4 13.5v2.5h12v-2.5',
   copy: 'M7 7V4.5A1 1 0 0 1 8 3.5h7.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H13M4.5 7H12a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z',
   text: 'M4 5h12M4 8.5h12M4 12h8M4 15.5h5',
+  send: 'M15.5 4.5v5a2.5 2.5 0 0 1-2.5 2.5H4.5M8 8.5 4.5 12 8 15.5',
   trash: 'M4.5 6h11M8 6V4.5h4V6M6 6l.7 9.5h6.6L14 6',
+  check: 'M4.5 10.5 8 14l7.5-8',
+  chevron: 'M5.5 8 10 12.5 14.5 8',
+  'font-size': 'M3 15.5 7 4.5l4 11M4.4 11.5h5.2M12.5 15.5l2.5-6 2.5 6M13.3 13.5h3.4',
 } as const;
 
 export type IconName = keyof typeof paths;

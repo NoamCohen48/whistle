@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Pane } from '../../src/herdr.ts';
 import { loadChanges, loadFileDiff, type Changes, type FileDiff } from '../api.ts';
 import { Sheet } from './Actions.tsx';
@@ -33,20 +33,23 @@ export function ChangesSheet({ pane, open, onClose, onPicture }: {
   const [diffs, setDiffs] = useState<Record<string, FileDiff | string>>({});
   const [generation, setGeneration] = useState(0);
   const paneId = pane?.pane_id;
+  const requestVersion = useRef(0);
   useEffect(() => {
     if (!open || !paneId) return;
     let current = true;
+    requestVersion.current++;
     setChanges(undefined); setError(''); setExpanded(undefined); setDiffs({});
     loadChanges(paneId).then(value => { if (current) setChanges(value); }, cause => { if (current) setError((cause as Error).message); });
-    return () => { current = false; };
+    return () => { current = false; requestVersion.current++; };
   }, [open, paneId, generation]);
   const toggle = (file: FileChange) => {
     if (expanded === file.path) { setExpanded(undefined); return; }
     setExpanded(file.path);
     if (!paneId || diffs[file.path] !== undefined || showsPicture(file)) return;
+    const version = requestVersion.current;
     loadFileDiff(paneId, file.path).then(
-      diff => setDiffs(previous => ({ ...previous, [file.path]: diff })),
-      cause => setDiffs(previous => ({ ...previous, [file.path]: (cause as Error).message })));
+      diff => { if (version === requestVersion.current) setDiffs(previous => ({ ...previous, [file.path]: diff })); },
+      cause => { if (version === requestVersion.current) setDiffs(previous => ({ ...previous, [file.path]: (cause as Error).message })); });
   };
   // Changed pictures are shown as pictures, from the working tree.
   const showsPicture = (file: FileChange) => isPicturePath(file.path) && file.status !== 'deleted';

@@ -21,6 +21,7 @@ export function Sheet({ open, title, onClose, children, id }: { open: boolean; t
     if (!open && element.open) element.close();
   }, [open]);
   return <dialog id={id} ref={dialog} className="sheet" aria-label={title} onClose={onClose}
+    onCancel={event => { event.preventDefault(); onClose(); }}
     onClick={event => { if (event.target === dialog.current) onClose(); }}>
     <div className="sheet-body">
       <div className="sheet-head"><h2 tabIndex={-1} autoFocus>{title}</h2>
@@ -61,6 +62,7 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   const [workspaceId, setWorkspaceId] = useState('');
   const [repositoryId, setRepositoryId] = useState('');
   const [agents, setAgents] = useState<string[]>();
+  const [agentRevision, setAgentRevision] = useState(0);
   const [agent, setAgent] = useState('');
   const [existing, setExisting] = useState(false);
   const [choices, setChoices] = useState<WorktreeChoice[]>();
@@ -86,14 +88,18 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   }, [request]);
   useEffect(() => {
     if (!request || agents) return;
+    let active = true;
     loadAgentKinds().then(list => {
+      if (!active) return;
       setAgents(list);
       const used = snapshot?.panes.map(pane => pane.agent).filter(Boolean) as string[] | undefined;
       const common = used?.sort((a, b) => used.filter(x => x === b).length - used.filter(x => x === a).length)
         .find(item => list.includes(item));
       setAgent(current => current || common || list[0] || '');
-    }).catch(cause => setError((cause as Error).message));
-  }, [request, agents, snapshot]);
+    }).catch(cause => { if (active) { setAgents([]); setError((cause as Error).message); } });
+    return () => { active = false; };
+    // Metadata polling must not restart agent discovery or overwrite a half-filled form.
+  }, [request, agents, agentRevision]);
   useEffect(() => {
     if (!request || kind !== 'worktree' || !existing || !repositoryId) return;
     let active = true;
@@ -140,7 +146,7 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
           {!agents ? <p className="sheet-status" role="status">Loading agents…</p>
             : agents.length ? <div className="choice-chips">{agents.map(item => <button type="button" key={item} data-agent={item}
               aria-pressed={agent === item} disabled={busy} onClick={() => setAgent(item)}>{item}</button>)}</div>
-              : <p className="sheet-status">Herdr reports no supported agents</p>}
+              : <><p className="sheet-status">No agents available</p><button type="button" onClick={() => { setError(''); setAgents(undefined); setAgentRevision(value => value + 1); }}>Reload agents</button></>}
         </fieldset>
       </> : null}
       {kind === 'workspace' ? <>

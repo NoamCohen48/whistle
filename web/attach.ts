@@ -1,4 +1,4 @@
-import { PairingRequired } from './api.ts';
+import { request } from './request.ts';
 
 // Pictures for an agent. Re-encoding on the phone keeps uploads small over the tailnet and
 // drops camera metadata (location, device) before anything leaves the phone.
@@ -35,9 +35,7 @@ async function shrink(file: Blob) {
 
 export async function attachPicture(file: Blob): Promise<string> {
   const { body, thumbnail } = await shrink(file);
-  const response = await fetch('/api/uploads', { method: 'POST', headers: { 'Content-Type': body.type }, body });
-  if (response.status === 401) throw new PairingRequired();
-  if (!response.ok) throw new Error(await response.text());
+  const response = await request('/api/uploads', { method: 'POST', headers: { 'Content-Type': body.type }, body });
   const { path } = await response.json() as { path: string };
   previews.set(path, thumbnail);
   return path;

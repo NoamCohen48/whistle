@@ -4,6 +4,9 @@ import { modifierOrder, namedKeys } from '../../src/keys.ts';
 import { TerminalSession, type SessionState } from '../terminal/session.ts';
 import { Icon } from './Icon.tsx';
 import { attachPicture, attachedPaths, previewFor } from '../attach.ts';
+import { clearPrompts, draftStatus, readPrompts, rememberPrompt } from '../drafts.ts';
+import { readPreference, writePreference } from '../preferences.ts';
+import { Sheet } from './Actions.tsx';
 
 const keyGroups = [
   ['Editing and navigation', namedKeys],
@@ -30,6 +33,19 @@ const CONTROL_START = 18;
 const CONTROL_END = [12, 70, 12];
 function vibrate(pattern: number | number[]) {
   try { navigator.vibrate?.(pattern); } catch { /* Blocked by the browser or no user activation yet. */ }
+}
+// Android Back closes an open drawer before leaving the pane, as it already closes sheets
+// (dialogs get this from the browser). Where CloseWatcher is missing, Back leaves the pane.
+type Watcher = { onclose: (() => void) | null; destroy(): void };
+const CloseWatcher = (globalThis as { CloseWatcher?: new () => Watcher }).CloseWatcher;
+function useBackCloses(open: boolean, close: () => void) {
+  const onClose = useEffectEvent(close);
+  useEffect(() => {
+    if (!open || !CloseWatcher) return;
+    const watcher = new CloseWatcher();
+    watcher.onclose = () => onClose();
+    return () => watcher.destroy();
+  }, [open]);
 }
 
 // Paths go at the end of the draft so the text written so far stays as it was.
@@ -99,7 +115,7 @@ function TerminalHistory({ engine, active }: { engine?: TerminalSession; active:
   </>;
 }
 
-function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
+function KeyPicker({ engine, state, open, maxHeight, onFont }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number; onFont: () => void }) {
   const customKey = useRef<HTMLInputElement>(null);
   const disabled = state.phase !== 'controlling';
   const sendKey = (key: string) => {
@@ -125,19 +141,23 @@ function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSessio
       <button type="button" id="scroll-up" aria-label="Scroll terminal up" disabled={disabled} onClick={() => engine?.scroll('up')}>PgUp</button>
       <button type="button" id="scroll-down" aria-label="Scroll terminal down" disabled={disabled} onClick={() => engine?.scroll('down')}>PgDn</button>
     </div>
-    <form id="custom-key-form" onSubmit={event => { event.preventDefault(); engine?.sendKey(customKey.current?.value || ''); }}>
-      <label htmlFor="custom-key">Key or chord</label>
-      <div className="key-entry"><input id="custom-key" ref={customKey} autoComplete="off" autoCapitalize="off"
-        placeholder="ctrl+shift+p" spellCheck={false} maxLength={80} disabled={disabled} />
-        <button type="submit" disabled={disabled}>Send</button></div>
-    </form>
-    <div id="key-grid" aria-label="All terminal keys">
-      {keyGroups.map(([heading, keys]) => <div className="key-group" key={heading} role="group" aria-label={heading}>
-        <p className="group-label">{heading}</p>
-        <div className="key-cells">{keys.map(key => <button type="button" key={key} data-key={key} disabled={disabled}
-          onPointerDown={event => event.preventDefault()} onClick={() => sendKey(key)}>{key}</button>)}</div>
-      </div>)}
-    </div>
+    <details id="all-keys">
+      <summary>All keys and chords</summary>
+      <button type="button" className="quiet" onClick={onFont}>Text size</button>
+      <form id="custom-key-form" onSubmit={event => { event.preventDefault(); engine?.sendKey(customKey.current?.value || ''); }}>
+        <label htmlFor="custom-key">Key or chord</label>
+        <div className="key-entry"><input id="custom-key" ref={customKey} autoComplete="off" autoCapitalize="off"
+          placeholder="ctrl+shift+p" spellCheck={false} maxLength={80} disabled={disabled} />
+          <button type="submit" disabled={disabled}>Send</button></div>
+      </form>
+      <div id="key-grid" aria-label="All terminal keys">
+        {keyGroups.map(([heading, keys]) => <div className="key-group" key={heading} role="group" aria-label={heading}>
+          <p className="group-label">{heading}</p>
+          <div className="key-cells">{keys.map(key => <button type="button" key={key} data-key={key} disabled={disabled}
+            onPointerDown={event => event.preventDefault()} onClick={() => sendKey(key)}>{key}</button>)}</div>
+        </div>)}
+      </div>
+    </details>
   </div>;
 }
 
@@ -157,6 +177,17 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const picker = useRef<HTMLInputElement>(null);
   const [attaching, setAttaching] = useState(false);
   const [attachError, setAttachError] = useState('');
+  const [undo, setUndo] = useState('');
+  const [saved, setSaved] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [restorePrompt, setRestorePrompt] = useState<string>();
+  const [fontOpen, setFontOpen] = useState(false);
+  const [showHelp, setShowHelp] = useState(() => !readPreference('compose-help-dismissed', false));
+  // The draft last handed to Send. It stays editable; the button just stops looking unsent.
+  const [sent, setSent] = useState('');
+  useBackCloses(keysOpen, () => setKeysOpen(false));
+  useBackCloses(compose, () => setCompose(false));
   useEffect(() => {
     const session = new TerminalSession(viewport.current!, host.current!, onState);
     onEngine(session);
@@ -170,7 +201,8 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
     else engine?.close();
   });
   useEffect(() => {
-    setCompose(false); setKeysOpen(false); setAttachError(''); syncPane();
+    setCompose(false); setKeysOpen(false); setAttachError(''); setUndo(''); setRestorePrompt(undefined); setFontOpen(false); setHistoryOpen(false); setSent('');
+    setHistory(paneId ? readPrompts(paneId) : []); syncPane();
   }, [engine, paneId, terminalId]);
   // An upload can finish after the person switched panes or kept typing: it lands in the
   // newest draft of the pane it was attached for, or nowhere.
@@ -191,6 +223,15 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
       if (latest.current.paneId === forPane) setAttachError((error as Error).message);
     } finally { setAttaching(false); }
   };
+  useEffect(() => {
+    const sync = () => setSaved(draftStatus(paneId || '', draft));
+    sync(); window.addEventListener('whistle-drafts-saved', sync);
+    return () => window.removeEventListener('whistle-drafts-saved', sync);
+  }, [paneId, draft]);
+  const submitDraft = () => {
+    if (engine?.paste(draft, true, Boolean(pane?.agent)) && paneId) { setHistory(rememberPrompt(paneId, draft)); setSent(draft); }
+  };
+  const justSent = Boolean(draft) && draft === sent;
   const attached = attachedPaths(draft);
   useEffect(() => {
     engine?.resize();
@@ -237,56 +278,91 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
         <button type="button" id="control" className={controlling ? 'release' : 'primary'} disabled={switching || !engine}
           onClick={() => engine?.toggleControl()}>{controlling ? 'Release control' : 'Take control'}</button>
       </div>
+      <div className="watch-tools" hidden={controlling}>
+        <button type="button" id="watch-compose" className="quiet" aria-pressed={compose} onClick={() => setCompose(value => !value)}><Icon name="compose" size={18} />Compose</button>
+        <button type="button" id="text-size" className="quiet" aria-haspopup="dialog" onClick={() => setFontOpen(true)}><Icon name="font-size" size={18} />Text size</button>
+      </div>
       <div id="compose" hidden={!compose}>
-        <textarea id="draft" ref={editor} rows={3} aria-label="Draft" spellCheck={false} autoCapitalize="off" value={draft}
-          placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
-          onPaste={event => {
-            const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
-            if (files.length) { event.preventDefault(); void attach(files); }
-          }} />
-        {attachError ? <p id="attach-error" role="alert">{attachError}</p> : null}
-        {attached.length ? <ul id="attachments" aria-label="Attached pictures">
-          {attached.map((path, index) => <li key={path}>
-            {previewFor(path) ? <img src={previewFor(path)} alt="" width={40} height={40} /> : <span className="no-preview"><Icon name="image" size={18} /></span>}
-            <span>Picture {index + 1}</span>
-            <button type="button" className="quiet" aria-label={`Remove picture ${index + 1}`}
-              onClick={() => onDraft(withoutPath(draft, path))}><Icon name="close" size={16} /></button>
-          </li>)}
-        </ul> : null}
-        <div className="compose-actions">
-          <button type="button" id="attach" className="quiet" disabled={attaching} aria-busy={attaching}
-            onClick={() => picker.current?.click()}><Icon name="image" size={18} />{attaching ? 'Attaching…' : 'Picture'}</button>
-          <input type="file" id="picture-input" ref={picker} accept="image/*" multiple hidden onChange={event => {
-            void attach([...event.target.files || []]); event.target.value = '';
-          }} />
-          <button type="button" id="clear-draft" className="quiet" disabled={!draft} onClick={() => { onDraft(''); editor.current?.focus(); }}>Clear</button>
-          <button type="button" id="paste" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, false, Boolean(pane?.agent))}>Paste</button>
-          <button type="button" id="submit" className="primary" disabled={!controlling || !draft} onClick={() => engine?.paste(draft, true, Boolean(pane?.agent))}>Paste + Enter</button>
+        <div className="compose-meta"><small role="status">{justSent ? 'Sent. The draft stays here until you clear it.' : saved}</small>
+          <button type="button" id="close-compose" className="icon-button" aria-label="Minimize compose" onClick={() => setCompose(false)}><Icon name="close" size={16} /></button></div>
+        <div className="composer">
+          <textarea id="draft" ref={editor} rows={2} aria-label="Draft" spellCheck={false} autoCapitalize="off" value={draft}
+            placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
+            onPaste={event => {
+              const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+              if (files.length) { event.preventDefault(); void attach(files); }
+            }} />
+          {attached.length ? <ul id="attachments" aria-label="Attached pictures">
+            {attached.map((path, index) => <li key={path}>
+              {previewFor(path) ? <img src={previewFor(path)} alt="" width={40} height={40} /> : <span className="no-preview"><Icon name="image" size={18} /></span>}
+              <span>Picture {index + 1}</span>
+              <button type="button" className="quiet" aria-label={`Remove picture ${index + 1}`}
+                onClick={() => onDraft(withoutPath(draft, path))}><Icon name="close" size={16} /></button>
+            </li>)}
+          </ul> : null}
+          <div className="compose-actions">
+            <button type="button" id="attach" className="icon-button" disabled={attaching} aria-busy={attaching}
+              aria-label={attaching ? 'Attaching picture' : 'Attach picture'} onClick={() => picker.current?.click()}><Icon name="image" /></button>
+            <input type="file" id="picture-input" ref={picker} accept="image/*" multiple hidden onChange={event => {
+              void attach([...event.target.files || []]); event.target.value = '';
+            }} />
+            <button type="button" id="clear-draft" className="icon-button" aria-label="Clear draft" disabled={!draft}
+              onClick={() => { setUndo(draft); onDraft(''); editor.current?.focus(); }}><Icon name="trash" /></button>
+            {undo && undo !== draft ? <button type="button" id="undo-clear" className="quiet" onClick={() => { onDraft(undo); setUndo(''); }}>Undo</button> : null}
+            {attaching ? <span className="compose-hint" role="status">Attaching…</span> : null}
+            <button type="button" id="paste" className="quiet" aria-label="Paste without Enter" disabled={!controlling || !draft}
+              onClick={() => engine?.paste(draft, false, Boolean(pane?.agent))}>Paste only</button>
+          </div>
         </div>
+        {attachError ? <p id="attach-error" role="alert">{attachError}</p> : null}
+        {showHelp ? <div className="compose-help"><p>Paste only inserts text. Send also presses Enter.{controlling ? '' : ' Take control before sending.'}</p><button type="button" className="quiet" onClick={() => { setShowHelp(false); writePreference('compose-help-dismissed', true); }}>Got it</button></div> : null}
+        {history.length ? <details className="prompt-history" open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)}><summary>Recent prompts<Icon name="chevron" size={16} /></summary>
+          <p>Saved when you tap Send, not proof of delivery. Choosing one never sends it.</p>
+          <ul>{history.map((text, index) => <li key={index}><button type="button" className="quiet" onClick={() => {
+            if (draft && draft !== text) setRestorePrompt(text); else { onDraft(text); setHistoryOpen(false); }
+          }}>{text}</button></li>)}</ul>
+          {restorePrompt !== undefined ? <div className="confirm"><p>Replace the current draft? You can undo this.</p><div className="confirm-actions"><button type="button" onClick={() => setRestorePrompt(undefined)}>Cancel</button><button type="button" onClick={() => { setUndo(draft); onDraft(restorePrompt); setRestorePrompt(undefined); setHistoryOpen(false); }}>Replace draft</button></div></div> : null}
+          <button type="button" className="quiet" onClick={() => { if (paneId) clearPrompts(paneId); setHistory([]); }}>Clear prompt history</button>
+        </details> : null}
       </div>
       <div id="keyboard" aria-label="Terminal controls" hidden={!controlling}>
         <div id="armed-keys" role="status" hidden={!armed.length}>
           <span className="armed-chord">{armed.map(title).join(' + ')} + …</span>
         </div>
-        <KeyPicker engine={engine} state={state} open={keysOpen} maxHeight={keypadMax} />
+        <KeyPicker engine={engine} state={state} open={keysOpen} maxHeight={keypadMax} onFont={() => setFontOpen(true)} />
         <div className="keys main-keys">
           <div className="tool-group">
             <button type="button" id="focus-keyboard" className="tool" aria-label="Keyboard" disabled={!controlling}
-              onClick={() => engine?.focusKeyboard()}><Icon name="keyboard" /><span>Type</span></button>
+              onClick={() => { setKeysOpen(false); engine?.focusKeyboard(); }}><Icon name="keyboard" /><span>Type</span></button>
             <button type="button" id="compose-toggle" className="tool" aria-pressed={compose} disabled={!controlling} onClick={() => {
               engine?.clearModifiers(); setKeysOpen(false); setCompose(value => !value);
             }}><Icon name="compose" /><span>Compose</span></button>
             <button type="button" id="more-keys" className="tool" aria-label="More keys" aria-expanded={keysOpen}
               data-armed={armed.length > 0} disabled={!controlling}
-              onClick={() => setKeysOpen(value => !value)}><Icon name="keys" /><span>Keys</span></button>
+              onClick={() => {
+                // Keys replaces the phone keyboard: the drawer and the IME together leave no room for the terminal.
+                if (!keysOpen && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                setKeysOpen(value => !value);
+              }}><Icon name="keys" /><span>Keys</span></button>
           </div>
           <div className="key-pair">
-            {['Escape', 'Enter'].map(key => <button type="button" key={key} data-key={key}
-              className={key === 'Enter' ? 'primary keycap' : 'keycap'} disabled={!controlling}
-              onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey(key)}>{key === 'Escape' ? 'Esc' : key}</button>)}
+            <button type="button" data-key="Escape" className="keycap" disabled={!controlling}
+              onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey('Escape')}>Esc</button>
+            {/* While composing, the primary key sends the draft: Paste + Enter, never a second Enter beside it. */}
+            {compose
+              ? <button type="button" id="submit" className="primary keycap send" aria-label="Paste + Enter" disabled={!controlling || !draft}
+                data-sent={justSent} onClick={submitDraft}><Icon name={justSent ? 'check' : 'send'} size={18} />{justSent ? 'Sent' : 'Send'}</button>
+              : <button type="button" data-key="Enter" className="primary keycap" disabled={!controlling}
+                onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey('Enter')}>Enter</button>}
           </div>
         </div>
       </div>
     </div>
+    <Sheet id="text-size-sheet" open={fontOpen} title="Terminal text size" onClose={() => setFontOpen(false)}>
+      <p className="sheet-note">Saved on this browser. While watching, this changes only your view, not the PC’s terminal.</p>
+      <div className="font-stepper"><button type="button" aria-label="Smaller terminal text" disabled={state.fontSize <= 10} onClick={() => engine?.setFontSize(state.fontSize - 1)}>A−</button>
+        <output aria-live="polite">{state.fontSize}px</output><button type="button" aria-label="Larger terminal text" disabled={state.fontSize >= 22} onClick={() => engine?.setFontSize(state.fontSize + 1)}>A+</button>
+        <button type="button" className="quiet" onClick={() => engine?.setFontSize(13)}>Reset</button></div>
+    </Sheet>
   </section>;
 }

@@ -61,13 +61,15 @@ To update an existing user daemon: verify the new binary, run `./dist/whistle in
 ## Use
 
 1. Pick an existing pane. It opens in **watch** mode without resizing/focusing the desktop.
-2. Tap **Take control**, then **Type** to type directly into the real terminal. Herdr fits the width while keeping a taller PTY, so fixed TUI widgets cannot consume all the chat space. Scroll to read; **Input** returns to the actual cursor.
-3. **Keys** opens modifiers, special keys and the full key pad above the one-row toolbar. Arm **Ctrl / Alt / Shift** for the next key; combine them as needed, or enter a custom chord (e.g. `ctrl+shift+p`). Unsupported keys show an error. Ctrl+D can exit an empty shell; it is a real terminal key.
-4. **Compose** is a separate local editor. Choose **Paste** or **Paste + Enter**. Multiline paste is refused when bracketed paste is unavailable.
+2. Tap **Take control**, then **Type** to type directly into the real terminal. Herdr fits the width while keeping a taller PTY, so fixed TUI widgets cannot consume all the chat space. Scroll to read; **↓ Latest** returns to the actual cursor.
+3. **Keys** opens modifiers and common keys above the one-row toolbar; **All keys and chords** expands the full key pad. Arm **Ctrl / Alt / Shift** for the next key; combine them as needed, or enter a custom chord (e.g. `ctrl+shift+p`). Unsupported keys show an error. Ctrl+D can exit an empty shell; it is a real terminal key.
+4. **Compose** is a separate local editor, available even while watching. Minimize it without losing the draft; Clear offers Undo. While controlling, the toolbar's Enter becomes **Send** (paste + Enter); **Paste only** inserts without Enter. Sending leaves the draft intact. Recent prompts can be restored locally, never automatically sent. Multiline paste is refused when bracketed paste is unavailable.
 5. **Width: fit/original** switches between phone width and horizontal panning.
 6. **Release control**, leave the page, or lock the phone to release sizing. Reconnection is watch-only; input is never automatically resent.
 7. Switch directly using the **top agent strip**. It includes idle/running agents, keeps local drafts and returns to watch mode on switches.
-8. The dashboard nests linked worktrees under their parent workspace (e.g. **tap → app-explorer · Worktree**).
+8. The dashboard nests linked worktrees under their parent workspace (e.g. **tap → app-explorer · Worktree**). Filter by status, pin panes, or collapse workspaces. Failed refreshes show when the last successful update happened.
+9. **Terminal text** supports finding and copying output; **Text size** adjusts local readability (also in Keys → All keys and chords while controlling). The header's changes shortcut opens a read-only Git review.
+10. **Settings** lists paired devices with confirmed revocation and explains notification permissions. A temporary connection failure asks you to retry, not pair again. Silent connections recover watch-only without replaying input.
 
 The temporary `whistle-poc-test` pane was closed after testing. The requested Spark model returned an account/provider unsupported-model error; see `.docs/poc.md`. Android IME behavior still needs physical-device testing.
 
