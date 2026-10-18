@@ -32,8 +32,13 @@ function testCard(width: number, height: number) {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
 }
 const picture = testCard(360, 240);
-interface Peer { pane: string; control: boolean; width: number; height: number; timer?: ReturnType<typeof setInterval> }
+interface Peer { pane: string; control: boolean; width: number; height: number; silent?: boolean; timer?: ReturnType<typeof setInterval> }
 let inventory = structuredClone(initial);
+const initialDevices = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Fixture browser', current: true, createdAt: Date.now(), lastSeenAt: Date.now(), expiresAt: Date.now() + 86400000 },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Old phone', current: false, createdAt: Date.now(), lastSeenAt: Date.now(), expiresAt: Date.now() + 86400000 },
+];
+let devices = structuredClone(initialDevices);
 let messages: Record<string, unknown>[] = [];
 let pairings = 0;
 let acknowledge = true;
@@ -100,6 +105,7 @@ function applyAction(body: Record<string, string>): { paneId?: string; warning?:
   }
 }
 function frame(ws: ServerWebSocket<Peer>) {
+  if (ws.data.silent) return;
   const { width, height, pane } = ws.data;
   const screen = (bracketedFrames ? '\x1b[?2004h' : '') + '\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` + 'Saved screenshot to docs/home-screen.png\r\n' +
     Array.from({ length: height - 3 }, (_, row) => `row ${row + 3}\r\n`).join('') +
@@ -115,7 +121,7 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; bracketedFrames = true; created = 0; uploads = 0;
+      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; bracketedFrames = true; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
@@ -132,6 +138,8 @@ const server = Bun.serve<Peer>({
       }
       return new Response('history');
     }
+    if (path === '/__test/silent') { for (const peer of peers) peer.data.silent = true; return new Response('silenced'); }
+    if (path === '/__test/empty') { inventory.panes = []; return new Response('empty'); }
     if (path === '/__test/disconnect') { for (const peer of peers) peer.close(); return new Response('closed'); }
     if (path === '/__test/status') {
       const pane = inventory.panes.find(item => item.pane_id === url.searchParams.get('pane'));
@@ -154,6 +162,19 @@ const server = Bun.serve<Peer>({
         if (body.ticket !== 'single-use-ticket' || pairings > 1) return new Response('QR expired or already used', { status: 401 });
       } else if (body.token !== 'test-token') return new Response('Incorrect access token', { status: 401 });
       return new Response('paired', { headers: { 'Set-Cookie': 'whistle_session=fixture; HttpOnly; SameSite=Strict; Path=/' } });
+    }
+    if (path.startsWith('/api/devices')) {
+      if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
+      if (request.method === 'GET') return Response.json({ devices });
+      if (request.method === 'DELETE' && request.headers.get('origin') === url.origin) {
+        const id = path.split('/').at(-1);
+        const device = devices.find(item => item.id === id);
+        if (!device) return new Response('Device not found', { status: 404 });
+        devices = devices.filter(item => item !== device);
+        messages.push({ type: 'revoke', id });
+        return new Response('Revoked', { headers: device.current ? { 'Set-Cookie': 'whistle_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' } : {} });
+      }
+      return new Response('Refused', { status: 403 });
     }
     if (path === '/api/previews' || path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
       || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/uploads'
@@ -241,7 +262,7 @@ const server = Bun.serve<Peer>({
     message(ws, raw) {
       try {
         const command = JSON.parse(String(raw));
-        if (command.type === 'ping') { ws.send('{"type":"pong"}'); return; }
+        if (command.type === 'ping') { if (!ws.data.silent) ws.send('{"type":"pong"}'); return; }
         messages.push({ ...command, pane: ws.data.pane });
         if (acknowledge && (command.type === 'input' || command.type === 'key')) ws.send(JSON.stringify({ type: 'ack', id: command.id }));
         if (command.type === 'resize') {

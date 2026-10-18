@@ -3,15 +3,17 @@ import { FitAddon } from '@xterm/addon-fit';
 import type { Pane } from '../../src/herdr.ts';
 import { chord, inputKey, validateChord, type Modifier } from '../../src/keys.ts';
 import { controlSize, inputScrollTop, pageScroll } from '../../src/viewport.ts';
+import { readPreference, writePreference } from '../preferences.ts';
 
 export type Phase = 'idle' | 'connecting' | 'requesting-control' | 'watching' | 'controlling' | 'disconnected' | 'paused';
 export interface SessionState {
   phase: Phase;
   fitWidth: boolean;
+  fontSize: number;
   modifiers: Modifier[];
   error: string;
 }
-export const INITIAL_SESSION: SessionState = { phase: 'idle', fitWidth: true, modifiers: [], error: '' };
+export const INITIAL_SESSION: SessionState = { phase: 'idle', fitWidth: true, fontSize: 13, modifiers: [], error: '' };
 
 // This class owns all high-frequency terminal state. React receives only UI transitions,
 // never terminal frames, cursor positions, scroll offsets, pending ACKs or typed bytes.
@@ -21,7 +23,7 @@ export class TerminalSession {
   private readonly listeners = new AbortController();
   private readonly observer: ResizeObserver;
   private readonly heartbeat: ReturnType<typeof setInterval>;
-  private state: SessionState = { ...INITIAL_SESSION, modifiers: [] };
+  private state: SessionState = { ...INITIAL_SESSION, fontSize: Math.max(10, Math.min(22, readPreference('terminal-font-size', 13))), modifiers: [] };
   private pane?: Pane;
   private socket?: WebSocket;
   private generation = 0;
@@ -29,6 +31,8 @@ export class TerminalSession {
   private watchCols = 120;
   private watchRows = 40;
   private reconnectDelay = 1000;
+  private lastResponse = 0;
+  private connectedAt = 0;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private readonly pending = new Map<number, number>();
@@ -44,7 +48,7 @@ export class TerminalSession {
     private readonly onState: (state: SessionState) => void) {
     this.terminal = new Terminal({
       fontFamily: 'ui-monospace, "Cascadia Code", "DejaVu Sans Mono", monospace',
-      fontSize: 13, lineHeight: 1.18, cursorBlink: true, scrollback: 1500,
+      fontSize: this.state.fontSize, lineHeight: 1.18, cursorBlink: true, scrollback: 1500,
       allowProposedApi: false, allowTransparency: false, convertEol: false, disableStdin: true,
       theme: { background: '#141819', foreground: '#e5ebea', cursor: '#bad7a1', selectionBackground: '#4b665a' },
     });
@@ -107,17 +111,26 @@ export class TerminalSession {
       if (document.hidden) { this.disconnect(); this.update({ phase: 'paused' }); }
       else if (this.pane) this.connect(false);
     }, { signal });
+    window.addEventListener('offline', () => {
+      this.disconnect();
+      if (this.pane) { this.update({ phase: 'disconnected' }); this.fail('This device is offline. Reconnect to Tailscale; input has stopped.'); }
+    }, { signal });
+    window.addEventListener('online', () => { if (this.pane) this.connect(false); }, { signal });
     window.addEventListener('pagehide', () => this.disconnect(), { signal });
     window.addEventListener('pageshow', event => { if (event.persisted && this.pane) this.connect(false); }, { signal });
     this.observer = new ResizeObserver(this.resize);
     this.observer.observe(viewport);
     this.heartbeat = setInterval(() => {
+      if (this.socket && !document.hidden && Date.now() - this.lastResponse > 25_000 && Date.now() - this.connectedAt > 25_000) {
+        this.fail('The connection stopped responding. Reconnecting watch-only; no input will be replayed.');
+        this.connect(false); return;
+      }
       if (this.socket?.readyState === WebSocket.OPEN) this.socket.send('{"type":"ping"}');
       if (this.pending.size && Date.now() - Math.min(...this.pending.values()) > 5000) {
         this.fail('Input write not confirmed. Check the pane before retrying; nothing will be replayed.');
         this.socket?.close();
       }
-    }, 10_000);
+    }, 5000);
     this.resize();
   }
 
@@ -175,6 +188,12 @@ export class TerminalSession {
     this.clearError(); this.connect(this.state.phase !== 'controlling');
   }
   toggleWidth() { this.update({ fitWidth: !this.state.fitWidth }); this.resize(); }
+  setFontSize(value: number) {
+    if (!Number.isFinite(value)) return;
+    const fontSize = Math.max(10, Math.min(22, Math.round(value)));
+    this.terminal.options.fontSize = fontSize;
+    writePreference('terminal-font-size', fontSize); this.update({ fontSize }); this.resize();
+  }
 
   private disconnect() {
     this.stopFling(); this.touchY = undefined; this.touchSamples = [];
@@ -197,6 +216,7 @@ export class TerminalSession {
     const rows = control ? size.rows : this.watchRows;
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const query = new URLSearchParams({ pane: pane.pane_id, mode: control ? 'control' : 'observe', cols: String(cols), rows: String(rows) });
+    this.connectedAt = this.lastResponse = Date.now();
     const ws = new WebSocket(`${protocol}//${location.host}/terminal?${query}`);
     this.socket = ws;
     this.update({ phase: control ? 'requesting-control' : 'connecting' });
@@ -204,6 +224,7 @@ export class TerminalSession {
     let received = false;
     ws.onmessage = event => {
       if (epoch !== this.generation || this.disposed) return;
+      this.lastResponse = Date.now();
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'terminal.frame') {
@@ -241,14 +262,15 @@ export class TerminalSession {
   }
   private send(command: { type: 'input'; text: string; submit?: boolean } | { type: 'key'; key: string }) {
     if (this.state.phase !== 'controlling' || this.socket?.readyState !== WebSocket.OPEN) {
-      this.fail('Not controlling this pane. Input was not sent.'); return;
+      this.fail('Not controlling this pane. Input was not sent.'); return false;
     }
     if (this.socket.bufferedAmount > 64 * 1024) {
-      this.fail('Connection is too slow. Input was not sent.'); this.socket.close(); return;
+      this.fail('Connection is too slow. Input was not sent.'); this.socket.close(); return false;
     }
     const id = ++this.sequence;
     this.pending.set(id, Date.now());
-    this.socket.send(JSON.stringify({ ...command, id }));
+    try { this.socket.send(JSON.stringify({ ...command, id })); return true; }
+    catch { this.pending.delete(id); this.fail('Input was not sent. The connection closed; reconnect and check the pane.'); this.socket.close(); return false; }
   }
   sendKey(key: string) {
     try {
@@ -262,12 +284,12 @@ export class TerminalSession {
   // Herdr frames are rendered screens, so a mirror attached mid-session may never see the program
   // turn bracketed paste on. Coding agents always accept it; the caller says when the pane is one.
   paste(value: string, submit: boolean, agent = false) {
-    if (!value || this.state.phase !== 'controlling') return;
+    if (!value || this.state.phase !== 'controlling') return false;
     this.clearModifiers();
     const text = value.replace(/\r?\n/g, '\r');
     const bracketed = this.terminal.modes.bracketedPasteMode || agent;
     if (!bracketed && /[\r\n]/.test(text)) { this.fail('This terminal did not say it accepts pasted lines, so nothing was sent. Send one line at a time.'); return; }
-    this.send({ type: 'input', text: bracketed ? '\x1b[200~' + text.replace(/\x1b/g, '') + '\x1b[201~' : text, ...(submit ? { submit: true } : {}) });
+    return this.send({ type: 'input', text: bracketed ? '\x1b[200~' + text.replace(/\x1b/g, '') + '\x1b[201~' : text, ...(submit ? { submit: true } : {}) });
   }
   private fittedSize() {
     const size = this.fit.proposeDimensions();
@@ -278,6 +300,11 @@ export class TerminalSession {
     const height = window.visualViewport?.height || window.innerHeight;
     document.documentElement.style.setProperty('--app-height', `${height}px`);
     document.documentElement.classList.toggle('short-viewport', height < 600);
+    // A small phone with the keyboard open: only the essentials of the dock fit.
+    document.documentElement.classList.toggle('tiny-viewport', height < 420);
+    // How the device is held, not the viewport's shape: the keyboard makes an upright phone's viewport wide.
+    const turned = screen.orientation?.type.startsWith('landscape') ?? screen.width > screen.height;
+    document.documentElement.classList.toggle('landscape', turned);
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
       if (this.disposed) return;

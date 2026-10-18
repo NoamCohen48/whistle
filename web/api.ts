@@ -2,30 +2,21 @@ import type { Action, ActionResult, WorktreeChoice } from '../src/actions.ts';
 import type { Changes, FileDiff } from '../src/changes.ts';
 import type { FolderList } from '../src/folders.ts';
 import type { Snapshot } from '../src/herdr.ts';
-import { clearDrafts } from './drafts.ts';
+import { PairingRequired, request } from './request.ts';
+export { PairingRequired, errorMessage } from './request.ts';
 
 export type { Action, Changes, FileDiff, FolderList, WorktreeChoice };
 
-export class PairingRequired extends Error {
-  constructor() {
-    super('Pair this browser first');
-    clearDrafts();
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('whistle-pairing-lost'));
-  }
-}
 export async function loadPanes(signal?: AbortSignal): Promise<Snapshot> {
-  const response = await fetch('/api/panes', { signal, cache: 'no-store' });
-  if (response.status === 401) throw new PairingRequired();
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
+  const response = await request('/api/panes', { signal });
+  return json(response);
 }
 export async function pairBrowser(path: '/api/login' | '/api/redeem-pairing', credential: Record<string, string>) {
-  const response = await fetch(path, {
+  await request(path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credential),
-  });
-  if (!response.ok) throw new Error(await response.text());
+  }, false);
 }
-export interface Startup { snapshot?: Snapshot; error: string }
+export interface Startup { snapshot?: Snapshot; error: string; needsPairing?: boolean }
 // Called once before React mounts: Strict Mode must not redeem a single-use ticket twice.
 export async function prepareSession(ticket: string | null): Promise<Startup> {
   let error = '';
@@ -33,36 +24,38 @@ export async function prepareSession(ticket: string | null): Promise<Startup> {
     try { await pairBrowser('/api/redeem-pairing', { ticket }); }
     catch (cause) { error = (cause as Error).message; }
   }
-  try { return { snapshot: await loadPanes(), error }; }
-  catch (cause) { return { error: error || (cause instanceof PairingRequired ? '' : (cause as Error).message) }; }
+  // A used or expired QR on a browser that is still paired changes nothing: open normally, no error.
+  try { return { snapshot: await loadPanes(), error: '' }; }
+  catch (cause) { return { error: error || (cause instanceof PairingRequired ? '' : (cause as Error).message), needsPairing: cause instanceof PairingRequired }; }
 }
 
 async function json<T>(response: Response): Promise<T> {
   if (response.status === 401) throw new PairingRequired();
   if (!response.ok) throw new Error(await response.text());
-  return response.json();
+  try { return await response.json(); }
+  catch { throw new Error('The PC returned an incomplete response. Refresh and check the result before trying again.'); }
 }
 export async function runAction(action: Action): Promise<ActionResult> {
-  return json(await fetch('/api/actions', {
+  return json(await request('/api/actions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action),
   }));
 }
 export async function loadPreviews(signal?: AbortSignal): Promise<Record<string, string>> {
-  return json(await fetch('/api/previews', { signal, cache: 'no-store' }));
+  return json(await request('/api/previews', { signal, cache: 'no-store' }));
 }
 export async function loadAgentKinds(): Promise<string[]> {
-  return (await json<{ kinds: string[] }>(await fetch('/api/agents', { cache: 'no-store' }))).kinds;
+  return (await json<{ kinds: string[] }>(await request('/api/agents', { cache: 'no-store' }))).kinds;
 }
 export async function loadWorktrees(workspaceId: string): Promise<WorktreeChoice[]> {
   return (await json<{ worktrees: WorktreeChoice[] }>(
-    await fetch(`/api/worktrees?workspace=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' }))).worktrees;
+    await request(`/api/worktrees?workspace=${encodeURIComponent(workspaceId)}`, { cache: 'no-store' }))).worktrees;
 }
 export async function loadFolders(path: string, signal?: AbortSignal): Promise<FolderList> {
-  return json(await fetch(`/api/folders?path=${encodeURIComponent(path)}`, { cache: 'no-store', signal }));
+  return json(await request(`/api/folders?path=${encodeURIComponent(path)}`, { cache: 'no-store', signal }));
 }
 export async function loadChanges(paneId: string): Promise<Changes> {
-  return json(await fetch(`/api/changes?pane=${encodeURIComponent(paneId)}`, { cache: 'no-store' }));
+  return json(await request(`/api/changes?pane=${encodeURIComponent(paneId)}`, { cache: 'no-store' }));
 }
 export async function loadFileDiff(paneId: string, path: string): Promise<FileDiff> {
-  return json(await fetch(`/api/changes/file?pane=${encodeURIComponent(paneId)}&path=${encodeURIComponent(path)}`, { cache: 'no-store' }));
+  return json(await request(`/api/changes/file?pane=${encodeURIComponent(paneId)}&path=${encodeURIComponent(path)}`, { cache: 'no-store' }));
 }

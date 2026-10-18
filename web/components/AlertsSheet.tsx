@@ -54,7 +54,7 @@ export function AlertsSheet({ open, onClose, onTurnOff }: { open: boolean; onClo
       {error ? <p className="sheet-error" role="alert">{error}</p> : null}
       <button type="button" id="alerts-off" className="danger" disabled={busy} onClick={() => {
         setBusy(true);
-        void onTurnOff().finally(() => setBusy(false));
+        void onTurnOff().catch(cause => setError((cause as Error).message)).finally(() => setBusy(false));
       }}>{busy ? 'Turning off…' : 'Turn off alerts on this phone'}</button>
     </div>}
   </Sheet>;

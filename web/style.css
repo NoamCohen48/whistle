@@ -81,7 +81,7 @@ header .title small { font-size: 12px; color: var(--muted); line-height: 1.35 }
 header .title code { color: var(--faint); font-size: 11.5px }
 .wordmark { flex: 1; padding-left: 10px; font-size: 18px; font-weight: 750; letter-spacing: -.02em }
 #refresh { margin-left: auto }
-#alerts { margin-left: auto }
+#alerts { margin-left: auto; gap: 6px; padding-inline: 10px; font-size: 13px }
 #alerts + #refresh { margin-left: 0 }
 #alerts[aria-pressed=true] { color: var(--accent) }
 
@@ -126,15 +126,15 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .pane-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface) }
 .pane-list li + li { border-top: 1px solid var(--line) }
 .pane {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px;
-  width: 100%; min-height: 64px; padding: 10px 12px 10px 16px; text-align: left;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  width: 100%; min-height: 84px; padding: 10px 12px 10px 16px; text-align: left;
   border: 0; border-radius: 0; background: transparent; font-size: 15px;
 }
 .pane-list li:first-child .pane { border-radius: var(--radius) var(--radius) 0 0 }
 .pane-list li:last-child .pane { border-radius: 0 0 var(--radius) var(--radius) }
 .pane:not(:disabled):active { transform: none; background: var(--surface-2) }
 .pane-copy { min-width: 0 }
-.pane-preview { display: block; margin-top: 5px; font: 12px/1.5 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.pane-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin-top: 6px; font: 12px/1.5 var(--mono); color: var(--muted); overflow: hidden; white-space: normal; overflow-wrap: anywhere }
 .pane-copy strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .pane-copy small { display: flex; gap: 6px; margin-top: 3px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden }
 .pane-copy small > span + span::before { content: '·'; margin-right: 6px; color: var(--faint) }
@@ -145,7 +145,29 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #needs-you { margin-bottom: 28px }
 #needs-you .workspace { color: var(--text) }
 #needs-you .pane-list { border-color: color-mix(in srgb, var(--alert) 35%, var(--line)) }
-.pane-id { font-size: 11.5px; color: var(--faint) }
+.pane-entry { display: flex; align-items: stretch; min-width: 0 }
+.pane-entry .pane { flex: 1; min-width: 0 }
+.pin-pane { align-self: center; flex: none; min-width: 52px; min-height: 36px; padding: 0 10px; margin-right: 8px; border-color: var(--line-strong); background: transparent; font-size: 13px; color: var(--text) }
+.pin-pane[aria-pressed=true] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent) }
+.pane-copy .cwd { color: var(--muted) }
+.workspace-toggle { width: 100%; justify-content: flex-start; gap: 8px; min-height: 40px; padding: 0; font: inherit; text-align: left }
+.workspace-toggle > .workspace-name { min-width: 0 }
+[data-collapsed=true] > .worktree-group { display: none }
+.inventory-freshness { margin-top: 7px; font-size: 12px; color: var(--muted) }
+.herd-filters { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 16px; margin-top: -6px; scrollbar-width: thin }
+.herd-filters button { min-height: 40px; padding: 0 10px; font-size: 13px; background: transparent; border-color: var(--line) }
+.herd-filters button span { font-variant-numeric: tabular-nums; color: var(--muted) }
+.herd-filters [aria-pressed=true] { background: var(--surface-2); border-color: var(--accent) }
+.recent-panes { margin: 8px 0 20px }
+.recent-panes summary { display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: 13px; color: var(--muted); cursor: pointer; list-style: none }
+.recent-panes summary::-webkit-details-marker { display: none }
+.recent-panes summary .icon, .workspace-toggle .icon:last-child { flex: none; color: var(--faint); transition: transform .15s }
+.recent-panes:not([open]) summary .icon, [data-collapsed=true] > .workspace .workspace-toggle .icon:last-child { transform: rotate(-90deg) }
+@media (prefers-reduced-motion: reduce) { .recent-panes summary .icon, .workspace-toggle .icon:last-child, .prompt-history summary .icon { transition: none } }
+#pinned-panes { margin-bottom: 20px }
+.empty p { max-width: 48ch; margin-bottom: 18px }
+#settings { font-size: 13px; padding-inline: 10px }
+.revoke { min-height: 40px; padding: 0 12px; border-color: color-mix(in srgb, var(--alert) 45%, transparent); background: transparent; color: var(--alert); font-size: 14px }
 .pane > .icon { color: var(--faint) }
 .worktree-group { position: relative; margin: 14px 0 0 14px; padding-left: 14px; border-left: 1px solid var(--line-strong) }
 .worktree-group .workspace { margin-left: 0 }
@@ -171,7 +193,10 @@ header .title code { color: var(--faint); font-size: 11.5px }
 /* Session */
 #session { flex: 1; min-height: 0; display: flex; flex-direction: column }
 /* Bottom dock: state, control and input live together within thumb reach. Overlays anchor to its top edge. */
-.dock { position: relative; flex-shrink: 0; background: var(--bg) }
+.dock { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--bg) }
+/* When space runs out only the draft gives way (it scrolls); state, control and the toolbar never leave the screen. */
+.dock > * { flex-shrink: 0 }
+.dock > #compose { flex-shrink: 1; min-height: 0 }
 .session-bar { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 4px 8px 4px 12px; border-top: 1px solid var(--line) }
 .session-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px }
 #connection {
@@ -190,13 +215,14 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #control { min-width: 128px; transition: none }
 [data-phase=controlling] #notice { display: none }
 #sizing { padding: 0 10px; font-size: 14px }
+.session-bar > button { flex-shrink: 0 }
 
-.terminal-frame { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column }
+.terminal-frame { position: relative; flex: 1; min-height: 48px; display: flex; flex-direction: column }
 /* The ring eases in when control starts but disappears instantly when it ends. */
 .terminal-frame::after { content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none }
 [data-phase=controlling] .terminal-frame::after { box-shadow: inset 0 0 0 2px var(--live), inset 0 18px 24px -20px var(--live); transition: box-shadow .2s }
 [data-phase=disconnected] .terminal-frame::after, [data-phase=paused] .terminal-frame::after { box-shadow: inset 0 2px var(--alert) }
-#terminal-viewport { isolation: isolate; flex: 1; min-height: 60px; overflow: auto; background: var(--bg); padding: 4px 8px; overscroll-behavior: contain }
+#terminal-viewport { isolation: isolate; flex: 1; min-height: 0; overflow: auto; background: var(--bg); padding: 4px 8px; overscroll-behavior: contain }
 #terminal { height: 100%; min-height: 40px }
 .xterm { padding: 0 }
 .xterm-viewport { overscroll-behavior: contain }
@@ -209,17 +235,61 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #terminal-history > span { position: absolute; top: 0; right: 8px; width: 5px; min-height: 32px; border-radius: 3px; background: var(--muted); box-shadow: 0 0 0 1px var(--bg); pointer-events: none }
 @media (prefers-reduced-motion: reduce) { #terminal-history { transition: none } }
 
-/* Compose */
-#compose { max-height: calc(var(--app-height, 100dvh) * .4); overflow: auto; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface) }
-#clear-draft, #attach { min-height: 36px; padding: 0 10px; font-size: 14px }
-#attach { gap: 6px; padding-left: 4px }
-#clear-draft { margin-right: auto }
-#attach-error { margin: 6px 0 0; color: var(--alert); font-size: 14px }
-#attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none }
+/* Compose: one card (draft, pictures, small tools); the toolbar's primary key becomes Send. */
+#compose { max-height: calc(var(--app-height, 100dvh) * .45); overflow: auto; padding: 8px 8px 2px; border-top: 1px solid var(--line) }
+.composer { border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); transition: border-color .12s }
+.composer:focus-within { border-color: color-mix(in srgb, var(--live) 55%, var(--line-strong)) }
+#draft {
+  border: 0; border-radius: 14px 14px 0 0; background: transparent; padding: 10px 12px 4px; resize: none;
+  field-sizing: content; min-height: calc(2lh + 14px); max-height: calc(var(--app-height, 100dvh) * .28);
+}
+#draft:focus-visible { outline: none }
+#attach-error { margin: 6px 4px 0; color: var(--alert); font-size: 14px }
+#attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0 8px; list-style: none }
 #attachments li { display: flex; align-items: center; gap: 8px; padding: 3px 2px 3px 3px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--bg); font-size: 14px }
 #attachments img, #attachments .no-preview { width: 40px; height: 40px; border-radius: 7px; object-fit: cover; display: grid; place-items: center; background: var(--surface); color: var(--muted) }
 #attachments button { min-height: 40px; min-width: 40px; padding: 0 }
-.compose-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px }
+.compose-actions { display: flex; align-items: center; gap: 2px; padding: 0 4px 2px }
+.compose-hint { font-size: 13px; color: var(--muted) }
+#paste { margin-left: auto; min-height: 40px; padding: 0 10px; font-size: 14px; color: var(--text) }
+#paste:disabled { color: var(--muted) }
+
+/* Local tools stay available without terminal control. */
+.watch-tools { display: flex; justify-content: space-between; padding: 0 8px max(4px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line) }
+.watch-tools button { min-height: 40px; font-size: 13px }
+.compose-meta { display: flex; align-items: center; gap: 6px; min-height: 28px }
+.compose-meta small { flex: 1; min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.4 }
+.compose-meta .icon-button { width: 36px; min-height: 32px }
+.compose-help { display: flex; align-items: center; gap: 8px; padding: 4px }
+.compose-help p, .prompt-history p { font-size: 12px; line-height: 1.45 }
+.compose-help button { min-height: 40px; padding: 0 8px; font-size: 12px }
+.prompt-history summary { display: flex; align-items: center; gap: 4px; min-height: 40px; cursor: pointer; font-size: 12px; color: var(--muted); list-style: none }
+.prompt-history summary::-webkit-details-marker { display: none }
+.prompt-history summary .icon { color: var(--faint); transition: transform .15s }
+.prompt-history:not([open]) summary .icon { transform: rotate(-90deg) }
+.prompt-history ul { max-height: 140px; overflow: auto; list-style: none; margin: 6px 0; padding: 0 }
+.prompt-history li button { width: 100%; display: block; padding: 8px; font-size: 13px; white-space: normal; text-align: left; overflow-wrap: anywhere }
+.prompt-history .confirm { padding: 8px }
+.font-stepper { display: flex; gap: 12px; align-items: center; margin-top: 20px }
+.font-stepper output { font-variant-numeric: tabular-nums }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap }
+.recovery-help { margin-bottom: 24px }
+.settings-section { padding-block: 14px 20px }
+.settings-section + .settings-section { border-top: 1px solid var(--line) }
+.settings-section h3 { margin-bottom: 10px; font-size: 16px }
+.settings-section .sheet-note { margin-bottom: 14px }
+.device-list { list-style: none; margin: 0; padding: 0 }
+.device-list li { display: flex; align-items: center; gap: 8px; padding: 14px 0 }
+.device-list li + li { border-top: 1px solid var(--line) }
+.device-list li > div { flex: 1; min-width: 0 }
+.device-list strong { font-size: 14px; overflow-wrap: anywhere }
+.device-list small { display: block; font-size: 12px; color: var(--muted); margin-top: 5px }
+.device-confirm { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 16px }
+.text-search { display: flex; align-items: center; gap: 6px; margin-block: 8px }
+.text-search input { min-width: 0 }
+.text-search button { min-width: 44px; padding: 0 }
+#terminal-text-body mark { background: #384536; color: var(--text); border-radius: 2px }
+#terminal-text-body mark[data-current] { background: var(--accent); color: var(--accent-ink) }
 
 /* Toolbar */
 #keyboard { padding: 2px 8px max(6px, env(safe-area-inset-bottom)) }
@@ -238,6 +308,8 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .key-pair { display: flex; gap: 6px }
 .keycap { height: var(--toolbar); min-width: 58px; padding: 0 12px; font: 600 14px var(--mono); border-bottom-width: 2px }
 .keycap.primary { min-width: 76px; border-bottom-color: #93b47a }
+.keycap.send { gap: 6px; font-family: inherit; font-weight: 650 }
+.keycap.send[data-sent=true] { background: var(--surface-2); border-color: var(--accent); border-bottom-color: var(--accent); color: var(--accent) }
 
 #armed-keys {
   position: absolute; z-index: 4; right: 10px; bottom: calc(100% + 8px);
@@ -250,7 +322,7 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #keypad {
   position: absolute; z-index: 5; bottom: 100%; left: 0; right: 0;
   max-height: min(400px, calc(var(--app-height, 100dvh) * .55)); overflow: auto; overscroll-behavior: contain;
-  padding: 0 12px 12px; background: var(--surface); border-top: 1px solid var(--line-strong);
+  padding: 0 12px 4px; background: var(--surface); border-top: 1px solid var(--line-strong);
   border-radius: 14px 14px 0 0; box-shadow: 0 -12px 32px rgba(5, 8, 8, .5);
 }
 .keypad-head { position: sticky; top: 0; z-index: 1; padding: 12px 0 8px; background: var(--surface) }
@@ -258,8 +330,14 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .modifiers #clear-modifiers { flex: 0 0 auto; color: var(--text) }
 .modifiers #clear-modifiers:disabled { color: var(--muted) }
 .modifiers button[aria-pressed=true] { background: var(--live); border-color: var(--live); color: var(--live-ink) }
-.extra-keys { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 4px 0 14px }
+.extra-keys { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 4px 0 10px }
 .extra-keys button { padding: 0 4px; font: 600 14px var(--mono) }
+#all-keys { border-top: 1px solid var(--line) }
+#all-keys summary { display: flex; align-items: center; min-height: 44px; color: var(--muted); font-size: 14px; cursor: pointer; list-style: none }
+#all-keys summary::-webkit-details-marker { display: none }
+#all-keys summary::after { content: '+'; margin-left: auto; font: 18px var(--mono); color: var(--faint) }
+#all-keys[open] summary::after { content: '−' }
+#all-keys[open] summary { margin-bottom: 4px }
 #custom-key-form { margin-bottom: 14px }
 .key-entry { display: flex; gap: 6px }
 .key-entry input { min-width: 0; font-family: var(--mono) }
@@ -314,7 +392,7 @@ header .title code { color: var(--faint); font-size: 11.5px }
   box-shadow: 0 6px 20px rgba(6, 10, 9, .55);
 }
 .sheet {
-  width: 100%; max-width: 560px; max-height: 88dvh; margin: auto auto 0; padding: 0;
+  width: 100%; max-width: 560px; max-height: min(88dvh, calc(var(--app-height, 100dvh) - 16px)); margin: auto auto 0; padding: 0;
   border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 16px 16px 0 0;
   background: var(--surface); color: var(--text); overflow: auto; overscroll-behavior: contain;
 }
@@ -415,7 +493,7 @@ select {
 .diff [data-line=note] { color: var(--muted) }
 /* Terminal text */
 #terminal-text-sheet { max-width: 760px }
-#terminal-text { margin: 4px -16px 0; padding: 10px 16px; max-height: 62dvh; overflow: auto; background: var(--bg); font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; overscroll-behavior: contain }
+#terminal-text-body { margin: 4px -16px 0; padding: 10px 16px; max-height: min(52dvh, calc(var(--app-height, 100dvh) - 260px)); overflow: auto; background: var(--bg); font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; overscroll-behavior: contain }
 
 .path-link { display: inline; min-height: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer }
 .text-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px }
@@ -449,24 +527,32 @@ button.danger { background: var(--alert); border-color: var(--alert); color: #2a
 .short-viewport .tool { gap: 1px; font-size: 11px }
 .short-viewport .tool .icon { width: 18px; height: 18px }
 .short-viewport #keyboard { padding-top: 0 }
-@media (orientation: landscape) {
-  .short-viewport #app { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) }
-  .short-viewport header { grid-column: 1; max-width: 42vw; padding-left: max(6px, env(safe-area-inset-left)) }
-  .short-viewport #agent-switcher { grid-column: 2; border-left: 1px solid var(--line) }
-  .short-viewport .tool { flex-direction: row; gap: 8px; font-size: 13px }
-  .short-viewport .dock { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line) }
-  .short-viewport .session-bar { grid-row: 2; border-top: 0; padding-right: 4px }
-  .short-viewport #compose { grid-column: 1 / -1; border-top: 0 }
-  .short-viewport #keyboard { grid-row: 2; grid-column: 2; padding-top: 4px }
-  .short-viewport #panes, .short-viewport #session { grid-column: 1 / -1 }
-  .short-viewport #panes { padding-top: 16px }
-  .short-viewport .intro { margin-bottom: 14px }
-  .short-viewport .intro h1 { font-size: 22px }
-}
-@media (orientation: portrait) {
-  /* Typing with the keyboard open: keep the terminal, drop the switcher until control is released. */
-  .short-viewport #app[data-phase=controlling] #agent-switcher { display: none }
-}
+.short-viewport .compose-actions button { min-height: 36px }
+.short-viewport #draft { padding-top: 8px }
+.short-viewport .compose-help { display: none }
+.picture-error { padding: 16px; text-align: center }
+/* The device, not the viewport, decides: a small upright phone with the keyboard open has a
+   wider-than-tall viewport, and must keep the portrait dock. session.ts sets .landscape. */
+.landscape.short-viewport #app { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) }
+.landscape.short-viewport header { grid-column: 1; max-width: 42vw; padding-left: max(6px, env(safe-area-inset-left)) }
+.landscape.short-viewport #agent-switcher { grid-column: 2; border-left: 1px solid var(--line) }
+.landscape.short-viewport .tool { flex-direction: row; gap: 8px; font-size: 13px }
+.landscape.short-viewport .dock { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line) }
+.landscape.short-viewport .session-bar { grid-row: 2; border-top: 0; padding-right: 4px }
+.landscape.short-viewport #compose { grid-column: 1 / -1; border-top: 0 }
+.landscape.short-viewport .watch-tools { grid-row: 2; grid-column: 2; border-top: 0; padding-top: 4px }
+.landscape.short-viewport #keyboard { grid-row: 2; grid-column: 2; padding-top: 4px }
+.landscape.short-viewport #panes, .landscape.short-viewport #session { grid-column: 1 / -1 }
+.landscape.short-viewport #panes { padding-top: 16px }
+.landscape.short-viewport .intro { margin-bottom: 14px }
+.landscape.short-viewport .intro h1 { font-size: 22px }
+/* Typing with the keyboard open: keep the terminal, drop the switcher until control is released. */
+:root:not(.landscape).short-viewport #app[data-phase=controlling] #agent-switcher { display: none }
+/* A small phone with the keyboard open: the ring already shows control, so the session bar and
+   draft extras step aside until the keyboard closes; Send stays on screen. */
+:root:not(.landscape).tiny-viewport #app[data-phase=controlling] .session-bar,
+:root:not(.landscape).tiny-viewport .compose-meta, :root:not(.landscape).tiny-viewport .prompt-history { display: none }
+:root:not(.landscape).tiny-viewport #compose { padding-top: 6px }
 
 @media (max-width: 380px) {
   #control { min-width: 0; padding-inline: 10px }

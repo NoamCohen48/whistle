@@ -26,6 +26,71 @@ test.afterEach(async ({ page }) => {
   await expect(page.locator('#error')).not.toContainText('Could not decode terminal data');
 });
 
+test('system Back returns to the dashboard after switching panes; Forward is watch-only', async ({ page }) => {
+  await control(page);
+  await page.locator('#agent-switcher [data-pane="w2:p1"]').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('keep this draft, never send it');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await expect(page.locator('#session')).toBeHidden();
+  expect(await page.evaluate(() => sessionStorage.getItem('whistle-pane'))).toBeNull();
+  await page.goForward();
+  await expect(page.locator('#pane-info')).toHaveText('w2:p1');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect((await messages(page)).filter(message => message.type === 'connect').at(-1)?.control).toBe(false);
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await expect(page.locator('#draft')).toHaveValue('keep this draft, never send it');
+  expect((await messages(page)).filter(message => message.type === 'input')).toEqual([]);
+});
+
+test('reloading a pane keeps a single Back step to the dashboard', async ({ page }) => {
+  await control(page);
+  const length = await page.evaluate(() => history.length);
+  await page.reload();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect(await page.evaluate(() => history.length)).toBe(length);
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await expect(page.locator('#session')).toBeHidden();
+  expect((await messages(page)).filter(message => message.type === 'input')).toEqual([]);
+});
+
+test('a cold-opened pane has a dashboard underneath it and the header Back consumes its history step', async ({ page }) => {
+  await pair(page);
+  await page.goto('about:blank');
+  await page.goto('/#pane=w1:p1');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#back').click();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  expect((await messages(page)).filter(message => ['input', 'resize'].includes(message.type))).toEqual([]);
+});
+
+test('Forward cannot reopen a replaced terminal from stale pane history', async ({ page }) => {
+  await open(page);
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await page.request.post(fixtureUrl('/__test/replace'));
+  const refreshed = page.waitForResponse(response => response.url().endsWith('/api/panes'));
+  await page.locator('#refresh').click();
+  await refreshed;
+  await page.goForward();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  await expect(page.locator('#session')).toBeHidden();
+  expect((await messages(page)).filter(message => message.type === 'connect')).toHaveLength(1);
+});
+
 test('single-use QR pairing and nested worktrees', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -34,6 +99,16 @@ test('single-use QR pairing and nested worktrees', async ({ page }) => {
   expect(await (await page.request.get(fixtureUrl('/__test/pairings'))).json()).toBe(1);
   await expect(page.locator('[data-workspace="w1"] > [data-workspace="w2"] .worktree-badge')).toHaveText('Worktree');
   await expect(page.locator('#agent-switcher button')).toHaveCount(2);
+  // Collapsing a workspace says how many panes it hides, its worktrees' included.
+  await page.locator('[data-workspace="w1"] > .workspace .workspace-toggle').click();
+  await expect(page.locator('[data-workspace="w1"] > .workspace .workspace-count')).toHaveText('2 hidden');
+  await page.locator('[data-workspace="w1"] > .workspace .workspace-toggle').click();
+  // The used QR again on a browser that is still paired: it just opens, without an error.
+  // (A query string forces a real load; a hash-only change would not redeem anything.)
+  await page.goto('/?again#pair=single-use-ticket');
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
+  expect(await (await page.request.get(fixtureUrl('/__test/pairings'))).json()).toBe(2);
+  await expect(page.locator('#error')).toBeHidden();
   expect(errors).toEqual([]);
 });
 
@@ -67,14 +142,23 @@ test('live text, chords and compose stay in one ordered input lane', async ({ pa
   await page.locator('#focus-keyboard').click();
   await page.keyboard.type('abc');
   await page.locator('.main-keys [data-key="Enter"]').click();
-  await page.locator('#more-keys').click();
+  // Keys replaces the phone keyboard rather than stacking under it. A bare click event keeps focus
+  // where it was, as an Android tap does, so the terminal's textarea must be blurred explicitly.
+  await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+  await page.locator('#more-keys').dispatchEvent('click');
+  await expect(page.locator('.xterm-helper-textarea')).not.toBeFocused();
   await page.locator('[data-modifier="ctrl"]').click();
+  await page.locator('#all-keys summary').click();
   await page.locator('#key-grid [data-key="p"]').click();
   await expect(page.locator('[data-modifier="ctrl"]')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#armed-keys')).toBeHidden();
   await page.locator('#custom-key').fill('ctrl+shift+k');
   await page.locator('#custom-key-form button').click();
   await page.locator('#compose-toggle').click();
+  await expect(page.locator('.compose-help')).toHaveText(/Send also presses Enter\.\s*Got it/);
+  // Composing swaps the toolbar's Enter for Send (Paste + Enter): never two Enter actions at once.
+  await expect(page.locator('.main-keys [data-key="Enter"]')).toHaveCount(0);
+  await expect(page.locator('#submit')).toBeDisabled();
   await page.locator('#draft').fill('line one\nline two');
   await page.locator('#paste').click();
   await page.locator('#submit').click();
@@ -227,6 +311,24 @@ test('short viewports and touch scrolling retain usable terminal controls', asyn
   await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
 });
 
+test('an upright small phone with the keyboard open keeps Send on screen', async ({ page }) => {
+  // The keyboard leaves a viewport wider than tall while the phone is still held upright.
+  await page.addInitScript(() => Object.defineProperty(screen, 'orientation', { value: { type: 'portrait-primary' } }));
+  await page.setViewportSize({ width: 360, height: 261 });
+  await control(page);
+  await expect(page.locator('html')).toHaveClass(/tiny-viewport/);
+  await expect(page.locator('html')).not.toHaveClass(/landscape/);
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('run the tests');
+  const send = await page.locator('#submit').boundingBox();
+  expect(send!.y + send!.height).toBeLessThanOrEqual(261);
+  await page.locator('#submit').click();
+  // Sent drafts stay editable, but the button no longer looks unsent.
+  await expect(page.locator('#submit')).toHaveText('Sent');
+  await page.locator('#draft').fill('run the tests again');
+  await expect(page.locator('#submit')).toHaveText('Send');
+});
+
 test('errors and armed modifiers overlay the terminal without resizing the PTY', async ({ page }) => {
   await control(page);
   const viewport = page.locator('#terminal-viewport');
@@ -238,6 +340,7 @@ test('errors and armed modifiers overlay the terminal without resizing the PTY',
   await page.locator('#more-keys').click();
   await expect(page.locator('#armed-keys')).toBeVisible();
   await page.locator('#more-keys').click();
+  await page.locator('#all-keys summary').click();
   await page.locator('#custom-key').fill('meta+x'); // Rejected locally: unsupported modifier.
   await page.locator('#custom-key-form button').click();
   await expect(page.locator('.terminal-frame > #error')).toBeVisible();
@@ -478,9 +581,11 @@ test('a long pane list can be searched and cleared', async ({ page, request }) =
 test('taking and losing control vibrate differently', async ({ page, request }) => {
   await page.addInitScript(() => {
     const calls: unknown[] = [];
+    // SAFETY: This fixture creates its own window.vibrations array before app startup.
     (window as unknown as { vibrations: unknown[] }).vibrations = calls;
     Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (pattern: unknown) => { calls.push(pattern); return true; } });
   });
+  // SAFETY: addInitScript above installs this test-only array on every document.
   const vibrations = () => page.evaluate(() => (window as unknown as { vibrations: unknown[] }).vibrations);
   await open(page);
   expect(await vibrations()).toEqual([]); // Watching alone is silent.
