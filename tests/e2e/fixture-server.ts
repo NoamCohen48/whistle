@@ -1,8 +1,8 @@
 // Isolated browser fixture. Never imports the Herdr adapter or opens a real pane.
 import type { ServerWebSocket } from 'bun';
-import type { Snapshot } from '../src/herdr.ts';
+import type { Snapshot } from '../../src/herdr.ts';
 import { deflateSync } from 'node:zlib';
-import { assetResponse } from '../src/assets.ts';
+import { assetResponse } from '../../src/assets.ts';
 
 const initial: Snapshot = {
   workspaces: [
