@@ -105,5 +105,7 @@ test('the worker shows a pushed alert as a notification tagged by pane', async (
   });
   await expect.poll(() => page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications())
     .map(item => [item.tag, item.silent]))).toEqual([['pane:w1:p1', false], ['pane:w2:p1', true]]);
+  // Real notifications reach the desktop running the tests; close them rather than leave them behind.
+  await page.evaluate(async () => { for (const item of await (await navigator.serviceWorker.ready).getNotifications()) item.close(); });
   await cdp.detach();
 });
