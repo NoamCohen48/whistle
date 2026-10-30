@@ -92,7 +92,25 @@ Revocation commits before live streams close. The host releases every controller
 
 ## Errors
 
-A refused request answers with a status and a plain-text message meant for the phone: 400 for malformed input, 401 to pair first, 403 for a foreign Origin, 404 for a pane, folder or file that no longer exists, 409 for a conflict (a pane already controlled, a worktree with uncommitted files), 413/415 for pictures, 422 when Herdr or Git refuses, 429 while token checks are paused, and 503 when Herdr is not reachable. Anything unexpected answers 500 with a generic message, and the details, which can include local paths, go only to the host's log.
+A refused request answers with a status and a plain-text message meant for the phone:
+
+| Status | When |
+| --- | --- |
+| 400 | Malformed input |
+| 401 | Pair first, or a wrong access token |
+| 403 | A foreign Origin, or a file or folder outside what the phone may read |
+| 404 | A pane, workspace, folder or file that no longer exists, or an unknown path |
+| 405 | A known path with the wrong method |
+| 409 | A conflict: a pane already controlled, a worktree with uncommitted files, a non-linked worktree, alert settings or a test alert before alerts are on |
+| 410 | A test alert to a subscription the push service has dropped; the phone turns alerts on again |
+| 413 | A request body over its limit, or any chunked body; a picture over 15 MB |
+| 415 | A file that is not a PNG, JPEG, WebP or GIF picture |
+| 422 | Herdr or Git refuses, such as a workspace that is not in a Git repository |
+| 429 | Token checks are paused after too many wrong tokens |
+| 502 | Herdr created something without returning its pane, or the push service could not be reached |
+| 503 | Herdr is not reachable |
+
+Anything unexpected answers 500 with a generic message, and the details, which can include local paths, go only to the host's log.
 
 ## Pane and worktree API
 
@@ -111,7 +129,7 @@ Paired-cookie only (the PC token is not accepted). `src/actions.ts` reduces each
 - `GET /api/agents`: agent kinds from Herdr's detection manifests whose executable is on the service `PATH` (plus `~/.local/bin`, `~/.bun/bin`); all kinds if none are found.
 - `GET /api/worktrees?workspace=ID`: linked, non-bare, non-prunable worktrees of that repository, with the pane to go to when one is already open.
 - `GET /api/folders?path=~/…` → `{path, folders: [{name, repo}], truncated}`: the folder names at an absolute or `~/` path, for picking a new workspace's folder. Read-only and home-only: the real path (after symlinks) must be inside the home folder, hidden folders and files are never listed, links count only when they lead to a folder inside home, and at most 400 names return. `repo` means the folder holds a `.git`. Errors: 400 bad path, 403 outside home or unreadable, 404 missing.
-- `GET /api/changes?pane=ID` → `{root, branch, files, truncated}`: what the pane's working tree changed against `HEAD` (staged and unstaged, renames, plus untracked files that are not ignored), up to 300 files. `GET /api/changes/file?pane=ID&path=…` → `{diff, binary, truncated}` for one listed file, capped at 256 KB. The folder is the pane's `cwd` as Herdr reports it, never a browser-supplied path, and a path must be in the current change list, so this cannot read other files; untracked files are read only if they are regular files inside the repository (no symlinks out). `src/changes.ts` only runs read-only git commands with `GIT_OPTIONAL_LOCKS=0`, `core.fsmonitor=false`, `--no-ext-diff` and `--no-textconv`.
+- `GET /api/changes?pane=ID` → `{root, branch, files, truncated}`: what the pane's working tree changed against `HEAD` (staged and unstaged, renames, plus untracked files that are not ignored), up to 300 files. `GET /api/changes/file?pane=ID&path=…` → `{diff, binary, truncated}` for one listed file, capped at 256 KB. The folder is the pane's `cwd` as Herdr reports it, never a browser-supplied path, and a path must be in the current change list, so this cannot read other files; untracked files are read only if they are regular files inside the repository (no symlinks out). Changes come only from read-only git commands (`src/git.ts`) with `GIT_OPTIONAL_LOCKS=0`, `core.fsmonitor=false`, `--no-ext-diff` and `--no-textconv`.
 - `GET /api/picture?pane=ID&path=…` returns a PNG, JPEG, WebP or GIF (by its bytes, at most 15 MB) so the phone can show pictures an agent made. A relative path resolves against the pane's `cwd`. After resolving symlinks, the file must be inside the pane's repository root (or the pane folder outside Git), so a pane opened in a project cannot reach pictures elsewhere on the PC. A pane opened in a broad folder such as `~` allows pictures anywhere under it. SVG is never served.
 
 Phone-side close and removal are behind a confirm step. Removal is never forced (`force: false`): Herdr refuses a checkout with modified or untracked files (`dirty_worktree_requires_force`, shown as a plain message). A successful removal closes the worktree's workspace and panes and deletes the checkout; the branch is kept. Herdr reports a repository's Git metadata only once it has worktrees, so the phone offers every main workspace as a repository and reports non-Git ones (`not_git_worktree`) on submit.
@@ -121,7 +139,7 @@ Phone-side close and removal are behind a confirm step. Removal is never forced 
 `src/webpush.ts` implements standard Web Push (RFC 8030 delivery, RFC 8291 `aes128gcm` encryption, RFC 8292 VAPID) with Node crypto; there is no extra dependency or third-party relay.
 
 - **Keys and state:** the VAPID P-256 key is created once in `push-vapid.json` and subscriptions live in `push.sqlite`, both `0600` in the state directory. The VAPID subject is the configured public origin. One subscription per paired device; revoking a device or its expiry removes it, and a push service answering 404/410 removes it too.
-- **Endpoints** (paired cookie; writes need the exact Origin): `GET /api/push` → `{publicKey, subscribed}`; `PUT /api/push` stores the browser subscription; `DELETE /api/push` removes it; `PUT /api/push/settings` stores this device's settings (`{finished, quiet?: {start, end, timeZone}}`, 409 before subscribing); `POST /api/push/test` sends "Alerts are on" and reports a delivery failure as 502.
+- **Endpoints** (paired cookie; writes need the exact Origin): `GET /api/push` → `{publicKey, subscribed}`; `PUT /api/push` stores the browser subscription; `DELETE /api/push` removes it; `PUT /api/push/settings` stores this device's settings (`{finished, quiet?: {start, end, timeZone}}`, 409 before subscribing); `POST /api/push/test` sends "Alerts are on": 409 before subscribing, 410 if the push service dropped the subscription (which is then removed), and 502 if the push service could not be reached.
 - **Allowed push services only:** subscription endpoints must be HTTPS on the browser vendors' push hosts (Google FCM, Mozilla, Microsoft WNS, Apple), with no port or credentials, and the keys must be well formed. The PC therefore never sends requests to arbitrary tailnet or local addresses on a browser's say-so.
 - **When alerts fire:** while at least one device is subscribed, the host polls `session.snapshot` every 3 s. An alert is sent when an agent pane *changes* into Herdr's `blocked` ("needs you") or `done` ("finished") status. Panes already waiting when polling starts, panes that appear already waiting and shells never alert, and a wait alerts once. A device that has that pane open in Whistle is skipped; a hidden or locked phone has no open stream, so it is alerted.
 - **Per-device settings:** kept with the subscription in `push.sqlite` (a re-subscription keeps them; older databases gain the column on start). `finished: false` drops "finished" alerts. Quiet hours (`HH:MM` range, may wrap past midnight, evaluated in the phone's IANA time zone) still send alerts but mark them `quiet`, and the worker shows them with `silent: true`.
@@ -135,12 +153,13 @@ Request bodies: the server's limit is 10 MB for this route only. Every other rou
 
 ## Source layout
 
-- `cli.ts` is the `whistle` command; `service.ts`, `releases.ts` and `config.ts` install and configure the user service. `host-client.ts` and `pair-command.ts` are how the command talks to the running host.
-- `server.ts` starts the host and wires the parts together. `routes.ts` is the HTTP API: one table where every route declares who may call it and whether it needs a same-origin request. `http.ts` holds response, cookie and error helpers, and `auth.ts` the access-token check.
+- `cli.ts` is the `whistle` command; `service.ts`, `releases.ts` and `config.ts` install and configure the user service, and `build-info.ts` tells a source checkout from the standalone executable. `host-client.ts` and `pair-command.ts` are how the command talks to the running host.
+- `server.ts` starts the host and wires the parts together. `state-files.ts` prepares the state directory and holds the files the host leaves there for the command: the PC access token and the server URL.
+- `routes.ts` is the HTTP API: one table where every route declares who may call it and whether it needs a same-origin request. `http.ts` holds response, cookie and error helpers, `http-error.ts` the error that carries a status, `auth.ts` the access-token check, and `assets.ts` serves the phone app's files.
 - `terminal-socket.ts` is the live terminal connection: watch and control, the serial input lane, and closing on revocation or shutdown.
-- `herdr.ts` talks to Herdr. `actions.ts`, `previews.ts`, `folders.ts`, `pictures.ts`, `changes.ts` and `uploads.ts` each serve one feature.
-- `devices.ts` and `pairing-tickets.ts` are pairing; `token.ts` the PC access token. `alerts.ts` decides when to alert, `webpush.ts` delivers, and `push-store.ts` stores subscriptions. Both stores open their databases through `database.ts`.
-- `../shared/` holds the terminal WebSocket protocol and key-chord rules, used by both the host and the phone app.
+- `herdr.ts` talks to Herdr; `server.ts` tells it where Herdr is with `useHerdr()`. `actions.ts`, `previews.ts`, `folders.ts`, `pictures.ts`, `changes.ts` and `uploads.ts` each serve one feature. `git.ts` runs read-only git for changes and pictures, `paths.ts` checks paths from the phone, and `picture-types.ts` recognises pictures by their bytes.
+- `devices.ts` and `pairing-tickets.ts` are pairing. `alerts.ts` decides when to alert, `webpush.ts` delivers, and `push-store.ts` stores subscriptions. Both stores open their databases through `database.ts`.
+- `../shared/` is the contract between the host and the phone app: `api.ts` has the HTTP API's JSON shapes, `protocol.ts` the terminal WebSocket messages, and `keys.ts` the key-chord rules.
 
 ## Checks
 
