@@ -20,23 +20,21 @@ Pull requests get a read-only token and no publishing rights. There is no `pull_
 
 ## Releasing
 
-`.github/workflows/release.yml` runs when a version tag is pushed. To release:
+`.github/workflows/release.yml` runs on every push to `main`, and releases when `package.json` has a version that has no GitHub release yet. To release:
 
 1. Set `version` in `package.json`, and add a matching `## X.Y.Z (date)` section to `CHANGELOG.md`. That section becomes the release notes.
-2. Commit, merge to `main`, then tag and push:
+2. Merge to `main`.
 
-   ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
+You don't create the tag yourself: publishing the release creates `vX.Y.Z` on the merged commit. Pushes that don't change the version stop after the first check. To retry a failed release, run the workflow again from the Actions tab.
 
 The workflow then:
 
-1. **Validate:** runs the whole CI job above.
-2. **Build:** checks that the tag matches `package.json` and that the changelog has a section for it. It installs a pinned, checksum-verified [nfpm](https://nfpm.goreleaser.com) and runs `bun run release` (x86-64 and ARM64).
-3. **Check packages:** installs each package in a clean container and runs `whistle --version`: `.deb` on Debian and Ubuntu, `.rpm` on Fedora, the archive on Debian, all on both architectures (ARM64 through QEMU), plus the Arch package on Arch Linux x86-64. It also verifies `SHA256SUMS` and the installer script's syntax.
-4. **Publish:** records [build provenance](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) for every file and creates the GitHub Release with all downloads. Versions with a hyphen, such as `0.2.0-rc.1`, are marked as pre-releases.
-5. **Website:** builds `site/` with this release's version and repository, and deploys it to GitHub Pages.
+1. **Check for a new version:** stops unless `vX.Y.Z` is unreleased, and fails if the changelog has no section for it.
+2. **Validate:** runs the whole CI job above.
+3. **Build:** installs a pinned, checksum-verified [nfpm](https://nfpm.goreleaser.com) and runs `bun run release` (x86-64 and ARM64).
+4. **Check packages:** installs each package in a clean container and runs `whistle --version`: `.deb` on Debian and Ubuntu, `.rpm` on Fedora, the archive on Debian, all on both architectures (ARM64 through QEMU), plus the Arch package on Arch Linux x86-64. It also verifies `SHA256SUMS` and the installer script's syntax.
+5. **Publish:** records [build provenance](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) for every file and creates the GitHub Release and its `vX.Y.Z` tag with all downloads. Versions with a hyphen, such as `0.2.0-rc.1`, are marked as pre-releases.
+6. **Website:** builds `site/` with this release's version and repository, and deploys it to GitHub Pages.
 
 Only the publish job can write to the repository, and only the Pages job can deploy the site. Each job checks out code without persisting credentials.
 
@@ -60,8 +58,8 @@ The website links to these names, and fills in the repository at build time. A f
 
 1. **Repository visibility.** Release downloads, the install script and the website must be public for other people to use them. Making the repository public also publishes its full history.
 2. **Pages.** In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions**.
-3. **Environment.** Limit the `github-pages` environment to tags matching `v*`. Add a required reviewer if you want to approve each release.
-4. **Rulesets.** Require the **Validate, test and package** check on `main`. Optionally protect `v*` tags so only maintainers can create them.
+3. **Environment.** Limit the `github-pages` environment to the `main` branch. Add a required reviewer if you want to approve each release.
+4. **Rulesets.** Require the **Validate, test and package** check on `main`. Protect `v*` tags from being moved or deleted.
 5. **Security reporting.** Turn on private vulnerability reporting (**Settings → Security**). [SECURITY.md](../SECURITY.md) points reporters there.
 
 ## Building downloads locally
