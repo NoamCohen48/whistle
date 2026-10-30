@@ -233,8 +233,43 @@ h3 { font-size: 21px; line-height: 1.25; letter-spacing: -.015em }
 dt { font-size: 19px; font-weight: 640; letter-spacing: -.01em }
 dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
 
+/* Download */
+.download { padding-block: 104px 112px; background: var(--surface) }
+.download-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 28px 48px }
+.arch-switch { margin: 0; padding: 0; border: 0 }
+.arch-switch legend { margin-bottom: 8px; padding: 0; font-size: 14px; font-weight: 600; color: var(--muted) }
+.segments { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--rule) }
+.segments label { position: relative; display: block }
+.segments input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer }
+.segments span { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; font-weight: 600; color: var(--muted); transition: background-color .16s var(--ease), color .16s var(--ease) }
+.segments input:checked + span { background: var(--ink); color: var(--bg) }
+.segments input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px }
+
+.installer { margin-top: 48px; padding: 32px; border-radius: 8px; background: var(--screen); color: var(--screen-ink) }
+.installer h3 { font-size: 24px }
+.installer > p { max-width: 60ch; margin-top: 8px; color: #9db0ac }
+.command-line { display: flex; align-items: center; gap: 16px; margin-top: 24px; padding: 12px 12px 12px 22px; border: 1px solid var(--screen-rule); border-radius: 8px }
+.command-line .command { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; font-size: clamp(13px, 1.5vw, 16px); overflow-wrap: anywhere }
+.prompt { color: #e9b35b; user-select: none }
+.copy { flex-shrink: 0; min-width: 96px; min-height: 44px; padding: 0 18px; border: 1px solid #3f4c4d; border-radius: 999px; background: transparent; color: var(--screen-ink); font: 600 14px var(--sans); cursor: pointer; transition: border-color .16s var(--ease) }
+.copy:hover { border-color: #e9b35b }
+.copy:focus-visible { outline-color: #bad7a1 }
+
+.packages-heading { margin-top: 64px }
+.packages { width: 100%; margin-top: 12px; border-collapse: collapse }
+.packages th, .packages td { padding: 14px 20px 14px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: middle }
+.packages thead th { padding-block: 0 10px; font-size: 14px; font-weight: 600; color: var(--muted) }
+.packages tbody th { font-weight: 640; white-space: nowrap }
+.packages code { font: 400 13px/1.5 var(--mono) }
+.packages [data-command] { color: var(--muted) }
+.packages td:last-child { padding-right: 0; text-align: right }
+.button-quiet { min-height: 44px; padding: 8px 20px; background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink) }
+.button-quiet:hover { background: var(--ink); color: var(--bg) }
+.download-more { display: flex; flex-wrap: wrap; gap: 4px 28px; margin-top: 20px; font-size: 15px }
+.download-more a { display: inline-flex; align-items: center; min-height: 44px }
+
 /* Setup */
-.setup { padding-block: 96px 112px; border-top: 1px solid var(--rule) }
+.setup { padding-block: 96px 112px }
 .steps { display: grid; gap: 0; max-width: 780px; margin-top: 48px; padding: 0; list-style: none; counter-reset: step }
 .steps li { position: relative; display: grid; gap: 10px; padding: 0 0 40px 76px; counter-increment: step }
 .steps li::before { content: counter(step); position: absolute; left: 0; top: -6px; font-size: 44px; font-weight: 300; line-height: 1; font-variation-settings: 'opsz' 96; color: var(--muted) }
@@ -248,6 +283,8 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
 /* Footer */
 .site-footer { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding-block: 28px 36px; border-top: 1px solid var(--rule); font-size: 14px; color: var(--muted) }
 .site-footer .wordmark { font-size: 20px; color: var(--ink) }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 4px 24px; margin-left: auto }
+.site-footer nav a { display: inline-flex; align-items: center; min-height: 44px }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto }
@@ -258,13 +295,24 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
   .hero { grid-template-columns: minmax(0, 1fr); gap: 56px; padding-block: 32px 72px }
   .pillars { grid-template-columns: minmax(0, 1fr) }
   .feature-groups { grid-template-columns: 1fr }
+  .packages thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%) }
+  .packages tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding-block: 16px; border-bottom: 1px solid var(--rule) }
+  .packages th, .packages td { display: block; padding: 0; border: 0 }
+  .packages td:nth-child(2) { grid-row: 2 }
+  .packages td:nth-child(3) { grid-row: 3; grid-column: 1 / -1; overflow-wrap: anywhere }
+  .packages td:last-child { grid-row: 1 / span 2; grid-column: 2; align-self: center }
 }
 @media (max-width: 640px) {
   .shell { width: calc(100% - 32px) }
   .site-header { min-height: 64px; gap: 12px }
   .site-header nav { gap: 16px; font-size: 14px }
   .lede { font-size: 17px }
-  .premise, .setup { padding-block: 64px }
+  .premise, .setup, .download { padding-block: 64px }
+  .installer { margin-top: 36px; padding: 24px 20px }
+  .command-line { flex-wrap: wrap; padding: 16px }
+  .copy { width: 100% }
+  .packages-heading { margin-top: 48px }
+  .site-footer nav { margin-left: 0 }
   .features { padding-block: 72px 64px }
   .pillars, .feature-groups, .steps { margin-top: 36px }
   .section-lede { font-size: 17px }
