@@ -1,32 +1,20 @@
 import { randomBytes } from 'node:crypto';
 import { chmod, mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { HttpError } from './http-error.ts';
+import { pictureTypes } from './picture-types.ts';
 
 // Pictures sent from the phone for an agent to read. The PC only stores them: the phone puts
 // the saved path into the draft, and the person still sends that draft themselves.
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-export const UPLOAD_LIFETIME_MS = 3 * 24 * 3600 * 1000;
-
-// Checked against the bytes, never the client's file name or Content-Type alone.
-const kinds = [
-  { type: 'image/png', ext: 'png', magic: (b: Buffer) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
-  { type: 'image/jpeg', ext: 'jpg', magic: (b: Buffer) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  { type: 'image/webp', ext: 'webp', magic: (b: Buffer) => b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP' },
-  { type: 'image/gif', ext: 'gif', magic: (b: Buffer) => /^GIF8[79]a$/.test(b.toString('latin1', 0, 6)) },
-];
-
-// The picture type of these bytes, or undefined.
-export const sniffPicture = (bytes: Buffer) => kinds.find(item => item.magic(bytes));
-
-export class UploadError extends Error {
-  constructor(message: string, readonly status = 400) { super(message); }
-}
+const UPLOAD_LIFETIME_MS = 3 * 24 * 3600 * 1000;
 
 export async function saveUpload(directory: string, contentType: string, bytes: Buffer, now = new Date()) {
-  if (!bytes.length) throw new UploadError('The picture is empty.');
-  if (bytes.length > MAX_UPLOAD_BYTES) throw new UploadError('The picture is larger than 10 MB.', 413);
-  const kind = kinds.find(item => item.type === contentType.split(';')[0].trim().toLowerCase());
-  if (!kind || !kind.magic(bytes)) throw new UploadError('Only PNG, JPEG, WebP and GIF pictures can be attached.', 415);
+  if (!bytes.length) throw new HttpError('The picture is empty.');
+  if (bytes.length > MAX_UPLOAD_BYTES) throw new HttpError('The picture is larger than 10 MB.', 413);
+  // The declared type must match the bytes.
+  const kind = pictureTypes.find(item => item.type === contentType.split(';')[0].trim().toLowerCase());
+  if (!kind || !kind.magic(bytes)) throw new HttpError('Only PNG, JPEG, WebP and GIF pictures can be attached.', 415);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   const stamp = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);

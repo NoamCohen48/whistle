@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import WebSocket from 'ws';
-import { hostConnection } from '../src/credentials.ts';
+import { hostConnection } from '../src/host-client.ts';
 import { rpc } from '../src/herdr.ts';
 
 // Explicit opt-in: this test types commands into a disposable shell pane.

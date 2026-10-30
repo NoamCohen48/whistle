@@ -1,11 +1,11 @@
-import { createConnection } from 'node:net';
-import { loadHostConfig } from './config.ts';
+import { loadHostConfig, type HostConfig } from './config.ts';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
 
-const hostConfig = loadHostConfig();
-export const socketPath = hostConfig.herdrSocketPath;
+// Read on first use, so importing this module never touches the configuration file.
+let hostConfig: HostConfig | undefined;
+const herdrConfig = () => hostConfig ??= loadHostConfig();
 
 export interface Pane {
   pane_id: string;
@@ -45,31 +45,55 @@ export interface Frame {
   full: boolean;
 }
 
+// Herdr answered and refused the request.
 export class HerdrError extends Error {
   constructor(public readonly code: string, message: string) { super(message); }
 }
+// Herdr could not be reached, or did not answer properly. A connection error names the socket
+// path, so it is kept as the cause for the host's log rather than shown on the phone.
+export class HerdrUnavailable extends Error {
+  constructor(message = 'Herdr is not reachable. Check that Herdr is running on the PC.', options?: ErrorOptions) { super(message, options); }
+}
 
+// One request to Herdr's socket. Uses Bun's own socket API: a failed node:net connection to a
+// Unix socket inside Bun.serve crashes the process (Bun 1.3) instead of emitting 'error'.
 export function rpc<T = any>(method: string, params: Record<string, unknown> = {}, timeoutMs = 5000): Promise<T> {
   return new Promise((resolve, reject) => {
-    const socket = createConnection(socketPath);
+    const decoder = new TextDecoder();
     let buffer = '';
-    const fail = (error: Error) => { socket.destroy(); reject(error); };
-    socket.setTimeout(timeoutMs, () => fail(new Error('Herdr request timed out')));
-    socket.on('error', fail);
-    socket.on('connect', () => socket.write(JSON.stringify({ id: crypto.randomUUID(), method, params }) + '\n'));
-    socket.on('data', chunk => {
-      buffer += chunk.toString();
-      if (buffer.length > 8 * 1024 * 1024) return fail(new Error('Herdr response too large'));
-      const newline = buffer.indexOf('\n');
-      if (newline < 0) return;
-      try {
-        const response = JSON.parse(buffer.slice(0, newline));
-        socket.destroy();
-        if (response.error) reject(new HerdrError(response.error.code, response.error.message));
-        else resolve(response.result);
-      } catch (error) { fail(error as Error); }
-    });
-    socket.on('end', () => { if (!buffer.includes('\n')) fail(new Error('Herdr closed without a response')); });
+    let settled = false;
+    let connection: { terminate(): void } | undefined;
+    const settle = (finish: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      connection?.terminate();
+      finish();
+    };
+    const fail = (error: HerdrUnavailable) => settle(() => reject(error));
+    const timer = setTimeout(() => fail(new HerdrUnavailable('Herdr did not answer in time.')), timeoutMs);
+    let path: string;
+    try { path = herdrConfig().herdrSocketPath; } catch (error) { settle(() => reject(error)); return; }
+    Bun.connect({ unix: path, socket: {
+      open(socket) {
+        connection = socket;
+        if (settled) socket.terminate();
+        else socket.write(JSON.stringify({ id: crypto.randomUUID(), method, params }) + '\n');
+      },
+      data(_socket, chunk) {
+        buffer += decoder.decode(chunk, { stream: true });
+        if (buffer.length > 8 * 1024 * 1024) return fail(new HerdrUnavailable('Herdr sent an answer that is too large.'));
+        const newline = buffer.indexOf('\n');
+        if (newline < 0) return;
+        let response;
+        try { response = JSON.parse(buffer.slice(0, newline)); }
+        catch (cause) { return fail(new HerdrUnavailable('Herdr sent an answer Whistle cannot read.', { cause })); }
+        settle(() => response.error ? reject(new HerdrError(response.error.code, response.error.message)) : resolve(response.result));
+      },
+      close() { fail(new HerdrUnavailable('Herdr closed the connection without answering.')); },
+      error(_socket, cause) { fail(new HerdrUnavailable(undefined, { cause })); },
+      connectError(_socket, cause) { fail(new HerdrUnavailable(undefined, { cause })); },
+    } }).catch(cause => fail(new HerdrUnavailable(undefined, { cause })));
   });
 }
 
@@ -88,8 +112,9 @@ export function terminalStream(
   paneId: string, mode: 'observe' | 'control', cols: number, rows: number,
   onFrame: (frame: Frame) => void, onClose: (reason: string) => void,
 ) {
-  const child = spawn(hostConfig.herdrBinary, ['terminal', 'session', mode, paneId, '--cols', String(cols), '--rows', String(rows)], {
-    env: { ...process.env, HERDR_SOCKET_PATH: socketPath },
+  const { herdrBinary, herdrSocketPath } = herdrConfig();
+  const child = spawn(herdrBinary, ['terminal', 'session', mode, paneId, '--cols', String(cols), '--rows', String(rows)], {
+    env: { ...process.env, HERDR_SOCKET_PATH: herdrSocketPath },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   const closed = new Promise<void>(resolve => child.once('close', () => resolve()));
@@ -107,7 +132,7 @@ export function terminalStream(
         firstFrame = true;
         clearTimeout(deadline);
         onFrame(frame);
-      } else if (frame.type === 'terminal.closed') onClose(frame.reason || 'Terminal closed');
+      } else if (frame.type === 'terminal.closed') { onClose(frame.reason || 'Terminal closed'); stop(); }
     } catch { onClose('Invalid terminal frame'); stop(); }
   });
   child.stderr.on('data', bytes => { stderr = (stderr + bytes.toString()).slice(-2000); });

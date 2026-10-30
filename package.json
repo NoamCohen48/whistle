@@ -22,7 +22,7 @@
     "test:vm:unit": "python3 -m unittest discover -s vm_tests/tests -t . -v",
     "test:vm": "python3 -m vm_tests.run",
     "typecheck": "tsc --noEmit",
-    "pair": "bun run src/pair.ts",
+    "pair": "bun run src/pair-command.ts",
     "whistle": "bun run src/cli.ts"
   },
   "dependencies": {

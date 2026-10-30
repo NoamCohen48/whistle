@@ -1,11 +1,22 @@
 import { validateChord } from './keys.ts';
 
+// The terminal WebSocket between the phone and the host, as JSON text messages.
+
+// Phone to host. Input and keys carry an increasing id that the host acknowledges.
 export type ClientCommand =
   | { type: 'input'; id: number; text: string; submit?: boolean }
   | { type: 'key'; id: number; key: string }
   | { type: 'resize'; cols: number; rows: number }
   | { type: 'scroll'; direction: 'up' | 'down'; lines: number }
   | { type: 'ping' };
+
+// Host to phone. After an error the host closes the connection.
+export type ServerMessage =
+  | { type: 'terminal.frame'; bytes: string; width: number; height: number; seq: number; full: boolean; mode: 'observe' | 'control' }
+  | { type: 'ack'; id: number }
+  | { type: 'key-rejected'; id: number; message: string }
+  | { type: 'error'; message: string }
+  | { type: 'pong' };
 
 export function dimensions(cols: unknown, rows: unknown): { cols: number; rows: number } {
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || Number(cols) < 2 || Number(cols) > 500 || Number(rows) < 2 || Number(rows) > 200) {

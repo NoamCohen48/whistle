@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { PairingTickets } from '../src/pairing.ts';
+import { PairingTickets } from '../src/pairing-tickets.ts';
 
 describe('QR pairing tickets', () => {
   test('works once, never twice', () => {

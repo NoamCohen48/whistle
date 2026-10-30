@@ -1,16 +1,13 @@
 import { chmod, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import QRCode from 'qrcode';
-import { hostConnection } from './credentials.ts';
+import { adminRequest, hostConnection } from './host-client.ts';
 
+// whistle pair: asks the running host for a single-use pairing link and shows it as a QR code.
 export async function showPairing() {
-  const { origin, requestOrigin, token, directory } = await hostConnection();
-  const response = await fetch(`${origin}/api/pairing-ticket`, {
-    method: 'POST', headers: { Origin: requestOrigin, Authorization: `Bearer ${token}` },
-    redirect: 'error', signal: AbortSignal.timeout(5000),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  const pairing: { url: string; expiresAt: number } = await response.json();
+  const connection = await hostConnection();
+  const { origin, requestOrigin, directory } = connection;
+  const pairing: { url: string; expiresAt: number } = await (await adminRequest('/api/pairing-ticket', 'POST', connection)).json();
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const image = join(directory, 'pair.png');
   await QRCode.toFile(image, pairing.url, { width: 600, margin: 4, errorCorrectionLevel: 'M' });

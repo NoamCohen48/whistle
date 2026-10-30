@@ -1,400 +1,85 @@
-import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
-import type { ServerWebSocket } from 'bun';
-import { HerdrError, rpc, snapshot, terminalStream, watchSize } from './herdr.ts';
-import { agentKinds, parseAction, runAction, worktrees } from './actions.ts';
-import { AgentWatcher, PushGone, PushStore, VapidKeys, parseSettings, parseSubscription, webPushSender } from './push.ts';
-import { dimensions, parseCommand } from './protocol.ts';
-import { ChangesError, changes, fileDiff } from './changes.ts';
-import { PictureError, readPicture } from './pictures.ts';
-import { panePreviews } from './previews.ts';
-import { FolderError, listFolders } from './folders.ts';
-import { MAX_UPLOAD_BYTES, UploadError, saveUpload, sweepUploads } from './uploads.ts';
-import { PairingTickets } from './pairing.ts';
-import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
-
-import { loadHostConfig, resolvePaths } from './config.ts';
-import { assetResponse } from './assets.ts';
-import { ensureToken } from './credentials.ts';
+import { AgentWatcher, alertSender } from './alerts.ts';
+import { AccessTokenGuard } from './auth.ts';
 import { pairCommand } from './build-info.ts';
+import { loadHostConfig, resolvePaths } from './config.ts';
+import { DeviceStore } from './devices.ts';
+import { HerdrUnavailable, snapshot } from './herdr.ts';
+import { PairingTickets } from './pairing-tickets.ts';
+import { PushStore } from './push-store.ts';
+import { createRequestHandler } from './routes.ts';
+import { TerminalSockets, type Peer } from './terminal-socket.ts';
+import { ensureToken, stateFiles, writeServerUrl } from './token.ts';
+import { MAX_UPLOAD_BYTES, sweepUploads } from './uploads.ts';
+import { VapidKeys, webPushSender } from './webpush.ts';
 
-const paths = resolvePaths();
-const config = loadHostConfig(paths);
-// Pause between a pasted draft and its Enter, so the program has taken the paste in first.
-const SUBMIT_DELAY_MS = 250;
-const tokenPath = join(paths.stateDir, 'access-token');
-const accessToken = await ensureToken(paths);
-const devices = new DeviceStore(join(paths.stateDir, 'devices.sqlite'));
-const pairingTickets = new PairingTickets();
-const pushStore = new PushStore(join(paths.stateDir, 'push.sqlite'));
-const vapid = new VapidKeys(join(paths.stateDir, 'push-vapid.json'), config.publicOrigin || 'mailto:whistle@localhost.invalid');
-const sendPush = webPushSender(pushStore, vapid);
-const uploadDir = join(paths.stateDir, 'uploads');
-const failures = new Map<string, { count: number; until: number }>();
-const controllers = new Map<string, ServerWebSocket<Peer>>();
-const peers = new Set<ServerWebSocket<Peer>>();
-interface Peer {
-  deviceId: string;
-  paneId: string;
-  mode: 'observe' | 'control';
-  cols: number;
-  rows: number;
-  stream?: ReturnType<typeof terminalStream>;
-  queue: Promise<void>;
-  pending: number;
-  lastId: number;
-  closed: boolean;
-}
+// The Whistle host: serves the phone app and its API, streams terminals, and sends alerts,
+// until SIGTERM or SIGINT.
+export async function startServer() {
+  const paths = resolvePaths();
+  const config = loadHostConfig(paths);
+  const tokens = new AccessTokenGuard(await ensureToken(paths));
+  const devices = new DeviceStore(join(paths.stateDir, 'devices.sqlite'));
+  const pushStore = new PushStore(join(paths.stateDir, 'push.sqlite'));
+  const vapid = new VapidKeys(join(paths.stateDir, 'push-vapid.json'), config.publicOrigin || 'mailto:whistle@localhost.invalid');
+  const sendAlert = alertSender(deviceId => pushStore.get(deviceId), webPushSender(vapid));
+  const sockets = new TerminalSockets(deviceId => devices.isActive(deviceId));
+  const uploadDir = join(paths.stateDir, 'uploads');
 
-function sameOrigin(request: Request) {
-  const origin = request.headers.get('origin');
-  try { return origin !== null && origin === (config.publicOrigin || new URL(request.url).origin); }
-  catch { return false; }
-}
-function authenticated(request: Request) {
-  const cookie = request.headers.get('cookie')?.split(';').map(c => c.trim()).find(c => c.startsWith('whistle_session='))?.slice(16);
-  return devices.authenticate(cookie);
-}
-function equalToken(candidate: unknown) {
-  if (typeof candidate !== 'string') return false;
-  const a = Buffer.from(candidate), b = Buffer.from(accessToken);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-function message(ws: ServerWebSocket<Peer>, value: unknown) {
-  if (!ws.data.closed) ws.send(JSON.stringify(value));
-}
-function cleanup(ws: ServerWebSocket<Peer>) {
-  ws.data.closed = true;
-  ws.data.stream?.stop();
-  if (controllers.get(ws.data.paneId) === ws) controllers.delete(ws.data.paneId);
-  peers.delete(ws);
-}
-
-const headers = {
-  'Cache-Control': 'no-store',
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-};
-function pairedResponse(secure: boolean, name: string) {
-  const { credential } = devices.issue(name);
-  return new Response('Paired', { headers: {
-    ...headers,
-    'Set-Cookie': `whistle_session=${credential}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_LIFETIME_MS / 1000}${secure ? '; Secure' : ''}`,
-  } });
-}
-const server = Bun.serve<Peer>({
-  hostname: config.host,
-  port: config.port,
-  maxRequestBodySize: MAX_UPLOAD_BYTES,
-  async fetch(request, server) {
-    try {
-      const url = new URL(request.url);
-      // Pictures are the only large bodies; every other route keeps the small limit, and a
-      // body must declare its length so it can be refused before it is read.
-      const bodyLimit = url.pathname === '/api/uploads' ? MAX_UPLOAD_BYTES : 4096;
-      if (request.headers.has('transfer-encoding') || Number(request.headers.get('content-length') || 0) > bodyLimit) {
-        return new Response('Request too large', { status: 413, headers });
-      }
-      // Explicit operator configuration, never client-supplied Forwarded headers.
-      const publicOrigin = config.publicOrigin || url.origin;
-      const secure = publicOrigin.startsWith('https:');
-      if (url.pathname === '/api/pairing-ticket' && request.method === 'POST') {
-        if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-        if (!equalToken(request.headers.get('authorization')?.replace(/^Bearer /, ''))) {
-          return new Response('PC access token required', { status: 401, headers });
-        }
-        const { ticket, expiresAt } = pairingTickets.create();
-        // A fragment is not sent in HTTP requests; the phone removes it immediately.
-        return Response.json({ url: `${publicOrigin}/#pair=${ticket}`, expiresAt }, { headers });
-      }
-      if (url.pathname === '/api/redeem-pairing' && request.method === 'POST') {
-        if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-        const body = await request.json();
-        const name = deviceName(body?.deviceName, request.headers.get('user-agent') || '');
-        if (!pairingTickets.redeem(body?.ticket)) {
-          return new Response(`QR expired or already used. Run ${pairCommand} on the PC for a new one.`, { status: 401, headers });
-        }
-        return pairedResponse(secure, name);
-      }
-      if (url.pathname === '/api/login' && request.method === 'POST') {
-        if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-        const ip = server.requestIP(request)?.address || 'unknown';
-        const failure = failures.get(ip);
-        if (failure && failure.until > Date.now() && failure.count >= 10) return new Response('Too many attempts; wait one minute', { status: 429, headers });
-        const body = await request.json();
-        const name = deviceName(body?.deviceName, request.headers.get('user-agent') || '');
-        if (!equalToken(body?.token)) {
-          const count = failure && failure.until > Date.now() ? failure.count + 1 : 1;
-          failures.set(ip, { count, until: Date.now() + 60_000 });
-          return new Response('Incorrect access token', { status: 401, headers });
-        }
-        failures.delete(ip);
-        return pairedResponse(secure, name);
-      }
-      const deviceRoute = url.pathname === '/api/devices' || /^\/api\/devices\/[0-9a-f-]{36}$/.test(url.pathname);
-      if (deviceRoute) {
-        const current = authenticated(request);
-        const pcAdmin = equalToken(request.headers.get('authorization')?.replace(/^Bearer /, ''));
-        if (!current && !pcAdmin) return new Response('Pair this browser first', { status: 401, headers });
-        if (url.pathname === '/api/devices' && request.method === 'GET') {
-          return Response.json({ devices: devices.list().map(device => ({ ...device, current: device.id === current?.id })) }, { headers });
-        }
-        if (url.pathname !== '/api/devices' && request.method === 'DELETE') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          const id = url.pathname.slice('/api/devices/'.length);
-          if (!devices.revoke(id)) return new Response('Device not found', { status: 404, headers });
-          pushStore.remove(id);
-          for (const peer of peers) if (peer.data.deviceId === id) {
-            message(peer, { type: 'error', message: 'This device was revoked. Pair again to reconnect.' });
-            cleanup(peer); peer.close(1008, 'Device revoked');
-          }
-          return new Response('Revoked', { headers: { ...headers, ...(id === current?.id ? {
-            'Set-Cookie': `whistle_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure ? '; Secure' : ''}`,
-          } : {}) } });
-        }
-        return new Response('Method not allowed', { status: 405, headers });
-      }
-      if (url.pathname.startsWith('/api/') || url.pathname === '/terminal') {
-        const current = authenticated(request);
-        if (!current) return new Response('Pair this browser first', { status: 401, headers });
-        if (url.pathname === '/api/panes' && request.method === 'GET') {
-          return Response.json(await snapshot(), { headers });
-        }
-        if (url.pathname === '/api/previews' && request.method === 'GET') {
-          return Response.json(await panePreviews((await snapshot()).panes), { headers });
-        }
-        if (url.pathname === '/api/agents' && request.method === 'GET') {
-          return Response.json({ kinds: await agentKinds() }, { headers });
-        }
-        if (url.pathname === '/api/worktrees' && request.method === 'GET') {
-          const workspaceId = url.searchParams.get('workspace') || '';
-          if (!/^[A-Za-z0-9:_.-]{1,128}$/.test(workspaceId)) return new Response('Invalid workspace', { status: 400, headers });
-          return Response.json({ worktrees: await worktrees(workspaceId) }, { headers });
-        }
-        if (url.pathname === '/api/folders' && request.method === 'GET') {
-          try {
-            return Response.json(await listFolders(url.searchParams.get('path') || '~'), { headers });
-          } catch (error) {
-            if (error instanceof FolderError) return new Response(error.message, { status: error.status, headers });
-            throw error;
-          }
-        }
-        if (url.pathname === '/api/picture' && request.method === 'GET') {
-          const pane = (await snapshot()).panes.find(item => item.pane_id === url.searchParams.get('pane'));
-          if (!pane) return new Response('Pane no longer exists', { status: 404, headers });
-          if (!pane.cwd?.startsWith('/')) return new Response('Herdr does not report a folder for this pane.', { status: 422, headers });
-          try {
-            const picture = await readPicture(pane.cwd, url.searchParams.get('path') || '');
-            return new Response(picture.bytes, { headers: { ...headers, 'Content-Type': picture.type, 'Content-Disposition': 'inline', 'Cross-Origin-Resource-Policy': 'same-origin' } });
-          } catch (error) {
-            if (error instanceof PictureError) return new Response(error.message, { status: error.status, headers });
-            throw error;
-          }
-        }
-        if ((url.pathname === '/api/changes' || url.pathname === '/api/changes/file') && request.method === 'GET') {
-          const pane = (await snapshot()).panes.find(item => item.pane_id === url.searchParams.get('pane'));
-          if (!pane) return new Response('Pane no longer exists', { status: 404, headers });
-          if (!pane.cwd?.startsWith('/')) return new Response('Herdr does not report a folder for this pane.', { status: 422, headers });
-          const path = url.searchParams.get('path') || '';
-          if (url.pathname === '/api/changes/file' && (!path || path.length > 4096 || path.includes('\0'))) {
-            return new Response('Invalid path', { status: 400, headers });
-          }
-          try {
-            return Response.json(url.pathname === '/api/changes' ? await changes(pane.cwd) : await fileDiff(pane.cwd, path), { headers });
-          } catch (error) {
-            if (error instanceof ChangesError) return new Response(error.message, { status: 422, headers });
-            throw error;
-          }
-        }
-        if (url.pathname === '/api/push') {
-          if (request.method === 'GET') {
-            return Response.json({ publicKey: vapid.publicKey, subscribed: Boolean(pushStore.get(current.id)), settings: pushStore.settings(current.id) }, { headers });
-          }
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          if (request.method === 'PUT') { pushStore.save(current.id, parseSubscription(await request.json())); return new Response('Subscribed', { headers }); }
-          if (request.method === 'DELETE') { pushStore.remove(current.id); return new Response('Unsubscribed', { headers }); }
-          return new Response('Method not allowed', { status: 405, headers });
-        }
-        if (url.pathname === '/api/push/settings' && request.method === 'PUT') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          const settings = parseSettings(await request.json());
-          if (!pushStore.saveSettings(current.id, settings)) return new Response('Turn on alerts first', { status: 409, headers });
-          return Response.json({ settings }, { headers });
-        }
-        if (url.pathname === '/api/push/test' && request.method === 'POST') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          try {
-            await sendPush(current.id, { title: 'Alerts are on', body: 'Whistle will tell you when an agent needs you.', paneId: '' });
-          } catch (error) {
-            if (error instanceof PushGone) pushStore.remove(current.id);
-            return new Response(`Could not reach the push service: ${(error as Error).message}`, { status: 502, headers });
-          }
-          return new Response('Sent', { headers });
-        }
-        if (url.pathname === '/api/actions' && request.method === 'POST') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          return Response.json(await runAction(parseAction(await request.json())), { headers });
-        }
-        if (url.pathname === '/api/uploads' && request.method === 'POST') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          try {
-            const path = await saveUpload(uploadDir, request.headers.get('content-type') || '', Buffer.from(await request.arrayBuffer()));
-            return Response.json({ path }, { headers });
-          } catch (error) {
-            if (error instanceof UploadError) return new Response(error.message, { status: error.status, headers });
-            throw error;
-          }
-        }
-        if (url.pathname === '/terminal') {
-          if (!sameOrigin(request)) return new Response('Origin rejected', { status: 403, headers });
-          const paneId = url.searchParams.get('pane') || '';
-          const mode = url.searchParams.get('mode') === 'control' ? 'control' : 'observe';
-          const state = await snapshot();
-          const pane = state.panes.find(p => p.pane_id === paneId);
-          if (!pane) return new Response('Pane no longer exists', { status: 404, headers });
-          if (mode === 'control' && controllers.has(paneId)) return new Response('Already controlled by another Whistle browser', { status: 409, headers });
-          const size = mode === 'control'
-            ? dimensions(Number(url.searchParams.get('cols')), Number(url.searchParams.get('rows')))
-            : await watchSize(pane);
-          const upgraded = server.upgrade(request, { data: {
-            deviceId: current.id, paneId, mode, ...size, queue: Promise.resolve(), pending: 0, lastId: 0, closed: false,
-          } });
-          return upgraded ? undefined : new Response('WebSocket upgrade required', { status: 400, headers });
-        }
-        return new Response('Not found', { status: 404, headers });
-      }
-      if (request.method !== 'GET') return new Response('Not found', { status: 404, headers });
-      return assetResponse(url.pathname, headers) || new Response('Not found', { status: 404, headers });
-    } catch (error) {
-      return new Response((error as Error).message, { status: 400, headers });
-    }
-  },
-  websocket: {
-    idleTimeout: 30,
-    maxPayloadLength: 128 * 1024,
-    backpressureLimit: 2 * 1024 * 1024,
-    closeOnBackpressureLimit: true,
-    open(ws) {
-      const peer = ws.data;
-      if (!devices.isActive(peer.deviceId)) { cleanup(ws); ws.close(1008, 'Device expired or revoked'); return; }
-      if (peer.mode === 'control') {
-        if (controllers.has(peer.paneId)) { ws.close(1008, 'Pane already controlled'); return; }
-        controllers.set(peer.paneId, ws);
-      }
-      peers.add(ws);
-      peer.stream = terminalStream(peer.paneId, peer.mode, peer.cols, peer.rows,
-        frame => message(ws, { ...frame, mode: peer.mode }),
-        reason => { message(ws, { type: 'error', message: reason }); cleanup(ws); ws.close(1011, 'Herdr stream ended'); },
-      );
-    },
-    message(ws, raw) {
-      const peer = ws.data;
-      try {
-        if (!devices.isActive(peer.deviceId)) throw new Error('Device expired or revoked');
-        const command = parseCommand(typeof raw === 'string' ? raw : raw.toString());
-        if (command.type === 'ping') { message(ws, { type: 'pong' }); return; }
-        if (peer.mode !== 'control') throw new Error('Take control before sending input');
-        if (peer.pending >= 100) throw new Error('Too many pending inputs; stopped rather than replaying');
-        peer.pending++;
-        peer.queue = peer.queue.then(async () => {
-          if (peer.closed) return;
-          if (!devices.isActive(peer.deviceId)) throw new Error('Device expired or revoked');
-          const stream = peer.stream;
-          if (!stream) throw new Error('Terminal stream is not open');
-          if (command.type === 'input' || command.type === 'key') {
-            if (!stream.controlled) throw new Error('Terminal is not controlled');
-            if (command.id <= peer.lastId) throw new Error('Duplicate or out-of-order input');
-            peer.lastId = command.id;
-            // All text and chords use this one serial RPC lane. Mixing CLI stdin
-            // and key RPCs could let a shortcut overtake previously typed text.
-            try {
-              if (command.type === 'input') {
-                await rpc('pane.send_text', { pane_id: peer.paneId, text: command.text });
-                // Enter in the same write as a paste is read as part of it (Claude Code just pastes), so it
-                // follows as its own key once the paste has landed, still inside this serial lane.
-                if (command.submit) {
-                  await Bun.sleep(SUBMIT_DELAY_MS);
-                  if (peer.closed || !stream.controlled) throw new Error('Control ended before Enter; the text was pasted but not submitted');
-                  await rpc('pane.send_keys', { pane_id: peer.paneId, keys: ['enter'] });
-                }
-              } else await rpc('pane.send_keys', { pane_id: peer.paneId, keys: [command.key] });
-              message(ws, { type: 'ack', id: command.id });
-            } catch (error) {
-              if (command.type === 'key' && error instanceof HerdrError && error.code === 'invalid_key') {
-                message(ws, { type: 'key-rejected', id: command.id, message: error.message });
-              } else throw error;
-            }
-          } else if (command.type === 'resize') {
-            await stream.send({ type: 'terminal.resize', cols: command.cols, rows: command.rows });
-          } else {
-            await stream.send({ type: 'terminal.scroll', direction: command.direction, lines: command.lines });
-          }
-        }).catch(error => {
-          message(ws, { type: 'error', message: error.message });
-          cleanup(ws); ws.close(1011, 'Input failed; not retried');
-        }).finally(() => { peer.pending--; });
-      } catch (error) {
-        message(ws, { type: 'error', message: (error as Error).message });
-        cleanup(ws); ws.close(1008, 'Invalid command');
-      }
-    },
-    close(ws) { cleanup(ws); },
-  },
-});
-const sweeper = setInterval(() => {
-  devices.sweep();
-  for (const peer of peers) if (!devices.isActive(peer.data.deviceId)) {
-    cleanup(peer); peer.close(1008, 'Device expired or revoked');
-  }
-  for (const [ip, failure] of failures) if (failure.until < Date.now()) failures.delete(ip);
-  void sweepUploads(uploadDir);
-}, 60_000);
-sweeper.unref();
-// Polls only while at least one device has alerts on.
-const watcher = new AgentWatcher({
-  snapshot, subscribers: () => pushStore.all(), send: sendPush,
-  isActive: deviceId => devices.isActive(deviceId),
-  // A phone with the pane open is already looking at it.
-  isWatching: (deviceId, paneId) => [...peers].some(peer => peer.data.deviceId === deviceId && peer.data.paneId === paneId && !peer.data.closed),
-  onGone: deviceId => pushStore.remove(deviceId),
-  settings: deviceId => pushStore.settings(deviceId),
-  onError: error => console.error(`Whistle alert not delivered: ${error.message}`),
-});
-let watching = false;
-const alerts = setInterval(() => {
-  if (watching) return;
-  watching = true;
-  void watcher.tick().catch(() => { /* Herdr briefly unavailable: try again next tick. */ }).finally(() => { watching = false; });
-}, 3000);
-alerts.unref();
-let stopping = false;
-async function shutdown() {
-  if (stopping) return;
-  stopping = true;
-  const closing = [...peers].map(peer => {
-    const closed = peer.data.stream?.closed;
-    cleanup(peer); peer.close(1001, 'Server stopping');
-    return closed;
+  const server = Bun.serve<Peer>({
+    hostname: config.host,
+    port: config.port,
+    maxRequestBodySize: MAX_UPLOAD_BYTES,
+    fetch: createRequestHandler({ config, devices, tickets: new PairingTickets(), tokens, pushStore, vapid, sendAlert, sockets, uploadDir }),
+    websocket: sockets.handlers,
   });
-  clearInterval(sweeper);
-  clearInterval(alerts);
-  await server.stop(true);
-  // Let controller CLI children flush terminal.release before the host exits.
-  // These are Whistle streams, never the Herdr daemon or agent processes.
-  await Promise.race([Promise.all(closing), Bun.sleep(1500)]);
-  devices.close();
-  pushStore.close();
-  process.exit(0);
+
+  const sweeper = setInterval(() => {
+    devices.sweep();
+    sockets.closeInactive();
+    tokens.sweep();
+    void sweepUploads(uploadDir);
+  }, 60_000);
+  sweeper.unref();
+  // Polls Herdr only while at least one device has alerts on.
+  const watcher = new AgentWatcher({
+    snapshot, subscribers: () => pushStore.all(), send: sendAlert,
+    isActive: deviceId => devices.isActive(deviceId),
+    isWatching: (deviceId, paneId) => sockets.isWatching(deviceId, paneId),
+    onGone: deviceId => pushStore.remove(deviceId),
+    settings: deviceId => pushStore.settings(deviceId),
+    onError: error => {
+      // Herdr restarting is routine; the next tick tries again.
+      if (!(error instanceof HerdrUnavailable)) console.error(`Whistle alert not delivered: ${error.message}`);
+    },
+  });
+  watcher.start(3000);
+
+  let stopping = false;
+  async function shutdown() {
+    if (stopping) return;
+    stopping = true;
+    const released = sockets.closeAll();
+    clearInterval(sweeper);
+    watcher.stop();
+    await server.stop(true);
+    // Let controller CLI children flush terminal.release before the host exits.
+    // These are Whistle streams, never the Herdr daemon or agent processes.
+    await Promise.race([released, Bun.sleep(1500)]);
+    devices.close();
+    pushStore.close();
+    process.exit(0);
+  }
+  const stop = () => { void shutdown().catch(cause => { console.error(`Whistle shutdown: ${(cause as Error).message}`); process.exit(1); }); };
+  process.on('SIGTERM', stop);
+  process.on('SIGINT', stop);
+
+  const boundHost = server.hostname || config.host;
+  const serverUrl = `http://${boundHost.includes(':') ? `[${boundHost}]` : boundHost}:${server.port}`;
+  await writeServerUrl(paths, serverUrl);
+  console.log(`Whistle: ${serverUrl}`);
+  console.log(`Pair your phone: ${pairCommand} (single-use QR, valid for 5 minutes)`);
+  console.log(`Access token: ${process.env.WHISTLE_TOKEN ? 'provided by WHISTLE_TOKEN' : join(paths.stateDir, stateFiles.accessToken)} (not included in URLs or logs)`);
 }
-const stop = () => { void shutdown().catch(cause => { console.error(`Whistle shutdown: ${(cause as Error).message}`); process.exit(1); }); };
-process.on('SIGTERM', stop);
-process.on('SIGINT', stop);
-const boundHost = server.hostname || config.host;
-const hostname = boundHost.includes(':') ? `[${boundHost}]` : boundHost;
-const serverUrl = `http://${hostname}:${server.port}`;
-await writeFile(join(paths.stateDir, 'server-url'), serverUrl, { mode: 0o600 });
-console.log(`Whistle: ${serverUrl}`);
-console.log(`Pair your phone: ${pairCommand} (single-use QR, valid for 5 minutes)`);
-console.log(`Access token: ${process.env.WHISTLE_TOKEN ? 'provided by WHISTLE_TOKEN' : tokenPath} (not included in URLs or logs)`);
+
+if (import.meta.main) await startServer();

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { controlSize, inputScrollTop, pageScroll } from '../src/viewport.ts';
+import { controlSize, inputScrollTop, pageScroll } from '../web/terminal/viewport.ts';
 
 test('phone and keyboard-sized views keep a tall PTY for TUI chat above fixed widgets', () => {
   expect(controlSize(46, 27)).toEqual({ cols: 46, rows: 64 });

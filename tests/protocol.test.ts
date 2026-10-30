@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { dimensions, parseCommand } from '../src/protocol.ts';
+import { dimensions, parseCommand } from '../shared/protocol.ts';
 
 describe('terminal command boundary', () => {
   test('preserves raw input including Enter, deletion, arrows and Unicode', () => {

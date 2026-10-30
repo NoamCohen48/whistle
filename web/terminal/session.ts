@@ -1,8 +1,9 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { Pane } from '../../src/herdr.ts';
-import { chord, inputKey, validateChord, type Modifier } from '../../src/keys.ts';
-import { controlSize, inputScrollTop, pageScroll } from '../../src/viewport.ts';
+import { chord, inputKey, validateChord, type Modifier } from '../../shared/keys.ts';
+import type { ClientCommand, ServerMessage } from '../../shared/protocol.ts';
+import { controlSize, inputScrollTop, pageScroll } from './viewport.ts';
 import { readPreference, writePreference } from '../preferences.ts';
 
 export type Phase = 'idle' | 'connecting' | 'requesting-control' | 'watching' | 'controlling' | 'disconnected' | 'paused';
@@ -226,7 +227,7 @@ export class TerminalSession {
       if (epoch !== this.generation || this.disposed) return;
       this.lastResponse = Date.now();
       try {
-        const message = JSON.parse(event.data);
+        const message = JSON.parse(event.data) as ServerMessage;
         if (message.type === 'terminal.frame') {
           const firstFrame = !received;
           if (!received) {
@@ -269,7 +270,7 @@ export class TerminalSession {
     }
     const id = ++this.sequence;
     this.pending.set(id, Date.now());
-    try { this.socket.send(JSON.stringify({ ...command, id })); return true; }
+    try { this.socket.send(JSON.stringify({ ...command, id } satisfies ClientCommand)); return true; }
     catch { this.pending.delete(id); this.fail('Input was not sent. The connection closed; reconnect and check the pane.'); this.socket.close(); return false; }
   }
   sendKey(key: string) {
@@ -311,7 +312,7 @@ export class TerminalSession {
       if (this.followInput) this.revealInput();
       if (this.state.phase !== 'controlling' || this.socket?.readyState !== WebSocket.OPEN) return;
       const size = this.fittedSize();
-      this.socket.send(JSON.stringify({ type: 'resize', cols: this.state.fitWidth ? size.cols : this.watchCols, rows: size.rows }));
+      this.socket.send(JSON.stringify({ type: 'resize', cols: this.state.fitWidth ? size.cols : this.watchCols, rows: size.rows } satisfies ClientCommand));
     }, 180);
   };
   private setViewTop(top: number) { this.viewport.scrollTop = top; this.expectedScrollTop = this.viewport.scrollTop; }
@@ -332,7 +333,7 @@ export class TerminalSession {
     const result = pageScroll(info.top, info.max, direction, pixels);
     if (!result.remote) this.setLocalTop(result.top);
     else if (this.state.phase === 'controlling' && this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type: 'scroll', direction, lines: Math.min(30, Math.max(1, Math.ceil(pixels / 17))) }));
+      this.socket.send(JSON.stringify({ type: 'scroll', direction, lines: Math.min(30, Math.max(1, Math.ceil(pixels / 17))) } satisfies ClientCommand));
     }
   }
   private rowHeight() {
