@@ -46,7 +46,7 @@ test('sender signs VAPID, encrypts for the receiver and reports expired subscrip
     const requests: { url: string; init: RequestInit }[] = [];
     let status = 201;
     const send = webPushSender(store, keys, (async (url: string, init: RequestInit) => { requests.push({ url, init }); return new Response(null, { status }); }) as typeof fetch);
-    const alert: Alert = { title: 'Reviewer needs you', body: 'tap · claude', paneId: 'w1:p1' };
+    const alert: Alert = { title: 'Reviewer needs you', body: 'atlas · claude', paneId: 'w1:p1' };
     await send('device-1', alert);
 
     const { url, init } = requests[0];
@@ -87,7 +87,7 @@ test('sender signs VAPID, encrypts for the receiver and reports expired subscrip
 test('watcher alerts once per change into blocked/done and skips watchers, revoked and gone devices', async () => {
   const pane = (pane_id: string, agent_status: string, extra = {}) =>
     ({ pane_id, terminal_id: `t-${pane_id}`, workspace_id: 'w1', tab_id: 't', agent: 'claude', agent_status, ...extra });
-  let state: Snapshot = { workspaces: [{ workspace_id: 'w1', label: 'tap' }], tabs: [], panes: [
+  let state: Snapshot = { workspaces: [{ workspace_id: 'w1', label: 'atlas' }], tabs: [], panes: [
     pane('w1:p1', 'working', { label: 'Reviewer' }), pane('w1:p2', 'blocked'), pane('w1:p3', 'working'), { ...pane('w1:p4', 'working'), agent: undefined },
   ] };
   const sent: [string, Alert][] = [];
@@ -105,8 +105,8 @@ test('watcher alerts once per change into blocked/done and skips watchers, revok
     { ...pane('w1:p4', 'done'), agent: undefined }, pane('w1:p5', 'blocked')] };
   await watcher.tick();
   expect(sent).toEqual([
-    ['phone', { title: 'Reviewer needs you', body: 'tap · claude', paneId: 'w1:p1' }],
-    ['phone', { title: 'claude finished', body: 'tap · claude', paneId: 'w1:p3' }],
+    ['phone', { title: 'Reviewer needs you', body: 'atlas · claude', paneId: 'w1:p1' }],
+    ['phone', { title: 'claude finished', body: 'atlas · claude', paneId: 'w1:p3' }],
   ]); // The tablet is watching p1, its p3 push expired; new pane p5 and shell p4 never alert.
   expect(gone.sort()).toEqual(['revoked', 'tablet']);
   await watcher.tick();
@@ -115,7 +115,7 @@ test('watcher alerts once per change into blocked/done and skips watchers, revok
   await watcher.tick();
   state = { ...state, panes: state.panes.map(item => item.pane_id === 'w1:p1' ? { ...item, agent_status: 'done' } : item) };
   await watcher.tick();
-  expect(sent.at(-1)).toEqual(['phone', { title: 'Reviewer finished', body: 'tap · claude', paneId: 'w1:p1' }]);
+  expect(sent.at(-1)).toEqual(['phone', { title: 'Reviewer finished', body: 'atlas · claude', paneId: 'w1:p1' }]);
 });
 
 test('push API: paired devices only, same-origin writes, and revocation drops the subscription', async () => {
@@ -201,7 +201,7 @@ test('settings survive re-subscribing, older databases are migrated, and the wat
     expect(store.settings('phone')).toEqual(settings);
     expect(store.get('phone')?.endpoint).toBe('https://fcm.googleapis.com/y');
 
-    const panes = (status: string) => ({ workspaces: [{ workspace_id: 'w1', label: 'tap' }], tabs: [], panes: [
+    const panes = (status: string) => ({ workspaces: [{ workspace_id: 'w1', label: 'atlas' }], tabs: [], panes: [
       { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'a', agent: 'claude', agent_status: status },
       { pane_id: 'w1:p2', terminal_id: 't2', workspace_id: 'w1', tab_id: 'b', agent: 'codex', agent_status: status === 'working' ? 'working' : 'done' },
     ] }) as Snapshot;
@@ -218,14 +218,14 @@ test('settings survive re-subscribing, older databases are migrated, and the wat
     await watcher.tick();
     // The phone skips "finished" and gets a quiet "needs you" at night; the tablet gets both, with sound.
     expect(sent).toEqual([
-      ['phone', { title: 'claude needs you', body: 'tap · claude', paneId: 'w1:p1', quiet: true }],
-      ['tablet', { title: 'claude needs you', body: 'tap · claude', paneId: 'w1:p1' }],
-      ['tablet', { title: 'codex finished', body: 'tap · codex', paneId: 'w1:p2' }],
+      ['phone', { title: 'claude needs you', body: 'atlas · claude', paneId: 'w1:p1', quiet: true }],
+      ['tablet', { title: 'claude needs you', body: 'atlas · claude', paneId: 'w1:p1' }],
+      ['tablet', { title: 'codex finished', body: 'atlas · codex', paneId: 'w1:p2' }],
     ]);
     sent.length = 0; now = new Date('2026-10-17T12:00:00Z');
     state = panes('working'); await watcher.tick();
     state = panes('blocked'); await watcher.tick();
-    expect(sent[0]).toEqual(['phone', { title: 'claude needs you', body: 'tap · claude', paneId: 'w1:p1' }]);
+    expect(sent[0]).toEqual(['phone', { title: 'claude needs you', body: 'atlas · claude', paneId: 'w1:p1' }]);
     store.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

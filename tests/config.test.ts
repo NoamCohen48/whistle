@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { loadHostConfig, resolvePaths } from '../src/config.ts';
-import { serviceUnit, unitQuote } from '../src/service.ts';
+import { packagedExecutable, serviceUnit, unitQuote } from '../src/service.ts';
 
 test('state/config/unit paths follow XDG and never depend on the working directory', () => {
   const paths = resolvePaths({ HOME: '/tmp/person', XDG_STATE_HOME: '/tmp/state', XDG_CONFIG_HOME: '/tmp/config', XDG_DATA_HOME: '/tmp/data' });
@@ -21,9 +21,9 @@ test('host config is validated, saved values survive and environment overrides a
   const home = mkdtempSync(join(tmpdir(), 'whistle-config-'));
   try {
     const paths = resolvePaths({ HOME: home }); mkdirSync(paths.configDir, { recursive: true });
-    writeFileSync(paths.configFile, JSON.stringify({ host: '100.68.36.94', port: 8799, herdrSocketPath: '/tmp/herdr.sock' }));
+    writeFileSync(paths.configFile, JSON.stringify({ host: '100.64.0.10', port: 8799, herdrSocketPath: '/tmp/herdr.sock' }));
     const loaded = loadHostConfig(paths, { HOME: home });
-    expect(loaded.host).toBe('100.68.36.94'); expect(loaded.port).toBe(8799);
+    expect(loaded.host).toBe('100.64.0.10'); expect(loaded.port).toBe(8799);
     expect(loadHostConfig(paths, { HOME: home, HOST: '127.0.0.1', PORT: '0' }).port).toBe(0);
     for (const host of ['0.0.0.0', '::', '*', 'example.com']) expect(() => loadHostConfig(paths, { HOME: home, HOST: host })).toThrow();
     for (const port of ['-1', 'NaN', '65536', '1.5']) expect(() => loadHostConfig(paths, { HOME: home, PORT: port })).toThrow();
@@ -36,7 +36,9 @@ test.skipIf(process.platform !== 'linux' || !Bun.which('systemd-analyze'))('gene
   try {
     const path = join(home, 'whistle.service');
     writeFileSync(path, serviceUnit(resolvePaths({ HOME: home })));
-    const child = Bun.spawn(['systemd-analyze', '--user', 'verify', path], { stdout: 'pipe', stderr: 'pipe' });
+    // The parser needs a user runtime directory; give it a private one so the check does not depend on a login session.
+    const runtime = join(home, 'runtime'); mkdirSync(runtime, { mode: 0o700 });
+    const child = Bun.spawn(['systemd-analyze', '--user', 'verify', path], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, XDG_RUNTIME_DIR: runtime } });
     const [error, code] = await Promise.all([new Response(child.stderr).text(), child.exited]);
     expect(error).toBe(''); expect(code).toBe(0);
   } finally { rmSync(home, { recursive: true, force: true }); }
@@ -55,4 +57,11 @@ test('user unit quotes paths and manages only its own companion process tree', (
   expect(unit).not.toContain('PartOf='); expect(unit).not.toContain('ExecStop=herdr');
   expect(unitQuote('a"b\\c')).toBe('"a\\"b\\\\c"');
   expect(() => unitQuote('a\nb')).toThrow();
+});
+
+test('package-managed executables run in place; downloads are copied into private releases', () => {
+  expect(packagedExecutable('/usr/bin/whistle')).toBe(true);
+  expect(packagedExecutable('/opt/whistle/whistle')).toBe(true);
+  expect(packagedExecutable('/home/sam/Downloads/whistle')).toBe(false);
+  expect(packagedExecutable('/usrlocal/whistle')).toBe(false);
 });

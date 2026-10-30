@@ -93,15 +93,15 @@ test('the worker shows a pushed alert as a notification tagged by pane', async (
   await cdp.send('ServiceWorker.enable');
   await cdp.send('ServiceWorker.deliverPushMessage', {
     origin: new URL(page.url()).origin, registrationId: await registration,
-    data: JSON.stringify({ title: 'Reviewer needs you', body: 'tap · claude', paneId: 'w1:p1' }),
+    data: JSON.stringify({ title: 'Reviewer needs you', body: 'atlas · claude', paneId: 'w1:p1' }),
   });
   await expect.poll(() => page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications())
     .map(item => ({ title: item.title, body: item.body, tag: item.tag, data: item.data })))).toEqual([
-    { title: 'Reviewer needs you', body: 'tap · claude', tag: 'pane:w1:p1', data: { paneId: 'w1:p1' } }]);
+    { title: 'Reviewer needs you', body: 'atlas · claude', tag: 'pane:w1:p1', data: { paneId: 'w1:p1' } }]);
   // During quiet hours the PC marks alerts quiet: shown, but silent.
   await cdp.send('ServiceWorker.deliverPushMessage', {
     origin: new URL(page.url()).origin, registrationId: await registration,
-    data: JSON.stringify({ title: 'Builder finished', body: 'tap · codex', paneId: 'w2:p1', quiet: true }),
+    data: JSON.stringify({ title: 'Builder finished', body: 'atlas · codex', paneId: 'w2:p1', quiet: true }),
   });
   await expect.poll(() => page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications())
     .map(item => [item.tag, item.silent]))).toEqual([['pane:w1:p1', false], ['pane:w2:p1', true]]);

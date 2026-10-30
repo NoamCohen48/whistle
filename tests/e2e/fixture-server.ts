@@ -6,13 +6,13 @@ import { assetResponse } from '../../src/assets.ts';
 
 const initial: Snapshot = {
   workspaces: [
-    { workspace_id: 'w1', label: 'tap', worktree: { repo_key: '/tap/.git', is_linked_worktree: false } },
-    { workspace_id: 'w2', label: 'app-explorer', worktree: { repo_key: '/tap/.git', is_linked_worktree: true } },
+    { workspace_id: 'w1', label: 'atlas', worktree: { repo_key: '/atlas/.git', is_linked_worktree: false } },
+    { workspace_id: 'w2', label: 'atlas-search', worktree: { repo_key: '/atlas/.git', is_linked_worktree: true } },
   ],
   tabs: [],
   panes: [
-    { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'tab1', label: 'First agent', agent: 'pi', agent_status: 'idle', cwd: '/home/dev/Work/tap' },
-    { pane_id: 'w2:p1', terminal_id: 't2', workspace_id: 'w2', tab_id: 'tab2', label: 'Second agent', agent: 'pi', agent_status: 'working', cwd: '/home/dev/.herdr/worktrees/tap/explorer' },
+    { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'tab1', label: 'First agent', agent: 'pi', agent_status: 'idle', cwd: '/home/sam/projects/atlas' },
+    { pane_id: 'w2:p1', terminal_id: 't2', workspace_id: 'w2', tab_id: 'tab2', label: 'Second agent', agent: 'pi', agent_status: 'working', cwd: '/home/sam/.herdr/worktrees/atlas/search' },
   ],
 };
 // A real PNG so pictures render: a striped test card.
@@ -55,13 +55,13 @@ let uploads = 0;
 // Review data for w1:p1 only; any other pane reports a folder outside Git.
 // Folders a fixture home contains; * marks a Git repository.
 const folderTree: Record<string, string[]> = {
-  '/home/dev': ['Documents', 'Downloads', 'Work'],
-  '/home/dev/Work': ['notes', 'site', 'tap*', 'whistle*'],
-  '/home/dev/Work/tap': ['docs', 'src', 'web'],
-  '/home/dev/Work/whistle': ['src', 'web'],
-  '/home/dev/Work/site': [], '/home/dev/Work/notes': [], '/home/dev/Documents': [], '/home/dev/Downloads': [],
+  '/home/sam': ['Documents', 'Downloads', 'projects'],
+  '/home/sam/projects': ['atlas*', 'notes', 'site', 'whistle*'],
+  '/home/sam/projects/atlas': ['docs', 'src', 'web'],
+  '/home/sam/projects/whistle': ['src', 'web'],
+  '/home/sam/projects/site': [], '/home/sam/projects/notes': [], '/home/sam/Documents': [], '/home/sam/Downloads': [],
 };
-const changes = { root: '/home/dev/Work/tap', branch: 'feature/review', truncated: false, files: [
+const changes = { root: '/home/sam/projects/atlas', branch: 'feature/review', truncated: false, files: [
   { path: 'assets/logo.png', status: 'modified', added: 0, removed: 0, binary: true },
   { path: 'docs/home-screen.png', status: 'untracked', added: 0, removed: 0, binary: true },
   { path: 'src/old.ts', status: 'deleted', added: 0, removed: 8, binary: false },
@@ -148,7 +148,7 @@ const server = Bun.serve<Peer>({
     }
     if (path === '/__test/add-panes') {
       const names = ['Docs writer', 'Test runner', 'Release notes', 'Lint fixer'];
-      for (const label of names) addPane('w1', { label, agent: 'claude', agent_status: 'idle', cwd: '/home/dev/Work/tap' });
+      for (const label of names) addPane('w1', { label, agent: 'claude', agent_status: 'idle', cwd: '/home/sam/projects/atlas' });
       return new Response('added');
     }
     if (path === '/__test/replace') {
@@ -184,8 +184,8 @@ const server = Bun.serve<Peer>({
       if (path === '/api/panes') return Response.json(inventory);
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
       if (path === '/api/worktrees') return Response.json({ worktrees: [
-        { path: '/tap-worktrees/docs', label: 'docs', branch: 'docs' },
-        { path: '/explorer', label: 'app-explorer', branch: 'explorer', openPaneId: 'w2:p1' },
+        { path: '/atlas-worktrees/docs', label: 'docs', branch: 'docs' },
+        { path: '/search', label: 'atlas-search', branch: 'search', openPaneId: 'w2:p1' },
       ] });
       if (path === '/api/push' && request.method === 'GET') return Response.json({ publicKey: pushKey, subscribed: pushSubscribed, settings: pushSettings });
       if (path === '/api/push/settings') {
@@ -205,10 +205,10 @@ const server = Bun.serve<Peer>({
       }
       if (path === '/api/folders') {
         const asked = url.searchParams.get('path') || '~';
-        const full = asked.replace(/^~(?=\/|$)/, '/home/dev').replace(/\/+$/, '') || '/';
+        const full = asked.replace(/^~(?=\/|$)/, '/home/sam').replace(/\/+$/, '') || '/';
         messages.push({ type: 'folders', path: asked });
         if (!full.startsWith('/')) return new Response('Use an absolute path or ~/…', { status: 400 });
-        if (full !== '/home/dev' && !full.startsWith('/home/dev/')) return new Response('Only folders inside your home folder can be browsed.', { status: 403 });
+        if (full !== '/home/sam' && !full.startsWith('/home/sam/')) return new Response('Only folders inside your home folder can be browsed.', { status: 403 });
         const list = folderTree[full];
         if (!list) return new Response('This folder does not exist.', { status: 404 });
         return Response.json({ path: full, truncated: false, folders: list.map(name => ({ name: name.replace(/\*$/, ''), repo: name.endsWith('*') })) });
@@ -216,7 +216,7 @@ const server = Bun.serve<Peer>({
       if (path === '/api/picture') {
         const file = url.searchParams.get('path') || '';
         messages.push({ type: 'picture', pane: url.searchParams.get('pane'), path: file });
-        if (!file.startsWith('/home/dev/Work/tap/') && !/^[^/]/.test(file)) return new Response('Only pictures inside this pane’s project can be shown.', { status: 403 });
+        if (!file.startsWith('/home/sam/projects/atlas/') && !/^[^/]/.test(file)) return new Response('Only pictures inside this pane’s project can be shown.', { status: 403 });
         return new Response(picture, { headers: { 'Content-Type': 'image/png' } });
       }
       if (path.startsWith('/api/changes')) {
@@ -234,7 +234,7 @@ const server = Bun.serve<Peer>({
         const bytes = new Uint8Array(await request.arrayBuffer());
         messages.push({ type: 'upload', contentType: type, size: bytes.length, png: bytes[0] === 0x89, jpeg: bytes[0] === 0xff });
         if (!/^image\/(png|jpeg)$/.test(type)) return new Response('Only PNG, JPEG, WebP and GIF pictures can be attached.', { status: 415 });
-        return Response.json({ path: `/home/dev/.local/state/whistle/uploads/20261017-143210-${(++uploads).toString(16).padStart(8, '0')}.${type === 'image/png' ? 'png' : 'jpg'}` });
+        return Response.json({ path: `/home/sam/.local/state/whistle/uploads/20261017-143210-${(++uploads).toString(16).padStart(8, '0')}.${type === 'image/png' ? 'png' : 'jpg'}` });
       }
       if (path === '/api/actions') {
         if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });

@@ -384,7 +384,7 @@ test('new agents, terminals and workspaces open watch-only without desktop focus
   await page.locator('#new-folder').fill('relative');
   await page.locator('#create-submit').click();
   await expect(page.locator('#create-sheet .sheet-error')).toHaveText('Use an absolute path or ~/…');
-  await page.locator('#new-folder').fill('~/Work/site');
+  await page.locator('#new-folder').fill('~/projects/site');
   await page.locator('#create-submit').click();
   await expect(page.locator('#pane-info')).toHaveText('wn3:n4');
   await expect(page.locator('#heading + small')).toContainText('site');
@@ -392,7 +392,7 @@ test('new agents, terminals and workspaces open watch-only without desktop focus
     { action: 'agent', workspaceId: 'w1', kind: 'claude' },
     { action: 'terminal', workspaceId: 'w1' },
     { action: 'workspace', cwd: 'relative' },
-    { action: 'workspace', cwd: '~/Work/site' },
+    { action: 'workspace', cwd: '~/projects/site' },
   ]);
   expect((await messages(page)).filter(message => message.type === 'connect').every(message => !message.control)).toBe(true);
 });
@@ -413,7 +413,7 @@ test('worktrees can be created, opened and reached when already open', async ({ 
   await page.locator('#new').click();
   await page.locator('[data-kind="worktree"]').click();
   await page.locator('#worktree-existing').click();
-  await page.locator('.worktree-choice', { hasText: 'explorer' }).click();
+  await page.locator('.worktree-choice', { hasText: 'search' }).click();
   await expect(page.locator('#pane-info')).toHaveText('w2:p1');
   await page.locator('#back').click();
   await page.locator('#new').click();
@@ -424,7 +424,7 @@ test('worktrees can be created, opened and reached when already open', async ({ 
   await expect(page.locator('#connection')).toHaveText('Watching');
   expect(await actions(page)).toEqual([
     { action: 'worktree-create', workspaceId: 'w1', branch: 'feat/phone', base: 'main' },
-    { action: 'worktree-open', workspaceId: 'w1', path: '/tap-worktrees/docs' },
+    { action: 'worktree-open', workspaceId: 'w1', path: '/atlas-worktrees/docs' },
   ]);
 });
 
@@ -475,7 +475,7 @@ test('agents that need you are listed first and open watch-only', async ({ page,
   const waiting = page.locator('#needs-you .pane');
   await expect(waiting).toHaveCount(2);
   await expect(waiting.first()).toContainText('Second agentneeds you');
-  await expect(page.locator('#needs-you')).toContainText('app-explorer');
+  await expect(page.locator('#needs-you')).toContainText('atlas-search');
   await expect(page.locator('#needs-you')).toContainText('finished');
   await expect(page.locator('#needs-you .dot[data-tone="attention"]')).toHaveCount(1);
   await waiting.filter({ hasText: 'Second agent' }).click();
@@ -494,33 +494,33 @@ test('new workspaces pick a folder by browsing the PC', async ({ page }) => {
   await page.locator('#new').click();
   await page.locator('[data-kind="workspace"]').click();
   // Starts beside the open projects; Herdr-managed worktree checkouts are not offered.
-  await expect(page.locator('.folder-chips button')).toHaveText(['~/Work/']);
-  await expect(page.locator('#new-folder')).toHaveValue('~/Work/');
-  await expect(page.locator('.crumbs button')).toHaveText(['~', 'Work']);
-  await expect(page.locator('.folder-row')).toHaveText(['notes', 'site', 'tapGit', 'whistleGit']);
+  await expect(page.locator('.folder-chips button')).toHaveText(['~/projects/']);
+  await expect(page.locator('#new-folder')).toHaveValue('~/projects/');
+  await expect(page.locator('.crumbs button')).toHaveText(['~', 'projects']);
+  await expect(page.locator('.folder-row')).toHaveText(['atlasGit', 'notes', 'site', 'whistleGit']);
 
   // Typing narrows the list; tapping goes into a folder.
-  await page.locator('#new-folder').fill('~/Work/wh');
+  await page.locator('#new-folder').fill('~/projects/wh');
   await expect(page.locator('.folder-row')).toHaveText(['whistleGit']);
   await page.locator('.folder-row').click();
-  await expect(page.locator('#new-folder')).toHaveValue('~/Work/whistle/');
+  await expect(page.locator('#new-folder')).toHaveValue('~/projects/whistle/');
   await expect(page.locator('#new-folder')).not.toBeFocused();
   await expect(page.locator('.folder-row')).toHaveText(['src', 'web']);
   await expect(page.locator('#new-label')).toHaveAttribute('placeholder', 'whistle');
 
   // Breadcrumbs go back up; missing and outside folders explain themselves.
   await page.locator('.crumbs button', { hasText: '~' }).click();
-  await expect(page.locator('.folder-row')).toHaveText(['Documents', 'Downloads', 'Work']);
+  await expect(page.locator('.folder-row')).toHaveText(['Documents', 'Downloads', 'projects']);
   await page.locator('#new-folder').fill('~/Nope/');
   await expect(page.locator('.folder-browser')).toContainText('This folder does not exist.');
   await page.locator('#new-folder').fill('/etc/');
   await expect(page.locator('.folder-browser')).toContainText('Only folders inside your home folder can be browsed.');
 
   await page.locator('.folder-chips button').click();
-  await page.locator('.folder-row', { hasText: 'tap' }).click();
+  await page.locator('.folder-row', { hasText: 'atlas' }).click();
   await page.locator('#create-submit').click();
   await expect(page.locator('#connection')).toHaveText('Watching');
-  expect(await actions(page)).toEqual([{ action: 'workspace', cwd: '~/Work/tap' }]);
+  expect(await actions(page)).toEqual([{ action: 'workspace', cwd: '~/projects/atlas' }]);
 });
 
 test('panes and workspaces can be renamed without leaving watch mode', async ({ page }) => {
@@ -537,7 +537,7 @@ test('panes and workspaces can be renamed without leaving watch mode', async ({ 
 
   await page.locator('#pane-actions').click();
   await page.locator('#menu-rename-workspace').click();
-  await expect(page.locator('#rename-input')).toHaveValue('tap');
+  await expect(page.locator('#rename-input')).toHaveValue('atlas');
   await page.locator('#rename-input').fill('');
   await page.locator('#rename-save').click();
   await expect(page.locator('#pane-menu')).toBeVisible(); // An empty workspace name is not submitted.
@@ -561,7 +561,7 @@ test('a long pane list can be searched and cleared', async ({ page, request }) =
   await page.locator('#pane-search').fill('claude runn');
   await expect(page.locator('#search-results .pane strong')).toHaveText(['Test runner']);
   await expect(page.locator('#pane-list')).toBeHidden();
-  await page.locator('#pane-search').fill('explorer');
+  await page.locator('#pane-search').fill('search');
   await expect(page.locator('#search-results .pane strong')).toHaveText(['Second agent']);
   await page.locator('#pane-search').fill('nothing like this');
   await expect(page.locator('#search-results')).toContainText('No matches');
@@ -631,7 +631,7 @@ test('pictures upload into the draft as paths and are only sent with it', async 
     return canvas.toDataURL('image/jpeg', 1).split(',')[1];
   }), 'base64');
   await page.locator('#picture-input').setInputFiles({ name: 'IMG_2041.jpg', mimeType: 'image/jpeg', buffer: photo });
-  await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000001.jpg ');
+  await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/sam/.local/state/whistle/uploads/20261017-143210-00000001.jpg ');
   await expect(page.locator('#attachments li')).toHaveCount(1);
   await expect(page.locator('#attachments img')).toHaveAttribute('src', /^data:image\/jpeg/);
   const [sent] = (await messages(page)).filter(upload);
@@ -652,11 +652,11 @@ test('pictures upload into the draft as paths and are only sent with it', async 
   expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
 
   await page.getByRole('button', { name: 'Remove picture 1' }).click();
-  await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png ');
+  await expect(page.locator('#draft')).toHaveValue('what is wrong here? /home/sam/.local/state/whistle/uploads/20261017-143210-00000002.png ');
   await expect(page.locator('#attachments li')).toHaveCount(1);
   await page.locator('#submit').click();
   await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(({ text, submit }) => ({ text, submit })))
-    .toEqual([{ text: '\x1b[200~what is wrong here? /home/dev/.local/state/whistle/uploads/20261017-143210-00000002.png \x1b[201~', submit: true }]);
+    .toEqual([{ text: '\x1b[200~what is wrong here? /home/sam/.local/state/whistle/uploads/20261017-143210-00000002.png \x1b[201~', submit: true }]);
 
   // Files that are not readable pictures are refused on the phone with a reason.
   await page.locator('#picture-input').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') });
@@ -689,7 +689,7 @@ test('changes can be reviewed read-only without touching the terminal', async ({
   await expect(viewer.locator('img')).toHaveJSProperty('naturalWidth', 360);
   await expect(viewer.getByRole('link', { name: 'Save to phone' })).toHaveAttribute('download', 'home-screen.png');
   expect((await messages(page)).filter(message => message.type === 'picture').map(message => message.path))
-    .toContain('/home/dev/Work/tap/docs/home-screen.png');
+    .toContain('/home/sam/projects/atlas/docs/home-screen.png');
   await viewer.getByRole('button', { name: 'Close' }).click();
   await expect(viewer).toBeHidden();
   await expect(sheet).toBeVisible();

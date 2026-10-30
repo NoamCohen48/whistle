@@ -107,7 +107,7 @@ test('silent streams reconnect watch-only without replaying input', async ({ pag
 
 test('dashboard supports status filters, pins, shortened paths, and persistent workspace collapse', async ({ page }) => {
   await pair(page);
-  await expect(page.locator('#pane-list .cwd').first()).toHaveText('~/Work/tap');
+  await expect(page.locator('#pane-list .cwd').first()).toHaveText('~/projects/atlas');
   await page.getByRole('button', { name: 'Pin First agent', exact: true }).click();
   await expect(page.locator('#pinned-panes .pane')).toHaveCount(1);
   await page.getByRole('group', { name: 'Filter panes' }).getByRole('button', { name: 'Working' }).click();
