@@ -86,7 +86,13 @@ Only the source-mode QR CLI can still use the original `.runtime/server-url` and
 
 `whistle devices` and `whistle revoke <id>` administer these endpoints using the private PC token, including when your phone is lost. Requests use fixed-origin credentials and refuse redirects.
 
+The PC access token (the `whistle` command, and logging in with the token) is checked in constant time. Ten wrong tokens from one address within a minute pause token checks from that address for a minute, and the host logs it. Behind Tailscale Serve every request comes from the proxy's loopback address, so a pause applies to everyone using the token; pairing with a QR code does not use the token and keeps working.
+
 Revocation commits before live streams close. The host releases every controller/observer belonging to that device. It checks validity at WebSocket open, on every message, before queued input executes, and periodically for idle streams. Other devices are not revoked. Already accepted writes cannot be undone; nothing is replayed.
+
+## Errors
+
+A refused request answers with a status and a plain-text message meant for the phone: 400 for malformed input, 401 to pair first, 403 for a foreign Origin, 404 for a pane, folder or file that no longer exists, 409 for a conflict (a pane already controlled, a worktree with uncommitted files), 413/415 for pictures, 422 when Herdr or Git refuses, 429 while token checks are paused, and 503 when Herdr is not reachable. Anything unexpected answers 500 with a generic message, and the details, which can include local paths, go only to the host's log.
 
 ## Pane and worktree API
 
@@ -112,7 +118,7 @@ Phone-side close and removal are behind a confirm step. Removal is never forced 
 
 ## Needs-you alerts
 
-`src/push.ts` implements standard Web Push (RFC 8030 delivery, RFC 8291 `aes128gcm` encryption, RFC 8292 VAPID) with Node crypto; there is no extra dependency or third-party relay.
+`src/webpush.ts` implements standard Web Push (RFC 8030 delivery, RFC 8291 `aes128gcm` encryption, RFC 8292 VAPID) with Node crypto; there is no extra dependency or third-party relay.
 
 - **Keys and state:** the VAPID P-256 key is created once in `push-vapid.json` and subscriptions live in `push.sqlite`, both `0600` in the state directory. The VAPID subject is the configured public origin. One subscription per paired device; revoking a device or its expiry removes it, and a push service answering 404/410 removes it too.
 - **Endpoints** (paired cookie; writes need the exact Origin): `GET /api/push` → `{publicKey, subscribed}`; `PUT /api/push` stores the browser subscription; `DELETE /api/push` removes it; `PUT /api/push/settings` stores this device's settings (`{finished, quiet?: {start, end, timeZone}}`, 409 before subscribing); `POST /api/push/test` sends "Alerts are on" and reports a delivery failure as 502.
@@ -126,6 +132,15 @@ Phone-side close and removal are behind a confirm step. Removal is never forced 
 `POST /api/uploads` (paired cookie, exact Origin) stores one picture for an agent to read and returns `{path}`; the phone puts that path in the draft and nothing is typed into a terminal until the person sends the draft. `src/uploads.ts` checks the bytes against the declared type (PNG, JPEG, WebP or GIF only; no SVG), caps it at 10 MB and writes it under a generated name as `0600` in `uploads/` (`0700`). The minute sweeper deletes Whistle-named pictures older than three days and leaves anything else in the folder alone.
 
 Request bodies: the server's limit is 10 MB for this route only. Every other route refuses a declared body over 4 KB, and any chunked body, with 413 before reading it, so pairing, login and actions keep their old limit. An agent outside its project folder may ask permission before reading a picture.
+
+## Source layout
+
+- `cli.ts` is the `whistle` command; `service.ts`, `releases.ts` and `config.ts` install and configure the user service. `host-client.ts` and `pair-command.ts` are how the command talks to the running host.
+- `server.ts` starts the host and wires the parts together. `routes.ts` is the HTTP API: one table where every route declares who may call it and whether it needs a same-origin request. `http.ts` holds response, cookie and error helpers, and `auth.ts` the access-token check.
+- `terminal-socket.ts` is the live terminal connection: watch and control, the serial input lane, and closing on revocation or shutdown.
+- `herdr.ts` talks to Herdr. `actions.ts`, `previews.ts`, `folders.ts`, `pictures.ts`, `changes.ts` and `uploads.ts` each serve one feature.
+- `devices.ts` and `pairing-tickets.ts` are pairing; `token.ts` the PC access token. `alerts.ts` decides when to alert, `webpush.ts` delivers, and `push-store.ts` stores subscriptions. Both stores open their databases through `database.ts`.
+- `../shared/` holds the terminal WebSocket protocol and key-chord rules, used by both the host and the phone app.
 
 ## Checks
 
