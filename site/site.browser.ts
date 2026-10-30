@@ -51,14 +51,29 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(demo.getByRole('button', { name: /Checkout tests/ })).toBeFocused();
     await expect(demo.getByRole('button', { name: 'Simulate a dropped connection' })).toBeHidden();
 
-    const button = page.getByRole('link', { name: 'Set it up' });
+    const button = page.getByRole('link', { name: 'Download for Linux' });
     await expect(button).toBeVisible();
     expect(await button.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
     await button.click();
-    await expect(page).toHaveURL(/#setup$/);
+    await expect(page).toHaveURL(/#download$/);
+
+    // Downloads are plain links to the latest GitHub release, fixed at build time; the processor switch rewrites them.
+    const download = page.locator('#download');
+    const debian = download.getByRole('link', { name: 'Download for Debian and Ubuntu' });
+    await expect(debian).toHaveAttribute('href', /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/latest\/download\/whistle_amd64\.deb$/);
+    await expect(download.getByText('sudo apt install ./whistle_amd64.deb')).toBeVisible();
+    await expect(download.getByText(/^Version \d+\.\d+\.\d+, for Linux/)).toBeVisible();
+    await download.getByRole('radio', { name: 'ARM64' }).check();
+    await expect(debian).toHaveAttribute('href', /\/whistle_arm64\.deb$/);
+    await expect(download.getByRole('link', { name: 'Download as a single file' })).toHaveAttribute('href', /\/whistle-linux-arm64$/);
+    await expect(download.getByText('sudo pacman -U ./whistle-aarch64.pkg.tar.zst')).toBeVisible();
+    await expect(download.getByText(/releases\/latest\/download\/install\.sh \| sh$/)).toBeVisible();
+    expect(await download.innerHTML()).not.toContain('__WHISTLE');
+
+    await page.getByRole('heading', { name: 'Set it up on your computer' }).scrollIntoViewIfNeeded();
     await expect(page.getByText('This website only describes Whistle.')).toBeVisible();
     expect(requests.every(url => url.startsWith(baseURL!))).toBe(true);
-    expect(requests.some(url => /\/api\/|\/terminal(?:\?|$)|tailf888b6/.test(url))).toBe(false);
+    expect(requests.some(url => /\/api\/|\/terminal(?:\?|$)|github\.com/.test(url))).toBe(false);
     expect(sockets).toEqual([]);
     expect(failures).toEqual([]);
     expect(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length)).toBe(0);
