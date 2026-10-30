@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Device } from '../../src/devices.ts';
+import type { Device } from '../../shared/api.ts';
 import { PairingRequired, errorMessage, request } from '../request.ts';
 import type { AlertState } from '../push.ts';
 import { Sheet } from './Actions.tsx';

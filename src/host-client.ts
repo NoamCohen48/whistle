@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadHostConfig, projectRoot, resolvePaths } from './config.ts';
-import { standalone } from './build-info.ts';
-import { stateFiles, validateToken } from './token.ts';
+import { loadHostConfig, resolvePaths } from './config.ts';
+import { legacyStateDir, stateFiles, validateToken } from './state-files.ts';
 
 // How the whistle command reaches the host running on this PC: its address and the PC access
 // token, from the files the host wrote at startup (or WHISTLE_URL and WHISTLE_TOKEN).
@@ -14,8 +13,9 @@ export async function hostConnection(paths = resolvePaths()): Promise<HostConnec
   if (!base) {
     try { base = await readFile(join(directory, stateFiles.serverUrl), 'utf8'); }
     catch (cause) {
-      if ((cause as NodeJS.ErrnoException).code !== 'ENOENT' || process.env.WHISTLE_STATE_DIR || standalone) throw cause;
-      directory = join(projectRoot, '.runtime');
+      const legacy = legacyStateDir();
+      if ((cause as NodeJS.ErrnoException).code !== 'ENOENT' || !legacy) throw cause;
+      directory = legacy;
       base = await readFile(join(directory, stateFiles.serverUrl), 'utf8');
     }
   }

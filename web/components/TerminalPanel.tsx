@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import type { Pane } from '../../src/herdr.ts';
+import type { Pane } from '../../shared/api.ts';
 import { modifierOrder, namedKeys } from '../../shared/keys.ts';
 import { TerminalSession, type SessionState } from '../terminal/session.ts';
 import { Icon } from './Icon.tsx';

@@ -2,39 +2,14 @@ import { lstat, open, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { HttpError } from './http-error.ts';
 import { isInside } from './paths.ts';
+import { git, topLevel } from './git.ts';
+import type { Changes, FileChange, FileDiff } from '../shared/api.ts';
 
 // Read-only review of a pane's working tree: what changed since the last commit. Nothing here
 // stages, commits, checks out or writes; paths come from Herdr's pane cwd, never the browser.
-export interface FileChange {
-  path: string; from?: string;
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked';
-  added: number; removed: number; binary: boolean;
-}
-export interface Changes { root: string; branch?: string; files: FileChange[]; truncated: boolean }
-export interface FileDiff { diff: string; binary: boolean; truncated: boolean }
-
 const MAX_FILES = 300;
 const MAX_DIFF_BYTES = 256 * 1024;
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
-// No optional locks (never touches the index), no fsmonitor hook, no external diff or textconv
-// programs, no colour and no prompts.
-async function git(cwd: string, args: string[], allowFailure = false) {
-  const child = Bun.spawn(['git', '-C', cwd, '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', ...args], {
-    stdout: 'pipe', stderr: 'pipe', stdin: 'ignore',
-    env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GIT_PAGER: 'cat', LC_ALL: 'C' },
-  });
-  const timer = setTimeout(() => child.kill(), 10_000);
-  const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-  clearTimeout(timer);
-  if (code !== 0 && !allowFailure) throw new HttpError(stderr.trim().split('\n')[0] || `git exited with ${code}`, 422);
-  return { stdout, code };
-}
-
-async function topLevel(cwd: string) {
-  const top = await git(cwd, ['rev-parse', '--show-toplevel'], true);
-  return top.code === 0 ? top.stdout.trim() : undefined;
-}
 
 // The repository a pane is in, and what its changes are compared with: the last commit, or
 // an empty tree before the first one.
@@ -44,11 +19,6 @@ async function repository(cwd: string): Promise<Repository> {
   if (!root) throw new HttpError('This folder is not a Git repository.', 422);
   const head = await git(cwd, ['rev-parse', '--verify', '-q', 'HEAD'], true);
   return { root, base: head.code === 0 ? 'HEAD' : EMPTY_TREE };
-}
-
-// The repository root, or the folder itself outside Git: the boundary for reading a pane's files.
-export async function fileBoundary(cwd: string) {
-  return await topLevel(cwd) ?? cwd;
 }
 
 const diffArgs = ['--no-ext-diff', '--no-textconv', '--no-color', '-M'];

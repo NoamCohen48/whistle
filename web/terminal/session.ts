@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import type { Pane } from '../../src/herdr.ts';
+import type { Pane } from '../../shared/api.ts';
 import { chord, inputKey, validateChord, type Modifier } from '../../shared/keys.ts';
 import type { ClientCommand, ServerMessage } from '../../shared/protocol.ts';
 import { controlSize, inputScrollTop, pageScroll } from './viewport.ts';

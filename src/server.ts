@@ -4,12 +4,12 @@ import { AccessTokenGuard } from './auth.ts';
 import { pairCommand } from './build-info.ts';
 import { loadHostConfig, resolvePaths } from './config.ts';
 import { DeviceStore } from './devices.ts';
-import { HerdrUnavailable, snapshot } from './herdr.ts';
+import { HerdrUnavailable, snapshot, useHerdr } from './herdr.ts';
 import { PairingTickets } from './pairing-tickets.ts';
 import { PushStore } from './push-store.ts';
 import { createRequestHandler } from './routes.ts';
 import { TerminalSockets, type Peer } from './terminal-socket.ts';
-import { ensureToken, stateFiles, writeServerUrl } from './token.ts';
+import { ensureToken, prepareStateDir, stateFiles, writeServerUrl } from './state-files.ts';
 import { MAX_UPLOAD_BYTES, sweepUploads } from './uploads.ts';
 import { VapidKeys, webPushSender } from './webpush.ts';
 
@@ -18,6 +18,8 @@ import { VapidKeys, webPushSender } from './webpush.ts';
 export async function startServer() {
   const paths = resolvePaths();
   const config = loadHostConfig(paths);
+  useHerdr(config);
+  await prepareStateDir(paths);
   const tokens = new AccessTokenGuard(await ensureToken(paths));
   const devices = new DeviceStore(join(paths.stateDir, 'devices.sqlite'));
   const pushStore = new PushStore(join(paths.stateDir, 'push.sqlite'));

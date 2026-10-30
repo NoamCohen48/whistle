@@ -6,26 +6,37 @@ import { standalone } from './build-info.ts';
 // Files the running host leaves in the state directory for the whistle command on the same PC.
 export const stateFiles = { accessToken: 'access-token', serverUrl: 'server-url' };
 
+// Where a source checkout kept them before the state directory existed. Only used when the
+// state directory is the default one, and never by the standalone executable.
+export function legacyStateDir() {
+  return standalone || process.env.WHISTLE_STATE_DIR ? undefined : join(projectRoot, '.runtime');
+}
+
+export async function prepareStateDir(paths: Paths) {
+  await mkdir(paths.stateDir, { recursive: true, mode: 0o700 });
+  await chmod(paths.stateDir, 0o700);
+}
+
 export function validateToken(token: string) {
   if (token.length < 24 || token.length > 1024) throw new Error('PC access token must contain between 24 and 1024 characters');
   return token;
 }
 
-// The PC access token: from WHISTLE_TOKEN, or created once in the state directory.
+const readIfPresent = async (path: string) => {
+  try { return (await readFile(path, 'utf8')).trim(); }
+  catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause; }
+};
+
+// The PC access token: from WHISTLE_TOKEN, or created once in the (prepared) state directory.
 export async function ensureToken(paths: Paths) {
-  await mkdir(paths.stateDir, { recursive: true, mode: 0o700 });
-  await chmod(paths.stateDir, 0o700);
   if (process.env.WHISTLE_TOKEN) return validateToken(process.env.WHISTLE_TOKEN);
   const path = join(paths.stateDir, stateFiles.accessToken);
-  try { const token = validateToken((await readFile(path, 'utf8')).trim()); await chmod(path, 0o600); return token; }
-  catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause; }
-  let token: string | undefined;
+  const saved = await readIfPresent(path);
+  if (saved !== undefined) { await chmod(path, 0o600); return validateToken(saved); }
   // Migrate only the old PC token, never pretend memory-only browser cookies can be imported.
-  if (!standalone && !process.env.WHISTLE_STATE_DIR) {
-    try { token = validateToken((await readFile(join(projectRoot, '.runtime', stateFiles.accessToken), 'utf8')).trim()); }
-    catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause; }
-  }
-  token ||= crypto.randomUUID() + crypto.randomUUID();
+  const legacy = legacyStateDir();
+  const migrated = legacy && await readIfPresent(join(legacy, stateFiles.accessToken));
+  const token = migrated ? validateToken(migrated) : crypto.randomUUID() + crypto.randomUUID();
   try { await writeFile(path, token, { mode: 0o600, flag: 'wx' }); }
   catch (cause) { if ((cause as NodeJS.ErrnoException).code !== 'EEXIST') throw cause; return validateToken((await readFile(path, 'utf8')).trim()); }
   return token;

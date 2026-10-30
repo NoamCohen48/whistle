@@ -1,49 +1,22 @@
-import { loadHostConfig, type HostConfig } from './config.ts';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
+import type { HostConfig } from './config.ts';
+import { HttpError } from './http-error.ts';
+import type { Pane, Snapshot } from '../shared/api.ts';
+import type { ServerMessage } from '../shared/protocol.ts';
 
-// Read on first use, so importing this module never touches the configuration file.
-let hostConfig: HostConfig | undefined;
-const herdrConfig = () => hostConfig ??= loadHostConfig();
+// Where Herdr is. Set once at startup from the host's configuration.
+type HerdrLocation = Pick<HostConfig, 'herdrSocketPath' | 'herdrBinary'>;
+let location: HerdrLocation | undefined;
+export function useHerdr(config: HerdrLocation) { location = config; }
+function herdrConfig() {
+  if (!location) throw new Error('useHerdr() must be called before talking to Herdr');
+  return location;
+}
 
-export interface Pane {
-  pane_id: string;
-  terminal_id: string;
-  workspace_id: string;
-  tab_id: string;
-  label?: string;
-  agent?: string;
-  agent_status?: string;
-  cwd?: string;
-  terminal_title_stripped?: string;
-  scroll?: { viewport_rows: number };
-}
-export interface Workspace {
-  workspace_id: string;
-  label?: string;
-  name?: string;
-  worktree?: {
-    repo_key: string;
-    repo_name?: string;
-    repo_root?: string;
-    checkout_path?: string;
-    is_linked_worktree: boolean;
-  };
-}
-export interface Snapshot {
-  panes: Pane[];
-  workspaces: Workspace[];
-  tabs: { tab_id: string; label?: string }[];
-}
-export interface Frame {
-  type: 'terminal.frame';
-  bytes: string;
-  width: number;
-  height: number;
-  seq: number;
-  full: boolean;
-}
+// One terminal frame from Herdr; the host adds the mode before sending it to the phone.
+type Frame = Omit<Extract<ServerMessage, { type: 'terminal.frame' }>, 'mode'>;
 
 // Herdr answered and refused the request.
 export class HerdrError extends Error {
@@ -99,6 +72,13 @@ export function rpc<T = any>(method: string, params: Record<string, unknown> = {
 
 export async function snapshot(): Promise<Snapshot> {
   return (await rpc('session.snapshot')).snapshot;
+}
+
+// A pane that is still open, or a 404.
+export async function findPane(paneId: string | null) {
+  const pane = (await snapshot()).panes.find(item => item.pane_id === paneId);
+  if (!pane) throw new HttpError('Pane no longer exists', 404);
+  return pane;
 }
 
 export async function watchSize(pane: Pane) {

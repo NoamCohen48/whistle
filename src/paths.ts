@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import { isAbsolute, join, sep } from 'node:path';
+import { HttpError } from './http-error.ts';
 
 // Paths typed on the phone: absolute, or relative to the home folder with ~/.
 export function hostPath(value: string, home = homedir()) {
@@ -13,4 +14,10 @@ export function hostPath(value: string, home = homedir()) {
 // real paths (no symlinks), or a link could lead outside.
 export function isInside(path: string, folder: string) {
   return path === folder || path.startsWith(folder.endsWith(sep) ? folder : folder + sep);
+}
+
+// A file path sent by the phone, before it is resolved against a pane's folder.
+export function requestPath(value: string | null) {
+  if (!value || value.length > 4096 || value.includes('\0')) throw new HttpError('Invalid path');
+  return value;
 }

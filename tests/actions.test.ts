@@ -107,6 +107,12 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     const refused = await action({ type: 'remove-worktree', workspaceId: 'w1' }, { Cookie: cookie });
     expect(refused.status).toBe(409);
     expect(await refused.text()).toContain('Only linked worktrees');
+    failures.push({ code: 'not_git_worktree', message: 'not a git worktree' });
+    const notGit = await action({ type: 'remove-worktree', workspaceId: 'w2' }, { Cookie: cookie });
+    expect(notGit.status).toBe(422);
+    expect(await notGit.text()).toBe('This workspace is not in a Git repository.');
+    // Herdr answered without the pane it opened.
+    expect((await action({ type: 'worktree-open', workspaceId: 'w1', path: '/wt/a' }, { Cookie: cookie })).status).toBe(502);
 
     expect(calls).toEqual([
       { method: 'tab.create', params: { workspace_id: 'w1', focus: false } },
@@ -120,6 +126,8 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
       { method: 'pane.rename', params: { pane_id: 'w1:p1', label: 'Reviewer' } },
       { method: 'pane.rename', params: { pane_id: 'w1:p1', label: null } },
       { method: 'workspace.rename', params: { workspace_id: 'w2', label: 'Docs' } },
+      { method: 'worktree.remove', params: { workspace_id: 'w2', force: false } },
+      { method: 'worktree.open', params: { workspace_id: 'w1', path: '/wt/a', focus: false } },
     ]);
 
     const kinds = await (await host.request('/api/agents', { headers: { Cookie: cookie } })).json();

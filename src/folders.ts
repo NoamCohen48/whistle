@@ -3,12 +3,11 @@ import { lstat, readdir, realpath, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { HttpError } from './http-error.ts';
 import { hostPath, isInside } from './paths.ts';
+import type { FolderList } from '../shared/api.ts';
 
 // Folder names for picking a new workspace's folder on the phone. Read-only and limited to the
 // home folder: only directory names are listed, never files, hidden folders or anything outside home.
 const MAX_FOLDERS = 400;
-export interface FolderEntry { name: string; repo: boolean }
-export interface FolderList { path: string; folders: FolderEntry[]; truncated: boolean }
 
 export async function listFolders(input: string, home = homedir()): Promise<FolderList> {
   let path: string;

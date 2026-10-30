@@ -1,5 +1,5 @@
 import { request as httpRequest } from './request.ts';
-import type { AlertSettings } from '../src/alerts.ts';
+import type { AlertSettings } from '../shared/api.ts';
 
 export type { AlertSettings };
 

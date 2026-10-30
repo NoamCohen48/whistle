@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { Pane, Snapshot } from '../src/herdr.ts';
+import type { Pane, Snapshot } from '../shared/api.ts';
 import { errorMessage, loadPanes, pairBrowser, PairingRequired, runAction, type Action, type Startup } from './api.ts';
 import { CreateSheet, PaneMenu, type CreateRequest } from './components/Actions.tsx';
 import { ChangesSheet } from './components/Changes.tsx';

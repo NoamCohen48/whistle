@@ -1,8 +1,8 @@
 import { lstat, open, realpath } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
-import { fileBoundary } from './changes.ts';
+import { fileBoundary } from './git.ts';
 import { HttpError } from './http-error.ts';
-import { isInside } from './paths.ts';
+import { isInside, requestPath } from './paths.ts';
 import { sniffPicture } from './picture-types.ts';
 
 // Pictures an agent made (screenshots, charts), shown on the phone. Only picture files inside
@@ -10,11 +10,13 @@ import { sniffPicture } from './picture-types.ts';
 const MAX_PICTURE_BYTES = 15 * 1024 * 1024;
 const EXTENSIONS = /\.(png|jpe?g|webp|gif)$/i;
 
-export async function readPicture(cwd: string, path: string) {
-  if (!path || path.length > 4096 || path.includes('\0')) throw new HttpError('Invalid path');
+export async function readPicture(cwd: string, input: string | null) {
+  const path = requestPath(input);
   if (!EXTENSIONS.test(path)) throw new HttpError('Only PNG, JPEG, WebP and GIF pictures can be shown.', 415);
   const full = isAbsolute(path) ? path : resolve(cwd, path);
-  const root = await realpath(await fileBoundary(cwd));
+  let root: string;
+  try { root = await realpath(await fileBoundary(cwd)); }
+  catch { throw new HttpError('This pane’s folder no longer exists.', 404); }
   let real: string, info: Awaited<ReturnType<typeof lstat>>;
   try { real = await realpath(full); info = await lstat(real); }
   catch { throw new HttpError('That picture does not exist.', 404); }

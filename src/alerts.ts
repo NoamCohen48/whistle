@@ -1,13 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { Pane, Snapshot } from './herdr.ts';
+import type { AlertSettings, Pane, Snapshot } from '../shared/api.ts';
 import { PushGone, type PushSend, type PushSubscription } from './webpush.ts';
 
 // "Needs you" alerts: the PC polls Herdr and, when an agent turns blocked or done, sends each
 // subscribed phone an alert over Web Push.
 
 export interface Alert { title: string; body: string; paneId: string; quiet?: boolean }
-// Per device. Quiet hours deliver alerts without sound or vibration, in the phone's own time zone.
-export interface AlertSettings { finished: boolean; quiet?: { start: string; end: string; timeZone: string } }
 
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 export function parseSettings(input: unknown): AlertSettings {

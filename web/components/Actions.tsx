@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Pane, Snapshot, Workspace } from '../../src/herdr.ts';
+import type { Pane, Snapshot, Workspace } from '../../shared/api.ts';
 import { loadAgentKinds, loadWorktrees, runAction, type Action, type WorktreeChoice } from '../api.ts';
 import { FolderPicker, folderValue } from './FolderPicker.tsx';
 import { Icon, type IconName } from './Icon.tsx';
