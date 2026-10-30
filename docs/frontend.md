@@ -2,7 +2,7 @@
 
 ## Status
 
-The production frontend stack is React + Vite + TypeScript. The vanilla `web/app.ts` entry point has been replaced; the Bun host's HTTP/WebSocket API is unchanged. The host now persists/revokes browser pairings; see [host authentication](host.md). The host also includes an explicitly installed, checkout-based user-service CLI. Building/testing does not install it. Multi-session discovery and an installable/offline PWA are still separate work.
+The phone app is React + Vite + TypeScript, served by the Bun host and embedded in the standalone executable. Pairing and revocation live in the host; see [host authentication](host.md). The app is installable over HTTPS; see [HTTPS and the installable app](pwa.md).
 
 ## Layout
 
@@ -67,7 +67,7 @@ The development proxy matches `/api/` and exactly `/terminal`, not similarly nam
 
 ## Development
 
-Start the Bun host as before. In a second terminal:
+Start the Bun host with `bun start`. In a second terminal:
 
 ```sh
 bun run dev
@@ -75,9 +75,9 @@ bun run dev
 WHISTLE_API_URL=http://<pc-tailnet-ip>:8790 bun run dev
 ```
 
-Vite is local development tooling, not the phone-facing production server. `bun start` builds the UI and serves it through Bun, just as before. The existing running host reads the rebuilt assets from `dist/`, so refreshing the phone loads the new UI without restarting the host. New-host pairings also survive normal host restarts.
+Vite is local development tooling, not the phone-facing production server. `bun start` builds the UI and serves it through Bun. A source host reads the rebuilt assets from `dist/`, so refreshing the phone loads the new UI without restarting the host.
 
-The initial production JavaScript bundle is approximately 576 kB minified (160 kB gzipped as a size estimate; the host does not yet compress responses). Vite reports its default size advisory. It contains React and xterm in one file to preserve the existing fixed asset allowlist. Splitting/lazy-loading xterm and compression can be considered alongside production asset packaging; the warning is not a build error.
+The initial production JavaScript bundle is approximately 576 kB minified (160 kB gzipped as a size estimate; the host does not yet compress responses). Vite reports its default size advisory. It contains React and xterm in one file to preserve the existing fixed asset allowlist. Splitting or lazy-loading xterm, and compression, are possible later improvements; the warning is not a build error.
 
 ## Regression checks
 
