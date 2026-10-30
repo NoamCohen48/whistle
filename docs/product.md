@@ -12,7 +12,7 @@ Use the coding agents already running on a PC from a phone. Whistle is a remote 
 - Live input while controlling: typing, deletion, arrows and Enter act on the real terminal, and desktop changes show on the phone.
 - An optional Compose editor for long prompts, dictation, selection and multiline editing, with separate Paste and Paste + Enter.
 - A compact row of immediate keys: Enter, Esc, Tab, arrows and Ctrl. Keys are sent at once, never queued.
-- Watching must not change desktop geometry or focus. Taking control explicitly may fit the width to the phone, with an Original width override, and restores it on release.
+- Watching must not change desktop geometry or focus. Taking control explicitly may fit the width to the phone, with an Original width override in the pane menu, and restores it on release.
 - Pane identity survives reconnects, and connection state is always visible. Input is never replayed after a connection failure, and never carried over into another pane.
 - The network is the user's existing private network, such as Tailscale. Whistle adds no relay, tunnel or cloud service, and does not change the user's network setup.
 

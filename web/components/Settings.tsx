@@ -38,15 +38,14 @@ export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts }: {
   return <Sheet id="settings-sheet" open={open} title="Settings" onClose={() => { if (!busy) onClose(); }}>
     <section className="settings-section" aria-labelledby="notifications-heading">
       <h3 id="notifications-heading">Notifications</h3>
-      <p className="sheet-note">{alerts === 'blocked' ? 'Notifications are blocked. In your browser’s site settings, allow notifications for Whistle, then return here.'
-        : alerts === 'unsupported' ? 'Alerts need HTTPS and a supported browser. On iPhone, install Whistle to your Home Screen first.'
-          : alerts === 'on' ? 'Alerts are on for this device.' : 'Get an alert when an agent needs you.'}</p>
+      {alerts === 'blocked' || alerts === 'unsupported' ? <p className="sheet-note">{alerts === 'blocked'
+        ? 'Notifications are blocked. In your browser’s site settings, allow notifications for Whistle, then return here.'
+        : 'Alerts need HTTPS and a supported browser. On iPhone, install Whistle to your Home Screen first.'}</p> : null}
       {alerts !== 'unsupported' && alerts !== 'blocked' ? <button type="button" disabled={alertsBusy} onClick={() => { void onAlerts().then(message => setError(message || ''), cause => setError(errorMessage(cause))); }}>
         {alertsBusy ? 'Updating…' : alerts === 'on' ? 'Alert settings' : 'Turn on alerts'}</button> : null}
     </section>
     <section className="settings-section" aria-labelledby="devices-heading">
       <h3 id="devices-heading">Paired devices</h3>
-      <p className="sheet-note">Paired browsers have shell access on your PC. Revoking a device disconnects it immediately.</p>
       {error ? <div className="sheet-error" role="alert">{error}</div> : null}
       {!devices && !error ? <p className="sheet-status" role="status">Loading devices…</p> : null}
       {!devices && error ? <button type="button" onClick={() => setRevision(value => value + 1)}>Retry</button> : null}

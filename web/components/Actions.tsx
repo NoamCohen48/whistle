@@ -198,8 +198,12 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
 }
 
 type Pending = 'close-pane' | 'remove-worktree' | 'rename-pane' | 'rename-workspace' | undefined;
-export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRename, onChanges }: {
-  open: boolean; pane?: Pane; snapshot?: Snapshot; onClose: () => void; onChanges: () => void;
+// How the terminal is shown on this phone. Width applies only while controlling.
+export interface ViewOptions { onTextSize: () => void; onTerminalText: () => void; fitWidth?: boolean; onWidth?: () => void }
+
+export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRename, onChanges, view }: {
+  // From the dashboard (a long press on a row) there is no open terminal, so no view options or change review.
+  open: boolean; pane?: Pane; snapshot?: Snapshot; onClose: () => void; onChanges?: () => void; view?: ViewOptions;
   onNew: (request: CreateRequest) => void;
   onDone: (action: Action) => Promise<void>;
   onRename: (action: Action) => Promise<void>;
@@ -237,8 +241,14 @@ export function PaneMenu({ open, pane, snapshot, onClose, onNew, onDone, onRenam
         <Icon name="agent" />New agent here</button></li>
       <li><button type="button" id="menu-new-terminal" onClick={() => onNew({ kind: 'terminal', workspaceId: pane?.workspace_id })}>
         <Icon name="terminal" />New terminal here</button></li>
-      {pane?.cwd ? <li className="separated"><button type="button" id="menu-changes" onClick={onChanges}>
+      {view ? <li className="separated"><button type="button" id="menu-terminal-text" onClick={view.onTerminalText}>
+        <Icon name="text" />Terminal text</button></li> : null}
+      {pane?.cwd && onChanges ? <li><button type="button" id="menu-changes" onClick={onChanges}>
         <Icon name="diff" />Review changes</button></li> : null}
+      {view ? <li><button type="button" id="menu-text-size" onClick={view.onTextSize}>
+        <Icon name="font-size" />Text size</button></li> : null}
+      {view?.onWidth ? <li><button type="button" id="menu-width" onClick={view.onWidth}>
+        <Icon name="width" />{view.fitWidth ? 'Use the PC’s width' : 'Fit width to phone'}</button></li> : null}
       <li className="separated"><button type="button" id="menu-rename-pane" onClick={() => setPending('rename-pane')}>
         <Icon name="compose" />Rename pane</button></li>
       {workspace ? <li><button type="button" id="menu-rename-workspace" onClick={() => setPending('rename-workspace')}>

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Pane, Snapshot, Workspace } from '../../shared/api.ts';
 import { groupWorkspaces } from '../workspaces.ts';
 import { loadPreviews } from '../api.ts';
@@ -55,8 +55,13 @@ export function AgentSwitcher({ snapshot, selected, onSelect }: {
 
 const shortPath = (path: string) => path.replace(/^\/(?:home|Users)\/[^/]+(?=\/|$)/, '~');
 
+// A long press (contextmenu on touch, right click with a mouse) opens the pane's menu without opening the pane.
+const PaneMenuContext = createContext<((pane: Pane) => void) | undefined>(undefined);
+
 function PaneRow({ pane, detail, preview, onSelect, pinned, onPin }: { pane: Pane; detail?: string; preview?: string; onSelect: (pane: Pane) => void; pinned?: boolean; onPin?: (pane: Pane) => void }) {
-  return <div className="pane-entry"><button type="button" className="pane" onClick={() => onSelect(pane)}>
+  const onMenu = useContext(PaneMenuContext);
+  return <div className="pane-entry"><button type="button" className="pane" aria-haspopup={onMenu ? 'dialog' : undefined} onClick={() => onSelect(pane)}
+    onContextMenu={onMenu ? event => { event.preventDefault(); navigator.vibrate?.(12); onMenu(pane); } : undefined}>
     <StatusDot pane={pane} />
     <span className="pane-copy">
       <strong>{paneName(pane)}</strong>
@@ -65,8 +70,8 @@ function PaneRow({ pane, detail, preview, onSelect, pinned, onPin }: { pane: Pan
         {detail !== undefined ? <span>{detail}</span> : pane.cwd ? <span className="cwd" title={pane.cwd}>{shortPath(pane.cwd)}</span> : null}</small>
       {preview ? <span className="pane-preview">{Array.from(preview).slice(0, 120).join('')}</span> : null}
     </span>
-    <Icon name="forward" size={18} />
-  </button>{onPin ? <button type="button" className="pin-pane" aria-label={`${pinned ? 'Unpin' : 'Pin'} ${paneName(pane)}`} aria-pressed={Boolean(pinned)} onClick={() => onPin(pane)}>{pinned ? 'Pinned' : 'Pin'}</button> : null}</div>;
+  </button>{onPin ? <button type="button" className="pin-pane icon-button" aria-label={`${pinned ? 'Unpin' : 'Pin'} ${paneName(pane)}`} aria-pressed={Boolean(pinned)}
+    title={pinned ? 'Unpin' : 'Pin to the top'} onClick={() => onPin(pane)}><Icon name="pin" size={18} /></button> : null}</div>;
 }
 
 function WorkspaceGroup({ workspace, snapshot, previews, nested = false, nestedPanes = 0, children, onSelect, pinned, onPin }: {
@@ -102,9 +107,9 @@ function matches(snapshot: Snapshot, pane: Pane, words: string[], preview?: stri
   return words.every(word => text.includes(word));
 }
 
-export function Inventory({ snapshot, hidden, banner, onSelect, recent = [], lastUpdated, stale = false, refreshing = false, onCreate }: {
+export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent = [], lastUpdated, stale = false, refreshing = false, onCreate }: {
   snapshot?: Snapshot; hidden: boolean; banner?: ReactNode; onSelect: (pane: Pane) => void;
-  recent?: string[]; lastUpdated?: number; stale?: boolean; refreshing?: boolean; onCreate?: () => void;
+  recent?: string[]; lastUpdated?: number; stale?: boolean; refreshing?: boolean; onCreate?: () => void; onMenu?: (pane: Pane) => void;
 }) {
   const [pinned, setPinned] = useState<string[]>(() => readPreference('pinned-panes', []));
   const [filter, setFilter] = useState('all');
@@ -145,15 +150,12 @@ export function Inventory({ snapshot, hidden, banner, onSelect, recent = [], las
   // Blocked agents are waiting on an answer, so they come before finished ones.
   const waiting = (snapshot?.panes.filter(needsYou) || [])
     .sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
-  return <main id="panes" hidden={hidden} aria-busy={!snapshot}>
+  return <PaneMenuContext value={onMenu}><main id="panes" hidden={hidden} aria-busy={!snapshot}>
     {banner}
-    <div className="intro"><h1>Your herd</h1><p className="inventory-freshness" role="status">{refreshing ? 'Refreshing…' : lastUpdated
-      ? `${stale ? 'Showing saved state. Last updated' : 'Updated'} ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(lastUpdated)}` : 'Connecting…'}</p></div>
-    {count ? <div className="herd-filters" role="group" aria-label="Filter panes">{[
-      ['all', 'All', count], ['needs', 'Needs you', snapshot!.panes.filter(needsYou).length],
-      ['busy', 'Working', snapshot!.panes.filter(pane => statusTone(pane) === 'busy').length],
-      ['idle', 'Idle', snapshot!.panes.filter(pane => statusTone(pane) === 'idle').length],
-    ].map(([value, name, total]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))}>{name}<span>{total}</span></button>)}</div> : null}
+    <h1 className="sr-only">Your herd</h1>
+    {/* Freshness is shown only when it matters: the list is a saved copy that may be out of date. */}
+    {stale && lastUpdated && !refreshing ? <p className="inventory-freshness" role="status">
+      Showing saved state. Last updated {new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(lastUpdated)}</p> : null}
     {searchable ? <div className="search" role="search">
       <Icon name="search" size={18} />
       <input id="pane-search" type="search" value={query} placeholder="Search panes" aria-label="Search panes"
@@ -163,6 +165,11 @@ export function Inventory({ snapshot, hidden, banner, onSelect, recent = [], las
       {query ? <button type="button" id="clear-search" className="icon-button" aria-label="Clear search"
         onClick={() => setQuery('')}><Icon name="close" size={18} /></button> : null}
     </div> : null}
+    {count ? <div className="herd-filters" role="group" aria-label="Filter panes">{[
+      ['all', 'All', count], ['needs', 'Needs you', snapshot!.panes.filter(needsYou).length],
+      ['busy', 'Working', snapshot!.panes.filter(pane => statusTone(pane) === 'busy').length],
+      ['idle', 'Idle', snapshot!.panes.filter(pane => statusTone(pane) === 'idle').length],
+    ].map(([value, name, total]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))}>{name}<span>{total}</span></button>)}</div> : null}
     {results ? <section id="search-results" className="workspace-group" aria-live="polite">
       <h2 className="workspace"><span className="workspace-name">
         {results.length ? `${results.length} ${results.length === 1 ? 'match' : 'matches'}` : 'No matches'}</span></h2>
@@ -189,5 +196,5 @@ export function Inventory({ snapshot, hidden, banner, onSelect, recent = [], las
             nested snapshot={snapshot} previews={previews} onSelect={onSelect} pinned={pinned} onPin={onPin} />)}
         </WorkspaceGroup>)
       : <div className="empty"><strong>No panes yet</strong><p>Open a workspace on your PC, or choose a project folder to create one here. Then start an agent or terminal.</p><button type="button" onClick={onCreate}>Open a project</button></div>}</div>
-  </main>;
+  </main></PaneMenuContext>;
 }

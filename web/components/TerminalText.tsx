@@ -71,12 +71,12 @@ export function TerminalTextSheet({ text, paneId, onClose, onPicture }: {
         }} />
       <button type="button" aria-label="Previous match" disabled={!matches} onClick={() => setActiveMatch(index => (index + matches - 1) % matches)}>↑</button>
       <button type="button" aria-label="Next match" disabled={!matches} onClick={() => setActiveMatch(index => (index + 1) % matches)}>↓</button></div>
-    <p className="sheet-status" aria-live="polite">{query ? matches ? `${activeMatch + 1} of ${matches} matches` : 'No matches' : 'Snapshot taken when opened'}</p>
+    <p className="sheet-status" aria-live="polite">{query ? matches ? `${activeMatch + 1} of ${matches} matches` : 'No matches' : ''}</p>
     {text ? <pre id="terminal-text-body" ref={body}>{text.split('\n').map((line, index) =>
       <span key={index}>{paneId ? linkPictures(line, path => onPicture({ paneId, path }), query) : markMatches(line, query)}{'\n'}</span>)}</pre>
       : <p className="sheet-status">Nothing on screen yet</p>}
     <div className="text-actions">
-      <p className="sheet-status" role="status">{status || 'Select text, or copy it all'}</p>
+      <p className="sheet-status" role="status">{status}</p>
       <button type="button" id="copy-text" className="primary" disabled={!text} onPointerDown={event => event.preventDefault()} onClick={() => {
         const part = selected();
         void copy(part || text || '').then(() => setStatus(part ? 'Copied selection' : 'Copied'), () => setStatus('Copy is blocked here; select the text instead'));
