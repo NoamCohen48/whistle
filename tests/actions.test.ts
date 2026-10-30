@@ -4,7 +4,8 @@ import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hostPath, parseAction, validRef } from '../src/actions.ts';
+import { parseAction, validRef } from '../src/actions.ts';
+import { hostPath } from '../src/paths.ts';
 import { startHost, testToken } from './helpers/host.ts';
 
 test('actions accept only fixed, validated fields', () => {
@@ -97,14 +98,14 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     expect(await ok({ type: 'close-pane', paneId: 'w1:p1' })).toEqual({});
     failures.push({ code: 'dirty_worktree_requires_force', message: "fatal: contains modified or untracked files, use --force to delete it" });
     const dirty = await action({ type: 'remove-worktree', workspaceId: 'w2' }, { Cookie: cookie });
-    expect(dirty.status).toBe(400);
+    expect(dirty.status).toBe(409);
     expect(await dirty.text()).toBe('This worktree has uncommitted or untracked files. Commit or clean them on your PC first.');
     expect(await ok({ type: 'remove-worktree', workspaceId: 'w2', force: true })).toEqual({});
     expect(await ok({ type: 'rename-pane', paneId: 'w1:p1', label: 'Reviewer' })).toEqual({});
     expect(await ok({ type: 'rename-pane', paneId: 'w1:p1' })).toEqual({});
     expect(await ok({ type: 'rename-workspace', workspaceId: 'w2', label: 'Docs' })).toEqual({});
     const refused = await action({ type: 'remove-worktree', workspaceId: 'w1' }, { Cookie: cookie });
-    expect(refused.status).toBe(400);
+    expect(refused.status).toBe(409);
     expect(await refused.text()).toContain('Only linked worktrees');
 
     expect(calls).toEqual([

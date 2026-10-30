@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Snapshot } from '../src/herdr.ts';
 import { startHost, testToken } from './helpers/host.ts';
-import { AgentWatcher, PushGone, PushStore, VapidKeys, encrypt, isQuiet, parseSettings, parseSubscription, webPushSender, type Alert } from '../src/push.ts';
+import { AgentWatcher, alertSender, isQuiet, parseSettings, type Alert } from '../src/alerts.ts';
+import { PushStore } from '../src/push-store.ts';
+import { PushGone, VapidKeys, encrypt, parseSubscription, webPushSender } from '../src/webpush.ts';
 
 const unb64 = (value: string) => Buffer.from(value.replace(/\s+/g, ''), 'base64url');
 
@@ -45,7 +47,7 @@ test('sender signs VAPID, encrypts for the receiver and reports expired subscrip
     store.save('device-1', { endpoint: 'https://fcm.googleapis.com/fcm/send/token', keys: { p256dh: receiver.getPublicKey().toString('base64url'), auth: auth.toString('base64url') } });
     const requests: { url: string; init: RequestInit }[] = [];
     let status = 201;
-    const send = webPushSender(store, keys, (async (url: string, init: RequestInit) => { requests.push({ url, init }); return new Response(null, { status }); }) as typeof fetch);
+    const send = alertSender(deviceId => store.get(deviceId), webPushSender(keys, (async (url: string, init: RequestInit) => { requests.push({ url, init }); return new Response(null, { status }); }) as typeof fetch));
     const alert: Alert = { title: 'Reviewer needs you', body: 'atlas · claude', paneId: 'w1:p1' };
     await send('device-1', alert);
 

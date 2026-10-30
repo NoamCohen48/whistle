@@ -1,7 +1,6 @@
-import { Database } from 'bun:sqlite';
+import type { Database } from 'bun:sqlite';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { chmodSync, closeSync, mkdirSync, openSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { openPrivateDatabase } from './database.ts';
 
 export const DEVICE_LIFETIME_MS = 90 * 86400_000;
 export interface Device {
@@ -17,21 +16,12 @@ const digest = (secret: string) => createHash('sha256').update(secret).digest('h
 export class DeviceStore {
   private readonly db: Database;
   constructor(path: string, private readonly now: () => number = Date.now) {
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    closeSync(openSync(path, 'a', 0o600));
-    chmodSync(path, 0o600);
-    this.db = new Database(path, { strict: true });
-    try {
-      this.db.exec('PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
-      const version = this.db.query<{ user_version: number }, []>('PRAGMA user_version').get()!.user_version;
-      if (version > 1) throw new Error('Device database is newer than this Whistle version');
-      if (version === 0) this.db.transaction(() => {
-        this.db.exec(`CREATE TABLE devices (
-          id TEXT PRIMARY KEY, name TEXT NOT NULL, credential_hash TEXT NOT NULL UNIQUE,
-          created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL
-        ); PRAGMA user_version=1;`);
-      })();
-    } catch (cause) { this.db.close(); throw cause; }
+    this.db = openPrivateDatabase(path, 'device', [
+      db => db.exec(`CREATE TABLE devices (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, credential_hash TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL
+      )`),
+    ]);
   }
   issue(name: string) {
     const credential = randomBytes(32).toString('base64url');

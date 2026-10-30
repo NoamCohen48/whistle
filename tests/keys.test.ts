@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { chord, inputKey, validateChord } from '../src/keys.ts';
-import { parseCommand } from '../src/protocol.ts';
+import { chord, inputKey, validateChord } from '../shared/keys.ts';
+import { parseCommand } from '../shared/protocol.ts';
 
 describe('general terminal chords', () => {
   test('combines modifiers in canonical order', () => {

@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
-import { adminRequest } from './credentials.ts';
-import { showPairing } from './pair.ts';
+import { adminRequest } from './host-client.ts';
+import { showPairing } from './pair-command.ts';
 import { installService, serviceAction, uninstallService } from './service.ts';
 import type { Device } from './devices.ts';
 import { standalone, versionDescription } from './build-info.ts';
@@ -48,7 +48,7 @@ export async function main(args = process.argv.slice(2)) {
       const paths = await uninstallService();
       console.log(`Whistle service removed. Preserved ${paths.configDir}, ${paths.stateDir} and ${paths.dataDir}.`); return;
     }
-    case 'serve': await import('./server.ts'); return;
+    case 'serve': await (await import('./server.ts')).startServer(); return;
     case 'pair': await showPairing(); return;
     case 'devices': {
       const { devices } = await (await adminRequest('/api/devices')).json() as { devices: Device[] };

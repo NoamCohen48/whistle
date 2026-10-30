@@ -1,5 +1,7 @@
 import { lstat, open, realpath } from 'node:fs/promises';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
+import { HttpError } from './http-error.ts';
+import { isInside } from './paths.ts';
 
 // Read-only review of a pane's working tree: what changed since the last commit. Nothing here
 // stages, commits, checks out or writes; paths come from Herdr's pane cwd, never the browser.
@@ -11,11 +13,9 @@ export interface FileChange {
 export interface Changes { root: string; branch?: string; files: FileChange[]; truncated: boolean }
 export interface FileDiff { diff: string; binary: boolean; truncated: boolean }
 
-export const MAX_FILES = 300;
-export const MAX_DIFF_BYTES = 256 * 1024;
+const MAX_FILES = 300;
+const MAX_DIFF_BYTES = 256 * 1024;
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
-
-export class ChangesError extends Error {}
 
 // No optional locks (never touches the index), no fsmonitor hook, no external diff or textconv
 // programs, no colour and no prompts.
@@ -27,27 +27,37 @@ async function git(cwd: string, args: string[], allowFailure = false) {
   const timer = setTimeout(() => child.kill(), 10_000);
   const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
   clearTimeout(timer);
-  if (code !== 0 && !allowFailure) throw new ChangesError(stderr.trim().split('\n')[0] || `git exited with ${code}`);
+  if (code !== 0 && !allowFailure) throw new HttpError(stderr.trim().split('\n')[0] || `git exited with ${code}`, 422);
   return { stdout, code };
 }
 
-async function repository(cwd: string) {
+async function topLevel(cwd: string) {
   const top = await git(cwd, ['rev-parse', '--show-toplevel'], true);
-  if (top.code !== 0) throw new ChangesError('This folder is not a Git repository.');
-  const head = await git(cwd, ['rev-parse', '--verify', '-q', 'HEAD'], true);
-  return { root: top.stdout.trim(), base: head.code === 0 ? 'HEAD' : EMPTY_TREE };
+  return top.code === 0 ? top.stdout.trim() : undefined;
 }
 
-// The repository root, or the folder itself outside Git: the boundary for reading files.
-export async function projectRoot(cwd: string) {
-  const top = await git(cwd, ['rev-parse', '--show-toplevel'], true);
-  return top.code === 0 ? top.stdout.trim() : cwd;
+// The repository a pane is in, and what its changes are compared with: the last commit, or
+// an empty tree before the first one.
+interface Repository { root: string; base: string }
+async function repository(cwd: string): Promise<Repository> {
+  const root = await topLevel(cwd);
+  if (!root) throw new HttpError('This folder is not a Git repository.', 422);
+  const head = await git(cwd, ['rev-parse', '--verify', '-q', 'HEAD'], true);
+  return { root, base: head.code === 0 ? 'HEAD' : EMPTY_TREE };
+}
+
+// The repository root, or the folder itself outside Git: the boundary for reading a pane's files.
+export async function fileBoundary(cwd: string) {
+  return await topLevel(cwd) ?? cwd;
 }
 
 const diffArgs = ['--no-ext-diff', '--no-textconv', '--no-color', '-M'];
 
 export async function changes(cwd: string): Promise<Changes> {
-  const { root, base } = await repository(cwd);
+  return listChanges(await repository(cwd));
+}
+
+async function listChanges({ root, base }: Repository): Promise<Changes> {
   const branch = (await git(root, ['branch', '--show-current'], true)).stdout.trim() || undefined;
   const files: FileChange[] = [];
   const status = (await git(root, ['diff', base, '--name-status', '-z', ...diffArgs])).stdout.split('\0');
@@ -85,7 +95,7 @@ async function readInside(root: string, path: string) {
   const full = join(root, path);
   try {
     const real = await realpath(full);
-    if (!(real + sep).startsWith(await realpath(root) + sep) || !(await lstat(full)).isFile()) return undefined;
+    if (!isInside(real, await realpath(root)) || !(await lstat(full)).isFile()) return undefined;
     const handle = await open(real, 'r');
     try {
       const buffer = Buffer.alloc(MAX_DIFF_BYTES + 1);
@@ -99,13 +109,14 @@ async function readInside(root: string, path: string) {
 // Only files that are in the current change list can be shown, so this never becomes a way
 // to read arbitrary files from the PC.
 export async function fileDiff(cwd: string, path: string): Promise<FileDiff> {
-  const listed = (await changes(cwd)).files.find(file => file.path === path);
-  if (!listed) throw new ChangesError('That file has no changes any more.');
+  const repo = await repository(cwd);
+  const { root, base } = repo;
+  const listed = (await listChanges(repo)).files.find(file => file.path === path);
+  if (!listed) throw new HttpError('That file has no changes any more.', 404);
   if (listed.binary) return { diff: '', binary: true, truncated: false };
-  const { root, base } = await repository(cwd);
   if (listed.status === 'untracked') {
     const content = await readInside(root, path);
-    if (!content) throw new ChangesError('That file can no longer be read.');
+    if (!content) throw new HttpError('That file can no longer be read.', 404);
     if (content.binary) return { diff: '', binary: true, truncated: false };
     const lines = content.text.replace(/\n$/, '').split('\n');
     return { diff: `@@ -0,0 +1,${lines.length} @@\n${lines.map(line => `+${line}`).join('\n')}\n`, binary: false, truncated: content.truncated };

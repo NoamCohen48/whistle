@@ -1,6 +1,8 @@
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { join } from 'node:path';
 import { HerdrError, rpc, snapshot } from './herdr.ts';
+import { HttpError } from './http-error.ts';
+import { hostPath } from './paths.ts';
 
 // Phone-initiated Herdr lifecycle actions. Every request is reduced to a fixed set of
 // validated fields: no commands, agent arguments or environment ever come from the browser.
@@ -30,9 +32,11 @@ function field(body: Record<string, unknown>, name: string, optional = false) {
   if (!trimmed || /[\x00-\x1f\x7f]/.test(trimmed)) throw new Error(`Invalid ${name}`);
   return trimmed;
 }
+// Herdr workspace, tab and pane IDs.
+export const isId = (value: string) => /^[A-Za-z0-9:_.-]{1,128}$/.test(value);
 function id(body: Record<string, unknown>, name: string) {
   const value = field(body, name);
-  if (!/^[A-Za-z0-9:_.-]{1,128}$/.test(value)) throw new Error(`Invalid ${name}`);
+  if (!isId(value)) throw new Error(`Invalid ${name}`);
   return value;
 }
 function label(body: Record<string, unknown>) {
@@ -51,13 +55,6 @@ function ref(body: Record<string, unknown>, name: string, optional = false) {
   if (value !== undefined && !validRef(value)) throw new Error(`Invalid ${name === 'base' ? 'base' : 'branch'} name`);
   return value;
 }
-export function hostPath(value: string, home = homedir()) {
-  if (value.length > 1024) throw new Error('Path is too long');
-  const expanded = value === '~' ? home : value.startsWith('~/') ? join(home, value.slice(2)) : value;
-  if (!isAbsolute(expanded)) throw new Error('Use an absolute path or ~/…');
-  return expanded;
-}
-
 export function parseAction(input: unknown, home = homedir()): Action {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid action');
   const body = input as Record<string, unknown>;
@@ -94,12 +91,18 @@ export function parseAction(input: unknown, home = homedir()): Action {
 
 async function workspace(workspaceId: string) {
   const found = (await snapshot()).workspaces.find(item => item.workspace_id === workspaceId);
-  if (!found) throw new Error('Workspace no longer exists');
+  if (!found) throw new HttpError('Workspace no longer exists', 404);
   return found;
 }
 const rootPane = (result: { root_pane?: { pane_id?: string } }) => result.root_pane?.pane_id;
+async function newTab(workspaceId: string) {
+  const paneId = rootPane(await rpc('tab.create', { workspace_id: workspaceId, focus: false }));
+  if (!paneId) throw new HttpError('Herdr did not return the new pane', 502);
+  return paneId;
+}
 
-// Herdr/git messages suggest CLI flags the phone deliberately cannot send.
+// Herdr/git messages suggest CLI flags the phone deliberately cannot send, so these refusals
+// get their own wording.
 const friendly: Record<string, string> = {
   dirty_worktree_requires_force: 'This worktree has uncommitted or untracked files. Commit or clean them on your PC first.',
   not_git_worktree: 'This workspace is not in a Git repository.',
@@ -107,17 +110,16 @@ const friendly: Record<string, string> = {
 export async function runAction(action: Action): Promise<ActionResult> {
   try { return await perform(action); }
   catch (error) {
-    if (error instanceof HerdrError && friendly[error.code]) throw new Error(friendly[error.code]);
+    if (error instanceof HerdrError && friendly[error.code]) throw new HttpError(friendly[error.code], 409);
     throw error;
   }
 }
 async function perform(action: Action): Promise<ActionResult> {
   switch (action.type) {
     case 'terminal':
-      return { paneId: rootPane(await rpc('tab.create', { workspace_id: action.workspaceId, focus: false })) };
+      return { paneId: await newTab(action.workspaceId) };
     case 'agent': {
-      const paneId = rootPane(await rpc('tab.create', { workspace_id: action.workspaceId, focus: false }));
-      if (!paneId) throw new Error('Herdr did not return the new pane');
+      const paneId = await newTab(action.workspaceId);
       try {
         await rpc('agent.start', { pane_id: paneId, kind: action.kind, name: action.kind, timeout_ms: AGENT_START_MS }, AGENT_START_MS + 5000);
         return { paneId };
@@ -135,11 +137,11 @@ async function perform(action: Action): Promise<ActionResult> {
     case 'worktree-open':
       return { paneId: rootPane(await rpc('worktree.open', { workspace_id: action.workspaceId, path: action.path, focus: false }, WORKTREE_MS)) };
     case 'close-pane':
-      if (!(await snapshot()).panes.some(pane => pane.pane_id === action.paneId)) throw new Error('Pane no longer exists');
+      if (!(await snapshot()).panes.some(pane => pane.pane_id === action.paneId)) throw new HttpError('Pane no longer exists', 404);
       await rpc('pane.close', { pane_id: action.paneId });
       return {};
     case 'remove-worktree':
-      if (!(await workspace(action.workspaceId)).worktree?.is_linked_worktree) throw new Error('Only linked worktrees can be removed');
+      if (!(await workspace(action.workspaceId)).worktree?.is_linked_worktree) throw new HttpError('Only linked worktrees can be removed', 409);
       await rpc('worktree.remove', { workspace_id: action.workspaceId, force: false }, WORKTREE_MS);
       return {};
     case 'rename-pane': // An empty name clears the label, so Herdr falls back to the terminal title.
