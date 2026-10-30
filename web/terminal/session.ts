@@ -326,7 +326,8 @@ export class TerminalSession {
     this.setViewTop(this.inputTop());
   }
   jumpToInput() { this.stopFling(); this.followInput = true; this.revealInput(); }
-  focusKeyboard() { this.jumpToInput(); this.terminal.focus(); }
+  // Blurring first makes Android raise the keyboard again when the terminal already has focus.
+  focusKeyboard() { this.jumpToInput(); this.terminal.textarea?.blur(); this.terminal.focus(); }
   scroll(direction: 'up' | 'down', pixels = 8 * 17) {
     this.followInput = false;
     const info = this.scrollInfo();

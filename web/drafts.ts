@@ -38,8 +38,7 @@ export function flushDrafts() {
 
 export function draftStatus(pane: string, text: string) {
   if (failed.has(pane)) return 'Kept in this page only; browser storage is unavailable';
-  if (pending.has(pane)) return 'Saving draft…';
-  return text ? 'Draft saved on this phone' : 'Draft stays local until you send';
+  return '';
 }
 
 function promptEntries(pane: string): { text: string; savedAt: number }[] {

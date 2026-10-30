@@ -115,7 +115,7 @@ function TerminalHistory({ engine, active }: { engine?: TerminalSession; active:
   </>;
 }
 
-function KeyPicker({ engine, state, open, maxHeight, onFont }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number; onFont: () => void }) {
+function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
   const customKey = useRef<HTMLInputElement>(null);
   const disabled = state.phase !== 'controlling';
   const sendKey = (key: string) => {
@@ -143,7 +143,6 @@ function KeyPicker({ engine, state, open, maxHeight, onFont }: { engine?: Termin
     </div>
     <details id="all-keys">
       <summary>All keys and chords</summary>
-      <button type="button" className="quiet" onClick={onFont}>Text size</button>
       <form id="custom-key-form" onSubmit={event => { event.preventDefault(); engine?.sendKey(customKey.current?.value || ''); }}>
         <label htmlFor="custom-key">Key or chord</label>
         <div className="key-entry"><input id="custom-key" ref={customKey} autoComplete="off" autoCapitalize="off"
@@ -161,10 +160,11 @@ function KeyPicker({ engine, state, open, maxHeight, onFont }: { engine?: Termin
   </div>;
 }
 
-export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner, onText }: {
+export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner, onText, fontOpen, onFontOpen }: {
   pane?: Pane; state: SessionState; onState: Dispatch<SetStateAction<SessionState>>;
   engine?: TerminalSession; onEngine: Dispatch<SetStateAction<TerminalSession | undefined>>;
   draft: string; onDraft: (value: string) => void; banner?: ReactNode; onText: (text: string) => void;
+  fontOpen: boolean; onFontOpen: (open: boolean) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -182,8 +182,6 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const [history, setHistory] = useState<string[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [restorePrompt, setRestorePrompt] = useState<string>();
-  const [fontOpen, setFontOpen] = useState(false);
-  const [showHelp, setShowHelp] = useState(() => !readPreference('compose-help-dismissed', false));
   // The draft last handed to Send. It stays editable; the button just stops looking unsent.
   const [sent, setSent] = useState('');
   useBackCloses(keysOpen, () => setKeysOpen(false));
@@ -201,7 +199,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
     else engine?.close();
   });
   useEffect(() => {
-    setCompose(false); setKeysOpen(false); setAttachError(''); setUndo(''); setRestorePrompt(undefined); setFontOpen(false); setHistoryOpen(false); setSent('');
+    setCompose(false); setKeysOpen(false); setAttachError(''); setUndo(''); setRestorePrompt(undefined); onFontOpen(false); setHistoryOpen(false); setSent('');
     setHistory(paneId ? readPrompts(paneId) : []); syncPane();
   }, [engine, paneId, terminalId]);
   // An upload can finish after the person switched panes or kept typing: it lands in the
@@ -261,30 +259,31 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const armed = modifierOrder.filter(modifier => state.modifiers.includes(modifier));
   return <section id="session" ref={section} hidden={!pane} aria-label="Terminal session" data-phase={state.phase}>
     <div className="terminal-frame">
-      <div id="terminal-viewport" ref={viewport}><div id="terminal" ref={host} /></div>
+      {/* While controlling, a tap on the terminal brings up the phone keyboard; a scroll swipe never clicks. */}
+      <div id="terminal-viewport" ref={viewport} onClick={() => {
+        if (!controlling) return;
+        setKeysOpen(false); engine?.focusKeyboard();
+      }}><div id="terminal" ref={host} /></div>
       <TerminalHistory key={`${paneId}:${terminalId}`} engine={engine} active={ready} />
       {banner}
     </div>
     <div className="dock" ref={dock}>
-      <div className="session-bar">
+      {/* While controlling, Release is in the header and the view options are in the pane menu. */}
+      <div className="session-bar" hidden={controlling}>
         <div className="session-state" role="status">
           <span id="connection">{phaseLabels[state.phase]}</span>
           <span id="notice">{notices[state.phase]}</span>
         </div>
-        <button type="button" id="sizing" className="quiet" hidden={!controlling} aria-label={state.fitWidth ? 'Width: fit' : 'Width: original'}
-          onClick={() => engine?.toggleWidth()}><Icon name="width" size={18} />{state.fitWidth ? 'Fit' : 'Full'}</button>
+        <button type="button" id="text-size" className="icon-button" aria-label="Text size" aria-haspopup="dialog"
+          onClick={() => onFontOpen(true)}><Icon name="font-size" /></button>
         <button type="button" id="terminal-text" className="icon-button" aria-label="Terminal text" aria-haspopup="dialog"
           disabled={!ready} onClick={() => engine && onText(engine.text())}><Icon name="text" /></button>
-        <button type="button" id="control" className={controlling ? 'release' : 'primary'} disabled={switching || !engine}
-          onClick={() => engine?.toggleControl()}>{controlling ? 'Release control' : 'Take control'}</button>
+        <button type="button" id="control" className="primary control-icon" aria-label="Take control" title="Take control"
+          disabled={switching || !engine} onClick={() => engine?.toggleControl()}><Icon name="hand" size={24} /></button>
       </div>
-      <div className="watch-tools" hidden={controlling}>
-        <button type="button" id="watch-compose" className="quiet" aria-pressed={compose} onClick={() => setCompose(value => !value)}><Icon name="compose" size={18} />Compose</button>
-        <button type="button" id="text-size" className="quiet" aria-haspopup="dialog" onClick={() => setFontOpen(true)}><Icon name="font-size" size={18} />Text size</button>
-      </div>
-      <div id="compose" hidden={!compose}>
-        <div className="compose-meta"><small role="status">{justSent ? 'Sent. The draft stays here until you clear it.' : saved}</small>
-          <button type="button" id="close-compose" className="icon-button" aria-label="Minimize compose" onClick={() => setCompose(false)}><Icon name="close" size={16} /></button></div>
+      <div id="compose" hidden={!compose || !controlling}>
+        {/* Compose closes from its toolbar button; this line appears only when the draft cannot be saved. */}
+        <div className="compose-meta" hidden={!saved}><small role="status">{saved}</small></div>
         <div className="composer">
           <textarea id="draft" ref={editor} rows={2} aria-label="Draft" spellCheck={false} autoCapitalize="off" value={draft}
             placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
@@ -315,9 +314,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
           </div>
         </div>
         {attachError ? <p id="attach-error" role="alert">{attachError}</p> : null}
-        {showHelp ? <div className="compose-help"><p>Paste only inserts text. Send also presses Enter.{controlling ? '' : ' Take control before sending.'}</p><button type="button" className="quiet" onClick={() => { setShowHelp(false); writePreference('compose-help-dismissed', true); }}>Got it</button></div> : null}
         {history.length ? <details className="prompt-history" open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)}><summary>Recent prompts<Icon name="chevron" size={16} /></summary>
-          <p>Saved when you tap Send, not proof of delivery. Choosing one never sends it.</p>
           <ul>{history.map((text, index) => <li key={index}><button type="button" className="quiet" onClick={() => {
             if (draft && draft !== text) setRestorePrompt(text); else { onDraft(text); setHistoryOpen(false); }
           }}>{text}</button></li>)}</ul>
@@ -329,11 +326,9 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
         <div id="armed-keys" role="status" hidden={!armed.length}>
           <span className="armed-chord">{armed.map(title).join(' + ')} + …</span>
         </div>
-        <KeyPicker engine={engine} state={state} open={keysOpen} maxHeight={keypadMax} onFont={() => setFontOpen(true)} />
+        <KeyPicker engine={engine} state={state} open={keysOpen} maxHeight={keypadMax} />
         <div className="keys main-keys">
           <div className="tool-group">
-            <button type="button" id="focus-keyboard" className="tool" aria-label="Keyboard" disabled={!controlling}
-              onClick={() => { setKeysOpen(false); engine?.focusKeyboard(); }}><Icon name="keyboard" /><span>Type</span></button>
             <button type="button" id="compose-toggle" className="tool" aria-pressed={compose} disabled={!controlling} onClick={() => {
               engine?.clearModifiers(); setKeysOpen(false); setCompose(value => !value);
             }}><Icon name="compose" /><span>Compose</span></button>
@@ -342,6 +337,8 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
               onClick={() => {
                 // Keys replaces the phone keyboard: the drawer and the IME together leave no room for the terminal.
                 if (!keysOpen && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                // Keys and Compose never stack: together they leave no room for the terminal.
+                if (!keysOpen) setCompose(false);
                 setKeysOpen(value => !value);
               }}><Icon name="keys" /><span>Keys</span></button>
           </div>
@@ -352,14 +349,13 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
             {compose
               ? <button type="button" id="submit" className="primary keycap send" aria-label="Paste + Enter" disabled={!controlling || !draft}
                 data-sent={justSent} onClick={submitDraft}><Icon name={justSent ? 'check' : 'send'} size={18} />{justSent ? 'Sent' : 'Send'}</button>
-              : <button type="button" data-key="Enter" className="primary keycap" disabled={!controlling}
-                onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey('Enter')}>Enter</button>}
+              : <button type="button" data-key="Enter" className="primary keycap" aria-label="Enter" title="Enter" disabled={!controlling}
+                onPointerDown={event => event.preventDefault()} onClick={() => engine?.sendKey('Enter')}><Icon name="enter" size={24} /></button>}
           </div>
         </div>
       </div>
     </div>
-    <Sheet id="text-size-sheet" open={fontOpen} title="Terminal text size" onClose={() => setFontOpen(false)}>
-      <p className="sheet-note">Saved on this browser. While watching, this changes only your view, not the PC’s terminal.</p>
+    <Sheet id="text-size-sheet" open={fontOpen} title="Terminal text size" onClose={() => onFontOpen(false)}>
       <div className="font-stepper"><button type="button" aria-label="Smaller terminal text" disabled={state.fontSize <= 10} onClick={() => engine?.setFontSize(state.fontSize - 1)}>A−</button>
         <output aria-live="polite">{state.fontSize}px</output><button type="button" aria-label="Larger terminal text" disabled={state.fontSize >= 22} onClick={() => engine?.setFontSize(state.fontSize + 1)}>A+</button>
         <button type="button" className="quiet" onClick={() => engine?.setFontSize(13)}>Reset</button></div>

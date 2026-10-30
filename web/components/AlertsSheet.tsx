@@ -35,13 +35,12 @@ export function AlertsSheet({ open, onClose, onTurnOff }: { open: boolean; onClo
   });
   return <Sheet id="alerts-sheet" open={open} title="Alerts" onClose={() => { if (!busy) onClose(); }}>
     {!settings ? error ? <p className="sheet-error" role="alert">{error}</p> : <p className="sheet-status" role="status">Loading…</p> : <div className="sheet-form">
-      <p className="sheet-note">You’re alerted when an agent needs you, unless you have its pane open.</p>
       <label className="check"><input type="checkbox" id="alert-finished" checked={settings.finished}
         onChange={event => save({ ...settings, finished: event.target.checked })} />
         <span>Also when an agent finishes</span></label>
       <label className="check"><input type="checkbox" id="alert-quiet" checked={Boolean(settings.quiet)}
         onChange={event => quiet(event.target.checked)} />
-        <span>Quiet hours<small>Alerts still arrive, without sound or vibration</small></span></label>
+        <span>Quiet hours</span></label>
       {settings.quiet ? <div className="quiet-times">
         {(['start', 'end'] as const).map(edge => <label className="field" key={edge}>{edge === 'start' ? 'From' : 'Until'}
           <input type="time" id={`quiet-${edge}`} required value={quietTimes[edge]} onChange={event => {

@@ -86,10 +86,10 @@ Browsers share cookies between ports on the same host name. If another HTTPS sit
 
 ## Using Whistle
 
-- **Your herd.** The home screen lists every Herdr pane, grouped by workspace, with linked worktrees nested under their project. Agents waiting on you come first. Filter by status, search, pin panes, or collapse workspaces.
+- **Your herd.** The home screen lists every Herdr pane, grouped by workspace, with linked worktrees nested under their project. Agents waiting on you come first. Filter by status, search, pin panes, or collapse workspaces. Long-press a pane for its menu: rename, close, or start another agent beside it.
 - **Watch first.** Opening a pane only watches it. It never resizes or focuses the terminal on your desktop.
-- **Take control** to type into the real terminal. Herdr fits the width to your phone while you control it and restores it when you release. **Keys** opens Esc, Tab, arrows, Ctrl, Alt and Shift, plus any chord, such as `ctrl+shift+p`.
-- **Compose** is a local editor for longer prompts, dictation and pictures. While you are in control, **Send** pastes the text and presses Enter. Each pane keeps its own draft, and nothing is sent until you tap Send.
+- Tap the hand button to take control, then tap the terminal to type into it; the slashed hand at the top releases it. Herdr fits the width to your phone while you control it (switch to the PC's width from the ⋯ menu) and restores it when you release. **Keys** opens Esc, Tab, arrows, Ctrl, Alt and Shift, plus any chord, such as `ctrl+shift+p`.
+- **Compose** (while you are in control) is a local editor for longer prompts, dictation and pictures. **Send** pastes the text and presses Enter. Each pane keeps its own draft, and nothing is sent until you tap Send.
 - **History.** Swipe through everything the pane printed, use the drag handle to jump, and tap **Latest** to return to the cursor. **Terminal text** lets you search and copy output.
 - **New** starts an agent, a terminal, a workspace in a folder on your PC, or a Git worktree. The ⋯ menu renames, closes, reviews the pane's Git changes, or removes a worktree.
 - **Alerts** (with HTTPS) tell you when an agent needs an answer and, if you like, when one finishes. Quiet hours are supported.

@@ -126,20 +126,20 @@ test('manual pairing reports errors and clears the token', async ({ page }) => {
 
 test('watch is read-only and control/release retains a tall PTY', async ({ page }) => {
   await open(page);
-  await expect(page.locator('#focus-keyboard')).toBeDisabled();
+  await expect(page.locator('#keyboard')).toBeHidden();
   await expect(page.locator('#compose-toggle')).toBeDisabled();
   expect((await messages(page)).filter(message => message.type === 'input')).toEqual([]);
   await page.locator('#control').click();
   await expect(page.locator('#connection')).toHaveText('Controlling');
   expect((await messages(page)).filter(message => message.type === 'connect' && message.control).at(-1)?.height).toBeGreaterThanOrEqual(64);
-  await page.locator('#control').click();
+  await page.locator('#release').click();
   await expect(page.locator('#connection')).toHaveText('Watching');
   expect((await messages(page)).filter(message => message.type === 'connect').at(-1)?.control).toBe(false);
 });
 
 test('live text, chords and compose stay in one ordered input lane', async ({ page }) => {
   await control(page);
-  await page.locator('#focus-keyboard').click();
+  await page.locator('#terminal-viewport').click();
   await page.keyboard.type('abc');
   await page.locator('.main-keys [data-key="Enter"]').click();
   // Keys replaces the phone keyboard rather than stacking under it. A bare click event keeps focus
@@ -155,7 +155,6 @@ test('live text, chords and compose stay in one ordered input lane', async ({ pa
   await page.locator('#custom-key').fill('ctrl+shift+k');
   await page.locator('#custom-key-form button').click();
   await page.locator('#compose-toggle').click();
-  await expect(page.locator('.compose-help')).toHaveText(/Send also presses Enter\.\s*Got it/);
   // Composing swaps the toolbar's Enter for Send (Paste + Enter): never two Enter actions at once.
   await expect(page.locator('.main-keys [data-key="Enter"]')).toHaveCount(0);
   await expect(page.locator('#submit')).toBeDisabled();
@@ -184,7 +183,7 @@ test('multiline paste reaches agents even when frames never report bracketed pas
     .toEqual([{ text: '\x1b[200~line one\rline two\x1b[201~', submit: true }]);
 
   // A plain terminal that never said it accepts pasted lines still refuses rather than running each line.
-  await page.locator('#control').click();
+  await page.locator('#release').click();
   await page.locator('#pane-actions').click();
   await page.locator('#menu-new-terminal').click();
   await page.locator('#create-submit').click();
@@ -225,7 +224,7 @@ test('switching agents preserves separate drafts and drops control/modifiers', a
 
 test('reconnection and reload are watch-only and never replay input', async ({ page }) => {
   await control(page);
-  await page.locator('#focus-keyboard').click();
+  await page.locator('#terminal-viewport').click();
   await page.keyboard.type('hello');
   await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').length).toBe(5);
   await page.request.post(fixtureUrl('/__test/disconnect'));
@@ -272,8 +271,8 @@ test('inventory updates keep xterm mounted and replacement panes disconnect', as
   expect(await terminal!.evaluate(node => node.isConnected)).toBe(true);
   expect((await messages(page)).filter(message => message.type === 'connect')).toHaveLength(2);
   await page.request.post(fixtureUrl('/__test/replace'));
-  await page.locator('#refresh').click();
-  await expect(page.locator('#session')).toBeHidden();
+  // Refresh is not offered while controlling; the inventory poll notices the replacement.
+  await expect(page.locator('#session')).toBeHidden({ timeout: 10_000 });
   await expect(page.locator('#error')).toContainText('closed or replaced');
   await expect(page.getByRole('heading', { name: 'Your herd' })).toBeVisible();
 });
@@ -592,7 +591,7 @@ test('taking and losing control vibrate differently', async ({ page, request }) 
   await page.locator('#control').click();
   await expect(page.locator('#connection')).toHaveText('Controlling');
   await expect.poll(vibrations).toEqual([18]);
-  await page.locator('#control').click();
+  await page.locator('#release').click();
   await expect(page.locator('#connection')).toHaveText('Watching');
   await expect.poll(vibrations).toEqual([18, [12, 70, 12]]);
   await page.locator('#control').click();
@@ -742,7 +741,7 @@ test('home-screen shortcuts open the last pane, the agent that needs you, or New
   await launch('control');
   await expect(page.locator('#heading')).toHaveText('First agent');
   await expect(page.locator('#connection')).toHaveText('Watching');
-  await expect(page.locator('#control')).toHaveText('Take control');
+  await expect(page.locator('#control')).toHaveAccessibleName('Take control');
   expect((await messages(page)).filter(message => message.type === 'connect').every(message => message.control === false)).toBe(true);
 });
 
@@ -788,6 +787,7 @@ test('drafts survive reload without input and are erased on pairing loss', async
   await expect(page.locator('#connection')).toHaveText('Controlling');
   await page.locator('#compose-toggle').click();
   await expect(page.locator('#draft')).toHaveValue('keep this /tmp/whistle-picture.png');
+  await page.locator('#release').click();
   await context.clearCookies();
   await page.locator('#refresh').click();
   await expect(page.locator('#pair')).toBeVisible();

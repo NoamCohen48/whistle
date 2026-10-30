@@ -20,7 +20,7 @@
   --radius: 10px;
   --radius-sm: 7px;
   --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "DejaVu Sans Mono", monospace;
-  --toolbar: 56px;
+  --toolbar: 44px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
   background: var(--bg);
@@ -54,6 +54,8 @@ button:disabled { opacity: .38; cursor: not-allowed }
 .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650 }
 @media (hover: hover) { .primary:not(:disabled):hover { background: #c9e2b3 } }
 .release { border-color: var(--live); color: var(--live); background: transparent; font-weight: 600 }
+.control-icon { padding: 0 }
+header .control-icon { width: 48px }
 .quiet { border-color: transparent; background: transparent; color: var(--muted) }
 .icon-button { width: 44px; padding: 0; border-color: transparent; background: transparent; color: var(--muted) }
 @media (hover: hover) { .icon-button:not(:disabled):hover { color: var(--text) } }
@@ -111,10 +113,8 @@ header .title code { color: var(--faint); font-size: 11.5px }
 
 /* Inventory */
 #panes { flex: 1; overflow: auto; padding: 24px 16px calc(32px + env(safe-area-inset-bottom)); overscroll-behavior: contain }
-.intro { margin: 0 4px 24px }
-.intro h1 { font-size: 30px; font-weight: 750; letter-spacing: -.025em; line-height: 1.15; margin-bottom: 6px }
-.workspace-group + .workspace-group { margin-top: 24px }
-.search { position: relative; display: flex; align-items: center; margin: -8px 0 24px }
+.workspace-group + .workspace-group { margin-top: 18px }
+.search { position: relative; display: flex; align-items: center; margin: 0 0 12px }
 .search > .icon { position: absolute; left: 14px; color: var(--faint); pointer-events: none }
 .search input { padding-left: 42px; padding-right: 44px; min-height: 46px; background: var(--surface); border-color: var(--line) }
 .search input::-webkit-search-cancel-button { display: none }
@@ -126,15 +126,16 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .pane-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface) }
 .pane-list li + li { border-top: 1px solid var(--line) }
 .pane {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  width: 100%; min-height: 84px; padding: 10px 12px 10px 16px; text-align: left;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px;
+  width: 100%; min-height: 56px; padding: 10px 6px 10px 14px; text-align: left;
   border: 0; border-radius: 0; background: transparent; font-size: 15px;
+  -webkit-touch-callout: none; user-select: none; /* a long press opens the pane menu, not text selection */
 }
 .pane-list li:first-child .pane { border-radius: var(--radius) var(--radius) 0 0 }
 .pane-list li:last-child .pane { border-radius: 0 0 var(--radius) var(--radius) }
 .pane:not(:disabled):active { transform: none; background: var(--surface-2) }
 .pane-copy { min-width: 0 }
-.pane-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin-top: 6px; font: 12px/1.5 var(--mono); color: var(--muted); overflow: hidden; white-space: normal; overflow-wrap: anywhere }
+.pane-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; margin-top: 4px; font: 12px/1.5 var(--mono); color: var(--muted); overflow: hidden; white-space: normal; overflow-wrap: anywhere }
 .pane-copy strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .pane-copy small { display: flex; gap: 6px; margin-top: 3px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden }
 .pane-copy small > span + span::before { content: '·'; margin-right: 6px; color: var(--faint) }
@@ -147,18 +148,20 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #needs-you .pane-list { border-color: color-mix(in srgb, var(--alert) 35%, var(--line)) }
 .pane-entry { display: flex; align-items: stretch; min-width: 0 }
 .pane-entry .pane { flex: 1; min-width: 0 }
-.pin-pane { align-self: center; flex: none; min-width: 52px; min-height: 36px; padding: 0 10px; margin-right: 8px; border-color: var(--line-strong); background: transparent; font-size: 13px; color: var(--text) }
-.pin-pane[aria-pressed=true] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent) }
+.pane > .dot { margin-top: 8px } /* Level with the pane name. */
+.pin-pane { align-self: flex-start; flex: none; margin: 4px 2px 0 0; color: var(--faint) }
+.pin-pane[aria-pressed=true] { color: var(--accent) }
+.pin-pane[aria-pressed=true] .icon path { fill: currentColor }
 .pane-copy .cwd { color: var(--muted) }
 .workspace-toggle { width: 100%; justify-content: flex-start; gap: 8px; min-height: 40px; padding: 0; font: inherit; text-align: left }
 .workspace-toggle > .workspace-name { min-width: 0 }
 [data-collapsed=true] > .worktree-group { display: none }
-.inventory-freshness { margin-top: 7px; font-size: 12px; color: var(--muted) }
-.herd-filters { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 16px; margin-top: -6px; scrollbar-width: thin }
+.inventory-freshness { margin: 0 4px 12px; font-size: 13px; color: var(--muted) }
+.herd-filters { display: flex; gap: 6px; overflow-x: auto; padding: 0 0 8px; scrollbar-width: thin }
 .herd-filters button { min-height: 40px; padding: 0 10px; font-size: 13px; background: transparent; border-color: var(--line) }
 .herd-filters button span { font-variant-numeric: tabular-nums; color: var(--muted) }
 .herd-filters [aria-pressed=true] { background: var(--surface-2); border-color: var(--accent) }
-.recent-panes { margin: 8px 0 20px }
+.recent-panes { margin: 0 0 6px }
 .recent-panes summary { display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: 13px; color: var(--muted); cursor: pointer; list-style: none }
 .recent-panes summary::-webkit-details-marker { display: none }
 .recent-panes summary .icon, .workspace-toggle .icon:last-child { flex: none; color: var(--faint); transition: transform .15s }
@@ -168,8 +171,7 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .empty p { max-width: 48ch; margin-bottom: 18px }
 #settings { font-size: 13px; padding-inline: 10px }
 .revoke { min-height: 40px; padding: 0 12px; border-color: color-mix(in srgb, var(--alert) 45%, transparent); background: transparent; color: var(--alert); font-size: 14px }
-.pane > .icon { color: var(--faint) }
-.worktree-group { position: relative; margin: 14px 0 0 14px; padding-left: 14px; border-left: 1px solid var(--line-strong) }
+.worktree-group { position: relative; margin: 12px 0 0 10px; padding-left: 12px; border-left: 1px solid var(--line-strong) }
 .worktree-group .workspace { margin-left: 0 }
 .worktree-group .workspace .icon { color: var(--faint) }
 .skeleton { display: grid; gap: 1px; border-radius: var(--radius); overflow: hidden }
@@ -197,7 +199,7 @@ header .title code { color: var(--faint); font-size: 11.5px }
 /* When space runs out only the draft gives way (it scrolls); state, control and the toolbar never leave the screen. */
 .dock > * { flex-shrink: 0 }
 .dock > #compose { flex-shrink: 1; min-height: 0 }
-.session-bar { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 4px 8px 4px 12px; border-top: 1px solid var(--line) }
+.session-bar { display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 4px 8px max(4px, env(safe-area-inset-bottom)) 12px; border-top: 1px solid var(--line) }
 .session-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px }
 #connection {
   --tone: var(--muted);
@@ -212,9 +214,8 @@ header .title code { color: var(--faint); font-size: 11.5px }
 [data-phase=disconnected] #connection { --tone: var(--alert) }
 [data-phase=connecting] #connection::before, [data-phase=requesting-control] #connection::before { animation: blink 1s ease-in-out infinite }
 @keyframes blink { 50% { opacity: .25 } }
-#control { min-width: 128px; transition: none }
+#control { width: 64px; transition: none }
 [data-phase=controlling] #notice { display: none }
-#sizing { padding: 0 10px; font-size: 14px }
 .session-bar > button { flex-shrink: 0 }
 
 .terminal-frame { position: relative; flex: 1; min-height: 48px; display: flex; flex-direction: column }
@@ -255,14 +256,8 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #paste:disabled { color: var(--muted) }
 
 /* Local tools stay available without terminal control. */
-.watch-tools { display: flex; justify-content: space-between; padding: 0 8px max(4px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line) }
-.watch-tools button { min-height: 40px; font-size: 13px }
-.compose-meta { display: flex; align-items: center; gap: 6px; min-height: 28px }
-.compose-meta small { flex: 1; min-width: 0; color: var(--muted); font-size: 11px; line-height: 1.4 }
-.compose-meta .icon-button { width: 36px; min-height: 32px }
-.compose-help { display: flex; align-items: center; gap: 8px; padding: 4px }
-.compose-help p, .prompt-history p { font-size: 12px; line-height: 1.45 }
-.compose-help button { min-height: 40px; padding: 0 8px; font-size: 12px }
+.compose-meta { padding: 0 4px 6px }
+.compose-meta small { color: var(--alert); font-size: 12px; line-height: 1.4 }
 .prompt-history summary { display: flex; align-items: center; gap: 4px; min-height: 40px; cursor: pointer; font-size: 12px; color: var(--muted); list-style: none }
 .prompt-history summary::-webkit-details-marker { display: none }
 .prompt-history summary .icon { color: var(--faint); transition: transform .15s }
@@ -292,14 +287,15 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #terminal-text-body mark[data-current] { background: var(--accent); color: var(--accent-ink) }
 
 /* Toolbar */
-#keyboard { padding: 2px 8px max(6px, env(safe-area-inset-bottom)) }
+/* Same height as the watching session bar, so the dock does not jump when control starts. */
+#keyboard { padding: 4px 8px max(4px, env(safe-area-inset-bottom)) }
 #compose:not([hidden]) + #keyboard { padding-top: 6px }
 .keys { display: flex; gap: 6px }
 .main-keys { align-items: stretch; gap: 8px }
-.tool-group { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px }
+.tool-group { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px }
 .tool {
-  flex-direction: column; gap: 3px; min-width: 0; height: var(--toolbar); padding: 0 2px;
-  border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; font-weight: 550;
+  gap: 8px; min-width: 0; height: var(--toolbar); padding: 0 2px;
+  border-color: transparent; background: transparent; color: var(--muted); font-size: 14px; font-weight: 550;
 }
 .tool span { max-width: 100%; overflow: hidden; text-overflow: ellipsis }
 .tool:not(:disabled):active { background: var(--surface-2) }
@@ -522,30 +518,23 @@ select {
 button.danger { background: var(--alert); border-color: var(--alert); color: #2a0f0a; font-weight: 650 }
 
 .short-viewport #notice { display: none }
-.short-viewport #control, .short-viewport #sizing { min-height: 38px }
-.short-viewport { --toolbar: 44px }
-.short-viewport .tool { gap: 1px; font-size: 11px }
-.short-viewport .tool .icon { width: 18px; height: 18px }
+.short-viewport #control { min-height: 38px }
+.short-viewport { --toolbar: 40px }
 .short-viewport #keyboard { padding-top: 0 }
 .short-viewport .compose-actions button { min-height: 36px }
 .short-viewport #draft { padding-top: 8px }
-.short-viewport .compose-help { display: none }
 .picture-error { padding: 16px; text-align: center }
 /* The device, not the viewport, decides: a small upright phone with the keyboard open has a
    wider-than-tall viewport, and must keep the portrait dock. session.ts sets .landscape. */
 .landscape.short-viewport #app { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) }
 .landscape.short-viewport header { grid-column: 1; max-width: 42vw; padding-left: max(6px, env(safe-area-inset-left)) }
 .landscape.short-viewport #agent-switcher { grid-column: 2; border-left: 1px solid var(--line) }
-.landscape.short-viewport .tool { flex-direction: row; gap: 8px; font-size: 13px }
 .landscape.short-viewport .dock { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line) }
 .landscape.short-viewport .session-bar { grid-row: 2; border-top: 0; padding-right: 4px }
 .landscape.short-viewport #compose { grid-column: 1 / -1; border-top: 0 }
-.landscape.short-viewport .watch-tools { grid-row: 2; grid-column: 2; border-top: 0; padding-top: 4px }
 .landscape.short-viewport #keyboard { grid-row: 2; grid-column: 2; padding-top: 4px }
 .landscape.short-viewport #panes, .landscape.short-viewport #session { grid-column: 1 / -1 }
 .landscape.short-viewport #panes { padding-top: 16px }
-.landscape.short-viewport .intro { margin-bottom: 14px }
-.landscape.short-viewport .intro h1 { font-size: 22px }
 /* Typing with the keyboard open: keep the terminal, drop the switcher until control is released. */
 :root:not(.landscape).short-viewport #app[data-phase=controlling] #agent-switcher { display: none }
 /* A small phone with the keyboard open: the ring already shows control, so the session bar and
@@ -555,7 +544,6 @@ button.danger { background: var(--alert); border-color: var(--alert); color: #2a
 :root:not(.landscape).tiny-viewport #compose { padding-top: 6px }
 
 @media (max-width: 380px) {
-  #control { min-width: 0; padding-inline: 10px }
   #notice { display: none }
   .keycap { min-width: 50px; padding-inline: 8px }
   .keycap.primary { min-width: 64px }
@@ -564,12 +552,10 @@ button.danger { background: var(--alert); border-color: var(--alert); color: #2a
 @media (min-width: 768px) {
   header { padding-inline: 14px }
   #panes { max-width: 760px; width: 100%; margin: 0 auto; padding-top: 40px }
-  .intro h1 { font-size: 36px }
   #terminal-viewport { padding-inline: 20px }
   .main-keys, #compose > * { max-width: 760px; margin-inline: auto }
   .session-bar { padding-inline: max(20px, calc((100% - 760px) / 2)) }
   #keypad { left: 50%; right: auto; width: min(760px, 100%); transform: translateX(-50%) }
-  .tool { flex-direction: row; gap: 8px; font-size: 14px }
   .pair { align-items: center; justify-content: center }
   .pair .brand, .pair form { width: min(100%, 440px) }
   .pair form { margin-top: 0 }

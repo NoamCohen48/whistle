@@ -40,6 +40,9 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [drafts, setDrafts] = useState<Record<string, string>>(readDrafts);
   const [createRequest, setCreateRequest] = useState<CreateRequest>();
   const [menuOpen, setMenuOpen] = useState(false);
+  // The pane a dashboard long press opened the menu for; undefined means the open pane's menu.
+  const [menuPaneId, setMenuPaneId] = useState<string>();
+  const [fontOpen, setFontOpen] = useState(false);
   const [changesFor, setChangesFor] = useState<string>();
   const [picture, setPicture] = useState<PictureRequest>();
   const [terminalText, setTerminalText] = useState<{ paneId: string; text: string }>();
@@ -242,6 +245,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     }
   };
   const destroy = async (action: Action) => {
+    if (menuPaneId) { await runAction(action); setMenuOpen(false); void refresh(); return; } // From the dashboard: no terminal is open.
     engine?.close(); // Release control before Herdr removes the pane.
     try { await runAction(action); }
     catch (cause) { if (selected) engine?.open(selected); throw cause; }
@@ -268,6 +272,9 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     {inventoryError && !error && !session.error ? <button type="button" className="quiet" disabled={refreshing} onClick={() => void refresh()}>Retry</button> : null}
     <button type="button" className="icon-button" aria-label="Dismiss" onClick={() => { clearError(); setInventoryError(''); }}><Icon name="close" size={18} /></button>
   </div>;
+  const controlling = Boolean(selected) && session.phase === 'controlling';
+  const menuPane = menuPaneId ? snapshot?.panes.find(pane => pane.pane_id === menuPaneId) : selected;
+  const showText = (text: string) => { if (selected) setTerminalText({ paneId: selected.pane_id, text }); };
   return <>
     <Pairing hidden={paired} loading={loading || refreshing} error={error || inventoryError} unavailable={!needsPairing && !loading} onPair={pair}
       onRetry={() => { setError(''); void refresh(); }} />
@@ -284,18 +291,22 @@ export function App({ startup }: { startup: Promise<Startup> }) {
           aria-pressed={alerts === 'on'} aria-label={alerts === 'on' ? 'Alerts on' : alerts === 'blocked' ? 'Alerts blocked' : 'Turn on alerts'}
           title={alerts === 'on' ? 'Alert settings' : 'Alert me when an agent needs me'} aria-haspopup={alerts === 'on' ? 'dialog' : undefined}
           onClick={() => { if (alerts === 'on') setAlertsOpen(true); else if (alerts === 'blocked') setSettingsOpen(true); else void toggleAlerts(); }}><Icon name={alerts === 'on' ? 'bell' : 'bell-off'} size={18} />Alerts</button> : null}
-        {!selected ? <button type="button" id="settings" className="quiet" onClick={() => setSettingsOpen(true)} aria-haspopup="dialog">Settings</button> : null}
-        {selected?.cwd ? <button type="button" id="review-changes" className="icon-button" aria-label="Review changes" aria-haspopup="dialog" onClick={() => setChangesFor(selected.pane_id)}><Icon name="diff" /></button> : null}
-        <button type="button" id="refresh" className="icon-button" aria-label="Refresh" aria-busy={refreshing} disabled={refreshing}
-          onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}><Icon name="refresh" /></button>
+        {!selected ? <button type="button" id="settings" className="icon-button" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)} aria-haspopup="dialog"><Icon name="settings" /></button> : null}
+        {controlling ? <button type="button" id="release" className="release control-icon" aria-label="Release control" title="Release control"
+          onClick={() => engine?.toggleControl()}><Icon name="hand-off" size={22} /></button> : null}
+        {selected?.cwd && !controlling ? <button type="button" id="review-changes" className="icon-button" aria-label="Review changes" aria-haspopup="dialog" onClick={() => setChangesFor(selected.pane_id)}><Icon name="diff" /></button> : null}
+        {/* Reconnecting would end control, so Refresh waits until control is released. */}
+        {controlling ? null : <button type="button" id="refresh" className="icon-button" aria-label="Refresh" aria-busy={refreshing} disabled={refreshing}
+          onClick={() => { clearError(); void refresh(); engine?.reconnect(); }}><Icon name="refresh" /></button>}
         {selected ? <button type="button" id="pane-actions" className="icon-button" aria-label="Pane actions"
-          aria-haspopup="dialog" onClick={() => setMenuOpen(true)}><Icon name="more" /></button> : null}
+          aria-haspopup="dialog" onClick={() => { setMenuPaneId(undefined); setMenuOpen(true); }}><Icon name="more" /></button> : null}
       </header>
       <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} />
-      <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select} banner={selected ? null : banner} recent={recent}
+      <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select}
+        onMenu={pane => { setMenuPaneId(pane.pane_id); setMenuOpen(true); }} banner={selected ? null : banner} recent={recent}
         lastUpdated={lastUpdated} stale={inventoryStale} refreshing={refreshing} onCreate={() => setCreateRequest({ kind: 'workspace' })} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
-        banner={selected ? banner : null} onText={text => { if (selected) setTerminalText({ paneId: selected.pane_id, text }); }}
+        banner={selected ? banner : null} onText={showText} fontOpen={fontOpen} onFontOpen={setFontOpen}
         draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) { saveDraft(draftKey, value); setDrafts(previous => ({ ...previous, [draftKey]: value })); } }} />
       {selected ? null : <button type="button" id="new" className="primary fab" aria-haspopup="dialog"
         onClick={() => setCreateRequest({ kind: 'agent', workspaceId: sessionStorage.getItem('whistle-workspace') || undefined })}>
@@ -305,9 +316,14 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       <AlertsSheet open={alertsOpen && alerts === 'on'} onClose={() => setAlertsOpen(false)}
         onTurnOff={async () => { const failure = await toggleAlerts(); if (failure) throw new Error(failure); setAlertsOpen(false); }} />
       <CreateSheet request={createRequest} snapshot={snapshot} onClose={() => setCreateRequest(undefined)} onCreated={created} />
-      <PaneMenu open={menuOpen} pane={selected} snapshot={snapshot} onClose={() => setMenuOpen(false)}
+      <PaneMenu open={menuOpen} pane={menuPane} snapshot={snapshot} onClose={() => setMenuOpen(false)}
         onNew={request => { setMenuOpen(false); setCreateRequest(request); }} onDone={destroy} onRename={rename}
-        onChanges={() => { setMenuOpen(false); setChangesFor(selected?.pane_id); }} />
+        onChanges={menuPaneId ? undefined : () => { setMenuOpen(false); setChangesFor(selected?.pane_id); }}
+        view={menuPaneId ? undefined : {
+          onTextSize: () => { setMenuOpen(false); setFontOpen(true); },
+          onTerminalText: () => { setMenuOpen(false); if (engine) showText(engine.text()); },
+          ...(controlling ? { fitWidth: session.fitWidth, onWidth: () => { setMenuOpen(false); engine?.toggleWidth(); } } : {}),
+        }} />
       <ChangesSheet pane={selected} open={Boolean(selected) && changesFor === selected?.pane_id} onClose={() => setChangesFor(undefined)}
         onPicture={setPicture} />
       <TerminalTextSheet text={terminalText?.paneId === selected?.pane_id ? terminalText?.text : undefined} paneId={selected?.pane_id}

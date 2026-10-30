@@ -13,24 +13,23 @@ async function open(page: Page) {
 const messages = async (page: Page) => (await page.request.get(`${fixture}/__test/messages`)).json() as Promise<{ type: string; control?: boolean; action?: string }[]>;
 test.beforeEach(async ({ request }) => { await request.post(`${fixture}/__test/reset`); });
 
-test('compose works locally in watch mode, can be minimized after release, and clear is undoable', async ({ page }) => {
+test('compose is only offered in control, keeps its draft across release, and clear is undoable', async ({ page }) => {
   await open(page);
-  await page.locator('#watch-compose').click();
-  await page.locator('#draft').fill('A draft written while watching');
-  await expect(page.locator('.compose-meta')).toContainText('Draft saved on this phone');
-  await expect(page.locator('#paste')).toBeDisabled();
+  await expect(page.locator('#compose-toggle')).toBeHidden();
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('A long prompt');
   await page.locator('#clear-draft').click();
   await expect(page.locator('#draft')).toHaveValue('');
   await page.locator('#undo-clear').click();
-  await expect(page.locator('#draft')).toHaveValue('A draft written while watching');
+  await expect(page.locator('#draft')).toHaveValue('A long prompt');
+  await page.locator('#release').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect(page.locator('#compose')).toBeHidden();
   await page.locator('#control').click();
   await expect(page.locator('#connection')).toHaveText('Controlling');
-  await page.locator('#control').click();
-  await expect(page.locator('#connection')).toHaveText('Watching');
-  await page.locator('#close-compose').click();
-  await expect(page.locator('#compose')).toBeHidden();
-  await page.locator('#watch-compose').click();
-  await expect(page.locator('#draft')).toHaveValue('A draft written while watching');
+  await expect(page.locator('#draft')).toHaveValue('A long prompt');
   expect((await messages(page)).filter(item => item.type === 'input')).toEqual([]);
 });
 
@@ -65,7 +64,7 @@ test('stale inventory is labelled and a successful retry clears the error', asyn
   await page.unroute('**/api/panes');
   await page.locator('#error').getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.locator('#error')).toBeHidden();
-  await expect(page.locator('.inventory-freshness')).toContainText('Updated');
+  await expect(page.locator('.inventory-freshness')).toHaveCount(0);
 });
 
 test('successful creation with a failed refresh cannot be submitted a second time', async ({ page }) => {
@@ -145,10 +144,10 @@ test('text sizing persists without controlling or resizing the PC, and text can 
 
 test('recent prompts restore locally and never auto-send', async ({ page }) => {
   await open(page);
-  await page.locator('#watch-compose').click();
-  await page.locator('#draft').fill('A reusable prompt');
   await page.locator('#control').click();
   await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('A reusable prompt');
   await page.locator('#submit').click();
   await expect(page.locator('#draft')).toHaveValue('A reusable prompt');
   await page.locator('#clear-draft').click();
@@ -194,11 +193,13 @@ test('draft storage denial keeps editing usable and reports memory-only saving h
     };
   });
   await open(page);
-  await page.locator('#watch-compose').click();
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
   await page.locator('#draft').fill('Keep this in memory');
   await expect(page.locator('.compose-meta')).toContainText('browser storage is unavailable');
-  await page.locator('#close-compose').click();
-  await page.locator('#watch-compose').click();
+  await page.locator('#compose-toggle').click();
+  await page.locator('#compose-toggle').click();
   await expect(page.locator('#draft')).toHaveValue('Keep this in memory');
   expect((await messages(page)).filter(item => item.type === 'input')).toEqual([]);
 });
@@ -216,4 +217,54 @@ test('empty inventory offers a project action and changes has a direct read-only
   await expect(page.getByRole('button', { name: 'Open a project', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open a project', exact: true }).click();
   await expect(page.locator('#new-folder')).toBeVisible();
+});
+
+test('while controlling, Release is in the header and view options are in the pane menu', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('#release')).toHaveCount(0);
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await expect(page.locator('.session-bar')).toBeHidden();
+  await expect(page.locator('#refresh')).toHaveCount(0);
+  await page.locator('#pane-actions').click();
+  await expect(page.locator('#menu-width')).toHaveText('Use the PC’s width');
+  await page.locator('#menu-text-size').click();
+  await expect(page.locator('#text-size-sheet')).toBeVisible();
+  await page.locator('#text-size-sheet .sheet-head button').click();
+  await page.locator('#release').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect(page.locator('.session-bar')).toBeVisible();
+  await page.locator('#pane-actions').click();
+  await expect(page.locator('#menu-width')).toHaveCount(0);
+});
+
+test('Compose and Keys are never open at the same time', async ({ page }) => {
+  await open(page);
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await expect(page.locator('#compose')).toBeVisible();
+  await page.locator('#more-keys').click();
+  await expect(page.locator('#more-keys')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#compose')).toBeHidden();
+  await page.locator('#compose-toggle').click();
+  await expect(page.locator('#compose')).toBeVisible();
+  await expect(page.locator('#more-keys')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('a long press on a dashboard row opens that pane’s menu without opening the pane', async ({ page }) => {
+  await pair(page);
+  const row = page.locator('#pane-list .pane', { hasText: 'First agent' });
+  await row.dispatchEvent('contextmenu');
+  await expect(page.locator('#pane-menu')).toBeVisible();
+  await expect(page.locator('#pane-menu h2')).toHaveText('First agent');
+  await expect(page.locator('#menu-terminal-text')).toHaveCount(0);
+  await expect(page.locator('#menu-changes')).toHaveCount(0);
+  await expect(page.locator('#session')).toBeHidden();
+  await page.locator('#menu-close-pane').click();
+  await page.locator('#confirm-destructive').click();
+  await expect(page.locator('#pane-menu')).toBeHidden();
+  await expect(page.locator('#pane-list .pane', { hasText: 'First agent' })).toHaveCount(0);
+  await expect(page.locator('#pane-list .pane', { hasText: 'Second agent' })).toHaveCount(1);
+  expect((await messages(page)).filter(item => item.type === 'connect')).toEqual([]);
 });
