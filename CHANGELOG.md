@@ -2,7 +2,7 @@
 
 Whistle follows [semantic versioning](https://semver.org). Each release's notes on GitHub come from its section here.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-30)
 
 The first public release.
 
