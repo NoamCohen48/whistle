@@ -4,9 +4,9 @@ import { hostConnection } from '../src/credentials.ts';
 import { rpc } from '../src/herdr.ts';
 
 // Explicit opt-in: this test types commands into a disposable shell pane.
-// Never point POC_TEST_PANE at a real agent or the calling pane.
-const paneId = process.env.POC_TEST_PANE;
-const base = process.env.POC_TEST_URL || 'http://127.0.0.1:8790';
+// Never point WHISTLE_TEST_PANE at a real agent or the calling pane.
+const paneId = process.env.WHISTLE_TEST_PANE;
+const base = process.env.WHISTLE_TEST_URL || 'http://127.0.0.1:8790';
 const integration = paneId ? test : test.skip;
 
 integration('real Herdr: auth, watch, ordered edits + Enter, resize, release, watch write rejection', async () => {

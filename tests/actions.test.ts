@@ -12,8 +12,8 @@ test('actions accept only fixed, validated fields', () => {
   expect(parseAction({ type: 'agent', workspaceId: 'w1', kind: 'claude', args: ['--dangerous'] }))
     .toEqual({ type: 'agent', workspaceId: 'w1', kind: 'claude' });
   expect(() => parseAction({ type: 'agent', workspaceId: 'w1', kind: 'claude; rm' })).toThrow('Invalid agent');
-  expect(parseAction({ type: 'workspace', cwd: '~/Work/app', label: ' App ', env: { A: '1' } }, '/home/u'))
-    .toEqual({ type: 'workspace', cwd: '/home/u/Work/app', label: 'App' });
+  expect(parseAction({ type: 'workspace', cwd: '~/projects/app', label: ' App ', env: { A: '1' } }, '/home/u'))
+    .toEqual({ type: 'workspace', cwd: '/home/u/projects/app', label: 'App' });
   expect(() => parseAction({ type: 'workspace', cwd: 'relative/dir' })).toThrow('absolute');
   expect(() => parseAction({ type: 'workspace', cwd: '/tmp\nx' })).toThrow('Invalid cwd');
   expect(parseAction({ type: 'worktree-create', workspaceId: 'w1', branch: 'feat/phone', base: '' }))

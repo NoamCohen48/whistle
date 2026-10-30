@@ -111,7 +111,8 @@ test.skipIf(process.platform !== 'linux' || process.getuid?.() === 0)('native in
     expect(await readFile(join(home, 'systemctl.log'), 'utf8')).toBe('--user show-environment\n--user daemon-reload\n--user enable whistle.service\n');
     const analyze = Bun.which('systemd-analyze');
     if (analyze) {
-      const parsed = await run(analyze, ['--user', 'verify', paths.unitFile], home, process.env);
+      const runtime = join(home, 'runtime'); await mkdir(runtime, { mode: 0o700 });
+      const parsed = await run(analyze, ['--user', 'verify', paths.unitFile], home, { ...process.env, XDG_RUNTIME_DIR: runtime });
       expect(parsed.stderr).toBe(''); expect(parsed.code).toBe(0);
     }
     await rm(join(home, 'download'), { recursive: true });

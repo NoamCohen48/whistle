@@ -26,12 +26,12 @@ test('install/start/restart/stop/uninstall use only systemctl --user and preserv
     await mkdir(join(home, 'bin'));
     await writeFile(join(home, 'bin/systemctl'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$WHISTLE_TEST_SYSTEMCTL_LOG"\n', { mode: 0o700 });
     await writeFile(join(home, 'bin/herdr'), '#!/bin/sh\nexit 1\n', { mode: 0o700 });
-    const installed = await cli(home, ['install', '--host', '100.68.36.94', '--port', '8799']);
+    const installed = await cli(home, ['install', '--host', '100.64.0.10', '--port', '8799']);
     expect(installed.stderr).toBe(''); expect(installed.code).toBe(0);
     expect(installed.stdout).toContain('no start/restart requested');
     const { paths } = installed;
     const config = JSON.parse(await readFile(paths.configFile, 'utf8'));
-    expect(config.host).toBe('100.68.36.94'); expect(config.port).toBe(8799);
+    expect(config.host).toBe('100.64.0.10'); expect(config.port).toBe(8799);
     expect(config.herdrBinary).toBe(join(home, 'bin/herdr'));
     expect((await stat(paths.configFile)).mode & 0o777).toBe(0o600);
     expect((await stat(paths.launcher)).mode & 0o777).toBe(0o700);

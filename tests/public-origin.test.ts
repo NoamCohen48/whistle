@@ -34,7 +34,7 @@ test('proxy origin is explicit canonical HTTPS and requires a loopback backend',
   }
   expect(parsePublicOrigin('')).toBeUndefined();
   const paths = resolvePaths({ HOME: '/tmp/whistle-origin-config-does-not-exist' });
-  expect(() => loadHostConfig(paths, { HOST: '100.68.36.94', WHISTLE_PUBLIC_ORIGIN: publicOrigin })).toThrow('loopback');
+  expect(() => loadHostConfig(paths, { HOST: '100.64.0.10', WHISTLE_PUBLIC_ORIGIN: publicOrigin })).toThrow('loopback');
 });
 
 test('configured proxy origin pins QR, Secure cookies and CSRF without trusting forwarding headers; PC CLI still works', async () => {
