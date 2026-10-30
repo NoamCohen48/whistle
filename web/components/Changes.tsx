@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Pane } from '../../src/herdr.ts';
+import type { Pane } from '../../shared/api.ts';
 import { loadChanges, loadFileDiff, type Changes, type FileDiff } from '../api.ts';
 import { Sheet } from './Actions.tsx';
 import { Icon } from './Icon.tsx';

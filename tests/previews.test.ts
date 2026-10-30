@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { panePreviews, previewLine } from '../src/previews.ts';
-import type { Pane } from '../src/herdr.ts';
+import type { Pane } from '../shared/api.ts';
 import { startHost, testToken } from './helpers/host.ts';
 
 test('preview uses the last nonempty plain line and limits Unicode characters', () => {

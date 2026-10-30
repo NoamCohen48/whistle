@@ -1,5 +1,6 @@
 import { stripVTControlCharacters } from 'node:util';
-import { rpc, type Pane } from './herdr.ts';
+import { rpc } from './herdr.ts';
+import type { Pane } from '../shared/api.ts';
 
 export function previewLine(text: string): string {
   const lines = stripVTControlCharacters(text).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').split(/[\r\n]/);

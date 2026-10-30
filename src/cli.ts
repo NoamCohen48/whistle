@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { adminRequest } from './host-client.ts';
 import { showPairing } from './pair-command.ts';
 import { installService, serviceAction, uninstallService } from './service.ts';
-import type { Device } from './devices.ts';
+import type { Device } from '../shared/api.ts';
 import { standalone, versionDescription } from './build-info.ts';
 
 const help = `Whistle — personal Herdr terminal remote

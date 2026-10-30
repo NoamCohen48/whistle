@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import type { Workspace } from '../src/herdr.ts';
+import type { Workspace } from '../shared/api.ts';
 import { groupWorkspaces } from '../web/workspaces.ts';
 
 const main: Workspace = { workspace_id: 'main', label: 'atlas', worktree: { repo_key: 'atlas/.git', is_linked_worktree: false } };

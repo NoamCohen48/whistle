@@ -1,4 +1,4 @@
-import type { Workspace } from '../src/herdr.ts';
+import type { Workspace } from '../shared/api.ts';
 
 export function groupWorkspaces(workspaces: Workspace[]) {
   const children = new Map<string, Workspace[]>();

@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { Pane, Snapshot, Workspace } from '../../src/herdr.ts';
+import type { Pane, Snapshot, Workspace } from '../../shared/api.ts';
 import { groupWorkspaces } from '../workspaces.ts';
 import { loadPreviews } from '../api.ts';
 import { Icon } from './Icon.tsx';

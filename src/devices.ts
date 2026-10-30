@@ -1,15 +1,9 @@
 import type { Database } from 'bun:sqlite';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { openPrivateDatabase } from './database.ts';
+import type { Device } from '../shared/api.ts';
 
 export const DEVICE_LIFETIME_MS = 90 * 86400_000;
-export interface Device {
-  id: string;
-  name: string;
-  createdAt: number;
-  expiresAt: number;
-  lastSeenAt: number;
-}
 const columns = 'id, name, created_at AS createdAt, expires_at AS expiresAt, last_seen_at AS lastSeenAt';
 const digest = (secret: string) => createHash('sha256').update(secret).digest('hex');
 

@@ -73,18 +73,24 @@ export class VapidKeys {
 
 // The subscription no longer exists; the device should be unsubscribed.
 export class PushGone extends Error {}
+// The push service could not be reached, or refused the message.
+export class PushFailed extends Error {}
 
 // Sends one encrypted message. A topic collapses undelivered messages that share it into the newest.
 export type PushSend = (subscription: PushSubscription, payload: unknown, topic: string) => Promise<void>;
 export function webPushSender(keys: VapidKeys, request: typeof fetch = fetch): PushSend {
   return async (subscription, payload, topic) => {
-    const response = await request(subscription.endpoint, {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10_000),
-      headers: { Authorization: keys.authorization(subscription.endpoint), 'Content-Encoding': 'aes128gcm',
-        'Content-Type': 'application/octet-stream', TTL: '3600', Urgency: 'high', Topic: topic },
-      body: encrypt(Buffer.from(JSON.stringify(payload)), subscription.keys),
-    });
+    const body = encrypt(Buffer.from(JSON.stringify(payload)), subscription.keys);
+    let response: Response;
+    try {
+      response = await request(subscription.endpoint, {
+        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: keys.authorization(subscription.endpoint), 'Content-Encoding': 'aes128gcm',
+          'Content-Type': 'application/octet-stream', TTL: '3600', Urgency: 'high', Topic: topic },
+        body,
+      });
+    } catch (cause) { throw new PushFailed((cause as Error).message, { cause }); }
     if (response.status === 404 || response.status === 410) throw new PushGone('Subscription expired');
-    if (!response.ok) throw new Error(`Push service answered ${response.status}`);
+    if (!response.ok) throw new PushFailed(`Push service answered ${response.status}`);
   };
 }

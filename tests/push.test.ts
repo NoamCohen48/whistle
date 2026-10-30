@@ -3,11 +3,11 @@ import { createDecipheriv, createECDH, createPublicKey, hkdfSync, verify } from 
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Snapshot } from '../src/herdr.ts';
+import type { Snapshot } from '../shared/api.ts';
 import { startHost, testToken } from './helpers/host.ts';
 import { AgentWatcher, alertSender, isQuiet, parseSettings, type Alert } from '../src/alerts.ts';
 import { PushStore } from '../src/push-store.ts';
-import { PushGone, VapidKeys, encrypt, parseSubscription, webPushSender } from '../src/webpush.ts';
+import { PushFailed, PushGone, VapidKeys, encrypt, parseSubscription, webPushSender } from '../src/webpush.ts';
 
 const unb64 = (value: string) => Buffer.from(value.replace(/\s+/g, ''), 'base64url');
 
@@ -80,7 +80,9 @@ test('sender signs VAPID, encrypts for the receiver and reports expired subscrip
     status = 410;
     await expect(send('device-1', alert)).rejects.toBeInstanceOf(PushGone);
     status = 500;
-    await expect(send('device-1', alert)).rejects.toThrow('500');
+    await expect(send('device-1', alert)).rejects.toBeInstanceOf(PushFailed);
+    const offline = alertSender(deviceId => store.get(deviceId), webPushSender(keys, (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch));
+    await expect(offline('device-1', alert)).rejects.toBeInstanceOf(PushFailed);
     await expect(send('device-2', alert)).rejects.toBeInstanceOf(PushGone);
     store.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -142,6 +144,9 @@ test('push API: paired devices only, same-origin writes, and revocation drops th
       host!.request('/api/push/settings', { method: 'PUT', headers: { Cookie: phone, ...extra }, body: JSON.stringify(body) });
     const quiet = { finished: false, quiet: { start: '22:00', end: '07:00', timeZone: 'Europe/Berlin' } };
     expect((await settings(quiet)).status).toBe(409); // Not subscribed yet.
+    const testAlert = await host.request('/api/push/test', { method: 'POST', headers: { Cookie: phone } });
+    expect(testAlert.status).toBe(409);
+    expect(await testAlert.text()).toBe('Turn on alerts first');
     expect((await put(subscription)).status).toBe(200);
     expect((await settings(quiet, { Origin: 'https://evil.invalid' })).status).toBe(403);
     expect((await settings({ finished: 'no' })).status).toBe(400);

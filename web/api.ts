@@ -1,7 +1,4 @@
-import type { Action, ActionResult, WorktreeChoice } from '../src/actions.ts';
-import type { Changes, FileDiff } from '../src/changes.ts';
-import type { FolderList } from '../src/folders.ts';
-import type { Snapshot } from '../src/herdr.ts';
+import type { Action, ActionResult, Changes, FileDiff, FolderList, Snapshot, WorktreeChoice } from '../shared/api.ts';
 import { PairingRequired, request } from './request.ts';
 export { PairingRequired, errorMessage } from './request.ts';
 

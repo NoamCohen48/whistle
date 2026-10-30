@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
-import { parseSettings, type AlertSettings } from './alerts.ts';
+import { parseSettings } from './alerts.ts';
+import type { AlertSettings } from '../shared/api.ts';
 import { openPrivateDatabase } from './database.ts';
 import type { PushSubscription } from './webpush.ts';
 

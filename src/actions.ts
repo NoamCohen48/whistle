@@ -1,24 +1,13 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { HerdrError, rpc, snapshot } from './herdr.ts';
+import { findPane, HerdrError, rpc, snapshot } from './herdr.ts';
 import { HttpError } from './http-error.ts';
 import { hostPath } from './paths.ts';
+import type { Action, ActionResult, WorktreeChoice } from '../shared/api.ts';
 
 // Phone-initiated Herdr lifecycle actions. Every request is reduced to a fixed set of
 // validated fields: no commands, agent arguments or environment ever come from the browser.
 // New panes are created without desktop focus; worktree removal is never forced.
-export type Action =
-  | { type: 'terminal'; workspaceId: string }
-  | { type: 'agent'; workspaceId: string; kind: string }
-  | { type: 'workspace'; cwd: string; label?: string }
-  | { type: 'worktree-create'; workspaceId: string; branch: string; base?: string }
-  | { type: 'worktree-open'; workspaceId: string; path: string }
-  | { type: 'close-pane'; paneId: string }
-  | { type: 'remove-worktree'; workspaceId: string }
-  | { type: 'rename-pane'; paneId: string; label?: string }
-  | { type: 'rename-workspace'; workspaceId: string; label: string };
-export interface ActionResult { paneId?: string; warning?: string }
-
 const AGENT_START_MS = 30_000;
 const WORKTREE_MS = 60_000;
 
@@ -94,23 +83,26 @@ async function workspace(workspaceId: string) {
   if (!found) throw new HttpError('Workspace no longer exists', 404);
   return found;
 }
-const rootPane = (result: { root_pane?: { pane_id?: string } }) => result.root_pane?.pane_id;
-async function newTab(workspaceId: string) {
-  const paneId = rootPane(await rpc('tab.create', { workspace_id: workspaceId, focus: false }));
+// Creates something that opens a pane, and returns that pane.
+async function openPane(method: string, params: Record<string, unknown>, timeoutMs?: number) {
+  const result = await rpc<{ root_pane?: { pane_id?: string } }>(method, { ...params, focus: false }, timeoutMs);
+  const paneId = result.root_pane?.pane_id;
   if (!paneId) throw new HttpError('Herdr did not return the new pane', 502);
   return paneId;
 }
+const newTab = (workspaceId: string) => openPane('tab.create', { workspace_id: workspaceId });
 
 // Herdr/git messages suggest CLI flags the phone deliberately cannot send, so these refusals
 // get their own wording.
-const friendly: Record<string, string> = {
-  dirty_worktree_requires_force: 'This worktree has uncommitted or untracked files. Commit or clean them on your PC first.',
-  not_git_worktree: 'This workspace is not in a Git repository.',
+const friendly: Record<string, [message: string, status: number]> = {
+  dirty_worktree_requires_force: ['This worktree has uncommitted or untracked files. Commit or clean them on your PC first.', 409],
+  not_git_worktree: ['This workspace is not in a Git repository.', 422],
 };
 export async function runAction(action: Action): Promise<ActionResult> {
   try { return await perform(action); }
   catch (error) {
-    if (error instanceof HerdrError && friendly[error.code]) throw new HttpError(friendly[error.code], 409);
+    const refusal = error instanceof HerdrError && friendly[error.code];
+    if (refusal) throw new HttpError(...refusal);
     throw error;
   }
 }
@@ -129,15 +121,13 @@ async function perform(action: Action): Promise<ActionResult> {
       }
     }
     case 'workspace':
-      return { paneId: rootPane(await rpc('workspace.create', { cwd: action.cwd, label: action.label ?? null, focus: false })) };
+      return { paneId: await openPane('workspace.create', { cwd: action.cwd, label: action.label ?? null }) };
     case 'worktree-create':
-      return { paneId: rootPane(await rpc('worktree.create', {
-        workspace_id: action.workspaceId, branch: action.branch, base: action.base ?? null, focus: false,
-      }, WORKTREE_MS)) };
+      return { paneId: await openPane('worktree.create', { workspace_id: action.workspaceId, branch: action.branch, base: action.base ?? null }, WORKTREE_MS) };
     case 'worktree-open':
-      return { paneId: rootPane(await rpc('worktree.open', { workspace_id: action.workspaceId, path: action.path, focus: false }, WORKTREE_MS)) };
+      return { paneId: await openPane('worktree.open', { workspace_id: action.workspaceId, path: action.path }, WORKTREE_MS) };
     case 'close-pane':
-      if (!(await snapshot()).panes.some(pane => pane.pane_id === action.paneId)) throw new HttpError('Pane no longer exists', 404);
+      await findPane(action.paneId);
       await rpc('pane.close', { pane_id: action.paneId });
       return {};
     case 'remove-worktree':
@@ -166,7 +156,6 @@ function searchPath() {
   const home = homedir();
   return [process.env.PATH, join(home, '.local', 'bin'), join(home, '.bun', 'bin')].filter(Boolean).join(':');
 }
-export interface WorktreeChoice { path: string; label: string; branch?: string; openPaneId?: string }
 export async function worktrees(workspaceId: string): Promise<WorktreeChoice[]> {
   const [state, result] = await Promise.all([snapshot(), rpc('worktree.list', { workspace_id: workspaceId }, WORKTREE_MS)]);
   return (result.worktrees as { path: string; label: string; branch?: string | null; is_bare: boolean; is_prunable: boolean;
