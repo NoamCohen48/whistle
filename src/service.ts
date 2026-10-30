@@ -13,6 +13,9 @@ export function unitQuote(value: string, command = false) {
   if (command) escaped = escaped.replace(/\$/g, '$$$$');
   return `"${escaped}"`;
 }
+// A distribution package owns /usr/bin/whistle and replaces it on upgrade, so the
+// launcher runs it in place and `whistle restart` picks the upgrade up.
+export const packagedExecutable = (path: string) => /^\/(?:usr|opt)\//.test(path);
 const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
 // systemd forbids '$' in its executable token, even escaped. Pass the managed
 // launcher as a literal shell argument; its exec replaces the shell in-place.
@@ -78,7 +81,7 @@ export async function installService(options: { host?: string; port?: string; he
   }
   await access(config.herdrBinary, constants.X_OK);
   await systemctl(['show-environment']); // Check the user bus before changing files; never print its values.
-  const executable = standalone ? await installExecutable(process.execPath, paths.dataDir) : process.execPath;
+  const executable = standalone && !packagedExecutable(process.execPath) ? await installExecutable(process.execPath, paths.dataDir) : process.execPath;
   await atomicWrite(paths.configFile, JSON.stringify(config, null, 2) + '\n');
   await atomicWrite(paths.unitFile, serviceUnit(paths));
   const command = standalone ? [executable] : [executable, join(projectRoot, 'src/cli.ts')];
