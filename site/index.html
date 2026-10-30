@@ -318,6 +318,48 @@
             <a href="https://github.com/__WHISTLE_REPOSITORY__/releases">Older versions</a>
             <a href="https://github.com/__WHISTLE_REPOSITORY__">Source code</a>
           </p>
+          <div class="download-guide" aria-labelledby="guide-heading">
+            <h3 id="guide-heading">How to download</h3>
+            <div class="guide-grid">
+              <div class="guide-choose">
+                <h4>Which processor do I have?</h4>
+                <p>Run <code>uname -m</code> on the PC. <code>x86_64</code> means x86-64, the usual choice for desktops and laptops. <code>aarch64</code> means ARM64, as on a Raspberry Pi or an ARM laptop. Pick the matching one with the switch above, and every file name and command on this page follows it.</p>
+                <h4>Which file should I pick?</h4>
+                <dl class="file-kinds">
+                  <div><dt>One command</dt><dd>The easiest. It picks your processor, checks the download and starts Whistle for you. It never asks for root.</dd></div>
+                  <div><dt>A package</dt><dd>For Debian, Ubuntu, Fedora, openSUSE and Arch. Your package manager knows about Whistle and can remove it cleanly.</dd></div>
+                  <div><dt>The single file</dt><dd>The raw program, nothing wrapped around it. It works on any Linux with systemd and needs no root at all.</dd></div>
+                  <div><dt>The archive</dt><dd>The same program, with the README and license, packed as a <code>.tar.gz</code>.</dd></div>
+                </dl>
+              </div>
+              <div class="guide-binary">
+                <h4>Install the single file</h4>
+                <ol class="guide-steps">
+                  <li>
+                    <p>Download it, and the checksums from the same release.</p>
+                    <pre class="command"><code data-command="bin" data-template="curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/{file}
+curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/SHA256SUMS">curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/whistle-linux-x64
+curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/SHA256SUMS</code></pre>
+                  </li>
+                  <li>
+                    <p>Check that the file is intact. It should print <code>OK</code>.</p>
+                    <pre class="command"><code>sha256sum --check --ignore-missing SHA256SUMS</code></pre>
+                  </li>
+                  <li>
+                    <p>Make it runnable and install it. Whistle copies itself into <code>~/.local/share/whistle</code>, adds a <code>whistle</code> command to <code>~/.local/bin</code> and starts on your Tailscale address. You can delete the download afterwards.</p>
+                    <pre class="command"><code data-command="bin" data-template="chmod +x {file}
+./{file} install --host &quot;$(tailscale ip -4)&quot; --now">chmod +x whistle-linux-x64
+./whistle-linux-x64 install --host "$(tailscale ip -4)" --now</code></pre>
+                  </li>
+                </ol>
+                <p class="guide-note">With the archive, unpack it first and run the program inside the same way:</p>
+                <pre class="command"><code data-command="target" data-template="tar -xzf whistle-{file}.tar.gz
+./whistle-__WHISTLE_VERSION__-{file}/whistle install --host &quot;$(tailscale ip -4)&quot; --now">tar -xzf whistle-linux-x64.tar.gz
+./whistle-__WHISTLE_VERSION__-linux-x64/whistle install --host "$(tailscale ip -4)" --now</code></pre>
+                <p class="guide-note">To upgrade, download the new file and run the same install command again. Paired phones stay paired.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -68,6 +68,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(download.getByRole('link', { name: 'Download as a single file' })).toHaveAttribute('href', /\/whistle-linux-arm64$/);
     await expect(download.getByText('sudo pacman -U ./whistle-aarch64.pkg.tar.zst')).toBeVisible();
     await expect(download.getByText(/releases\/latest\/download\/install\.sh \| sh$/)).toBeVisible();
+    const guide = download.locator('.download-guide');
+    await expect(guide.getByText(/^chmod \+x whistle-linux-arm64\n\.\/whistle-linux-arm64 install --host/)).toBeVisible();
+    await expect(guide.getByText(/^curl -fLO https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/latest\/download\/whistle-linux-arm64\n/)).toBeVisible();
+    await expect(guide.getByText(/^tar -xzf whistle-linux-arm64\.tar\.gz\n\.\/whistle-\d+\.\d+\.\d+-linux-arm64\/whistle install/)).toBeVisible();
     expect(await download.innerHTML()).not.toContain('__WHISTLE');
 
     await page.getByRole('heading', { name: 'Set it up on your computer' }).scrollIntoViewIfNeeded();
