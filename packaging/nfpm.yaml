@@ -1,0 +1,50 @@
+# Debian, RPM and Arch packages from one standalone executable.
+# scripts/release.ts sets VERSION and ARCH (amd64 or arm64) and stages the binary.
+name: whistle
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: 1
+section: utils
+priority: optional
+maintainer: Noam Cohen <92931230+NoamCohen48@users.noreply.github.com>
+description: |-
+  Phone remote for the coding agents you run in Herdr.
+  Whistle runs on your PC and serves a small web app to your paired phone,
+  over your private network. Watch any Herdr pane, take control to type into
+  the real terminal, get alerts when an agent needs you, and start new work.
+vendor: Whistle
+homepage: https://github.com/NoamCohen48/whistle
+license: MIT
+
+# Herdr is not packaged by every distribution, so it is recommended, not required.
+recommends:
+  - herdr
+  - tailscale
+suggests:
+  - git
+
+contents:
+  - src: ./.runtime/nfpm/whistle
+    dst: /usr/bin/whistle
+    file_info:
+      mode: 0755
+  - src: ./LICENSE
+    dst: /usr/share/licenses/whistle/LICENSE
+    file_info:
+      mode: 0644
+  - src: ./README.md
+    dst: /usr/share/doc/whistle/README.md
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: ./packaging/postinstall.sh
+
+overrides:
+  archlinux:
+    depends: []
+
+archlinux:
+  packager: Noam Cohen <92931230+NoamCohen48@users.noreply.github.com>
