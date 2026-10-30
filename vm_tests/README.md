@@ -100,9 +100,3 @@ Everything generated is private and Git-ignored under `.runtime/vm-tests/`:
 - `report.json`: cases from the latest successful invocation (a single-case run contains one case).
 
 Success removes the stopped guest's overlay and keys unless `--keep` is supplied. Failure shuts down the guest and retains diagnostics for investigation; it does not leave a VM running. The runner holds an exclusive lock to prevent concurrent matrices. Treat retained guest disks/keys as disposable test credentials: do not upload them. Remove stopped run directories after debugging; remove cached images only when no runner is active.
-
-## Recorded baseline
-
-The HTTPS/browser matrix passed **17 scenarios on each of Debian/nftables, Ubuntu/UFW and Fedora/firewalld (51 results)** in one serial `--all --https --browser` run. All 26 fast harness tests and project Pyright checks pass. Tested clean native build: `033b1c1`, SHA-256 `72e48b09cd44b916dc9a0734daef3358d44eb219052011b5726731ffbfc0183f`. This includes real native PWA installability, Secure cookies, WSS, restart/login/reboot and no-storage/offline checks behind each guest firewall. All guests shut down; production routing/daemon/authorization remained unchanged.
-
-On 2026-10-16, all **14 scenarios passed on each of the three OS/firewall combinations** (42 integration scenario results), with **22 fast harness tests** and clean project Pyright checks. Native executable: revision `b374b65`, SHA-256 `69ba2641fbed6ad798ca3a85c057b0ee16731ffc8f706e206d0774be8ecf1921`. Guests were shut down; the existing host daemon and networking were not changed.

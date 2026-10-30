@@ -3,10 +3,9 @@
 ## Confirmed scope
 
 - Web/PWA first, Android-first with iPhone support in scope.
-- First production release is the operator's personal daily driver.
 - Terminal-first control of existing Herdr processes, not a replacement harness.
-- Minimal functional UI; a separate UI/UX agent owns visual refinement.
-- Existing Tailscale is infrastructure. Do not silently change firewall rules; the operator explicitly prefers temporary exceptions, not permanent ones.
+- Minimal, functional UI.
+- The user's private network (such as Tailscale) is infrastructure. Whistle never changes firewall rules or network settings.
 
 ## Accepted: standalone PC companion service
 
@@ -27,9 +26,9 @@ Stopping, restarting, updating, or uninstalling the Whistle service must not sto
 
 ### Linux lifecycle
 
-Use a systemd user service, running as the operator rather than root. Start after login and restart on crashes. Do not silently enable user lingering/running after logout. Do not install a service or change system settings until implementing the agreed lifecycle explicitly.
+Use a systemd user service, running as the user rather than root. Start after login and restart on crashes. Do not silently enable user lingering/running after logout.
 
-The companion CLI and standalone native packaging are implemented (installation remains explicit; see [host lifecycle](host.md) and [packaging](packaging.md)):
+The companion CLI and standalone native packaging are implemented; installation is always explicit. See [host lifecycle](host.md) and [packaging](packaging.md):
 
 ```text
 whistle install
@@ -48,9 +47,9 @@ The service should discover multiple running Herdr sessions rather than depend p
 
 ## Accepted frontend stack
 
-React + Vite + TypeScript for application UI, with xterm.js in a dedicated imperative terminal controller outside React's frame-rendering loop. This replaces the vanilla PoC frontend; there are not two maintained frontends.
+React + Vite + TypeScript for application UI, with xterm.js in a dedicated imperative terminal controller outside React's frame-rendering loop.
 
-The migration is implemented. See [frontend boundaries and checks](frontend.md). Existing styling is retained deliberately for a later UI/UX pass.
+See [frontend boundaries and checks](frontend.md).
 
 ## Host direction and remaining proposals
 
@@ -58,7 +57,7 @@ The migration is implemented. See [frontend boundaries and checks](frontend.md).
 - SQLite is implemented for durable, revocable device pairings with hashed credentials. No Herdr transcripts are duplicated; host settings live in an owner-only config JSON outside the checkout.
 - HTTP for setup/settings and a versioned WebSocket protocol for terminal/control traffic.
 - Shared protocol schemas/types at browser/host boundaries.
-- Keep the existing CSS variables and baseline CSS for now. A CSS framework or component library is not selected; that can be decided during the UI/UX pass.
+- Plain CSS with variables; no CSS framework or component library.
 
 No need for Next.js/SSR, native mobile packaging, cloud relay infrastructure, a Rust rewrite, or a multi-multiplexer plugin system in the initial release.
 
@@ -75,8 +74,8 @@ No need for Next.js/SSR, native mobile packaging, cloud relay infrastructure, a 
 
 ## Next architecture questions
 
-- Broader binary distribution: target matrix, trusted release delivery, release garbage collection and future schema-compatible rollback policy.
+- Release garbage collection for `~/.local/share/whistle/releases/`, and a schema-compatible rollback policy.
 - Multi-session discovery and stable session-scoped identity.
 - Control lease revocation guarantees across the Herdr adapter.
 - Live inventory subscriptions, reconnection and resource bounds.
-- Physical-phone and actual logout/login startup validation. The first memory-only-to-durable cutover is complete; see [deployment](deployment.md).
+- More physical-phone validation: Android keyboards, lock/unlock and network handoff.
