@@ -91,10 +91,11 @@ test('successful creation with a failed refresh cannot be submitted a second tim
 });
 
 test('silent streams reconnect watch-only without replaying input', async ({ page }) => {
+  // Installed before the app loads, so its heartbeat runs on the test clock rather than a real 5 s timer.
+  await page.clock.install();
   await open(page);
   await page.locator('#control').click();
   await expect(page.locator('#connection')).toHaveText('Controlling');
-  await page.clock.install();
   await page.request.post(`${fixture}/__test/silent`);
   await page.clock.runFor(31_000);
   await expect(page.locator('#connection')).toHaveText('Watching');
