@@ -212,13 +212,16 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
     const forPane = paneId;
     setAttaching(true); setAttachError('');
     try {
+      // One unreadable picture is reported, but never drops the others picked with it.
       for (const file of pictures) {
-        const path = await attachPicture(file);
+        let path: string;
+        try { path = await attachPicture(file); }
+        catch (error) { if (latest.current.paneId === forPane) setAttachError((error as Error).message); continue; }
         if (latest.current.paneId !== forPane) return;
-        onDraft(withPath(latest.current.draft, path));
+        // Record the new draft at once: the next upload may finish before React re-renders.
+        const next = withPath(latest.current.draft, path);
+        latest.current.draft = next; onDraft(next);
       }
-    } catch (error) {
-      if (latest.current.paneId === forPane) setAttachError((error as Error).message);
     } finally { setAttaching(false); }
   };
   useEffect(() => {

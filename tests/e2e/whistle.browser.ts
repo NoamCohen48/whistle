@@ -663,6 +663,42 @@ test('pictures upload into the draft as paths and are only sent with it', async 
   expect((await messages(page)).filter(upload)).toHaveLength(2);
 });
 
+test('several pictures picked at once are all sent in one message, even if one of them cannot be read', async ({ page }) => {
+  const uploads = '/home/sam/.local/state/whistle/uploads/20261017-143210-';
+  await control(page);
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('compare these screens');
+
+  const picture = (type: 'image/png' | 'image/jpeg', color: string) => page.evaluate(async ([type, color]) => {
+    const canvas = Object.assign(document.createElement('canvas'), { width: 320, height: 240 });
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = color; context.fillRect(0, 0, 320, 240);
+    const blob = await new Promise<Blob>(resolve => canvas.toBlob(value => resolve(value!), type));
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  }, [type, color] as const).then(bytes => Buffer.from(bytes));
+  await page.locator('#picture-input').setInputFiles([
+    { name: 'before.png', mimeType: 'image/png', buffer: await picture('image/png', '#c33') },
+    { name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') },
+    { name: 'after.jpg', mimeType: 'image/jpeg', buffer: await picture('image/jpeg', '#3c3') },
+    { name: 'diff.png', mimeType: 'image/png', buffer: await picture('image/png', '#33c') },
+  ]);
+
+  // The readable pictures upload in the order they were picked; the broken one is reported, not fatal.
+  await expect(page.locator('#attachments li')).toHaveCount(3);
+  await expect(page.locator('#attach-error')).toHaveText('This file is not a picture Whistle can read.');
+  await expect(page.locator('#attach')).toBeEnabled();
+  expect((await messages(page)).filter(message => message.type === 'upload').map(message => message.contentType))
+    .toEqual(['image/png', 'image/jpeg', 'image/png']);
+  const draft = `compare these screens ${uploads}00000001.png ${uploads}00000002.jpg ${uploads}00000003.png `;
+  await expect(page.locator('#draft')).toHaveValue(draft);
+  expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
+
+  // One Send delivers the prompt with every picture path, as a single bracketed paste plus Enter.
+  await page.locator('#submit').click();
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(({ text, submit }) => ({ text, submit })))
+    .toEqual([{ text: `\x1b[200~${draft}\x1b[201~`, submit: true }]);
+});
+
 test('changes can be reviewed read-only without touching the terminal', async ({ page }) => {
   await open(page);
   await page.locator('#pane-actions').click();
