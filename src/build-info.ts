@@ -14,3 +14,5 @@ export function versionDescription() {
     ? `Whistle ${embeddedBuild.version} (${embeddedBuild.revision}, ${embeddedBuild.target}, standalone)`
     : 'Whistle development (source checkout)';
 }
+/** How to make a new pairing QR, as the person reading a message would type it. */
+export const pairCommand = standalone ? 'whistle pair' : 'bun run pair';

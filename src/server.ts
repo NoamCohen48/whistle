@@ -17,6 +17,7 @@ import { DeviceStore, DEVICE_LIFETIME_MS, deviceName } from './devices.ts';
 import { loadHostConfig, resolvePaths } from './config.ts';
 import { assetResponse } from './assets.ts';
 import { ensureToken } from './credentials.ts';
+import { pairCommand } from './build-info.ts';
 
 const paths = resolvePaths();
 const config = loadHostConfig(paths);
@@ -113,7 +114,7 @@ const server = Bun.serve<Peer>({
         const body = await request.json();
         const name = deviceName(body?.deviceName, request.headers.get('user-agent') || '');
         if (!pairingTickets.redeem(body?.ticket)) {
-          return new Response('QR expired or already used. Run bun run pair on the PC for a new one.', { status: 401, headers });
+          return new Response(`QR expired or already used. Run ${pairCommand} on the PC for a new one.`, { status: 401, headers });
         }
         return pairedResponse(secure, name);
       }
@@ -395,5 +396,5 @@ const hostname = boundHost.includes(':') ? `[${boundHost}]` : boundHost;
 const serverUrl = `http://${hostname}:${server.port}`;
 await writeFile(join(paths.stateDir, 'server-url'), serverUrl, { mode: 0o600 });
 console.log(`Whistle: ${serverUrl}`);
-console.log('Pair your phone: bun run pair (single-use QR, valid for 5 minutes)');
+console.log(`Pair your phone: ${pairCommand} (single-use QR, valid for 5 minutes)`);
 console.log(`Access token: ${process.env.WHISTLE_TOKEN ? 'provided by WHISTLE_TOKEN' : tokenPath} (not included in URLs or logs)`);
