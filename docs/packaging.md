@@ -27,9 +27,29 @@ The artifact suite also checks native installation using a fake user manager, va
 
 ## Release downloads
 
-`bun run release` builds both architectures and turns them into `dist/release/`: raw executables, tarballs, `.deb`, `.rpm` and Arch packages (with [nfpm](https://nfpm.goreleaser.com), from `packaging/nfpm.yaml`), the `install.sh` one-line installer and `SHA256SUMS`. File names carry no version, so `releases/latest/download/<name>` links stay valid. Archive and package timestamps come from the last commit, so rebuilding the same commit gives the same archives.
+`bun run release` builds both architectures and turns them into `dist/release/`: raw executables, tarballs, `.deb`, `.rpm` and Arch packages (with [nfpm](https://nfpm.goreleaser.com), from `packaging/nfpm.yaml`), the `install.sh` one-line installer and `SHA256SUMS`, plus the AUR files in `dist/aur/` (see below). File names carry no version, so `releases/latest/download/<name>` links stay valid. Archive and package timestamps come from the last commit, so rebuilding the same commit gives the same archives.
 
 Packages install `/usr/bin/whistle` and print how to start the service; they never start or restart a service themselves, because Whistle runs per user. A package-managed executable (anything under `/usr/` or `/opt/`) runs in place: its launcher points at `/usr/bin/whistle`, so after a package upgrade `whistle restart` runs the new version. Downloaded executables are copied into private releases, as below.
+
+## AUR
+
+Whistle is not published to the AUR yet: the release workflow's `aur` job is turned off with `if: false`. The files are still generated with every release, and everything below applies once that line is removed.
+
+The AUR package is `whistle-herdr-bin` (`whistle` on the AUR is an unrelated program). It installs the released executable, checked against the release's SHA-256 sums, as `/usr/bin/whistle`, like the Arch package from nfpm, and conflicts with it. `scripts/aur.ts` writes its `PKGBUILD` and `.SRCINFO` from `SHA256SUMS`; `bun run release` puts them in `dist/aur/`. After publishing a release, the release workflow builds and installs that package on Arch Linux from the published downloads, then pushes it to the AUR if the `AUR_SSH_KEY` secret holds the private key of the AUR account that maintains it. Without the secret, the check still runs and the push is skipped with a notice. The AUR's host key is checked against its published fingerprint.
+
+To regenerate the files for a published release by hand:
+
+```sh
+curl -fsSLO https://github.com/NoamCohen48/whistle/releases/download/v0.2.0/SHA256SUMS
+bun run scripts/aur.ts 0.2.0 SHA256SUMS aur/
+cd aur && makepkg -si
+```
+
+## Nix
+
+`flake.nix` builds Whistle from source for `x86_64-linux` and `aarch64-linux` (`packages.default`, `apps.default` and `overlays.default`), so `nix run github:NoamCohen48/whistle` gives the same standalone executable as the downloads. `packaging/nix/package.nix` installs the locked dependencies for every platform in one fixed-output derivation, patches the native Vite build parts for this machine, runs the Vite build and `scripts/package.ts` with the flake's revision (`WHISTLE_REVISION`, since the build has no Git), and checks `whistle --version`. The executable is never stripped or patched, because the app is appended to Bun.
+
+When `bun.lock` changes, the dependency hash in `package.nix` must change too: the CI job "Build the Nix package" fails and prints the new hash. `nix flake update` moves nixpkgs forward. The flake uses nixpkgs' Bun, which may be newer than the 1.3.11 used for releases.
 
 ## Install / upgrade
 
