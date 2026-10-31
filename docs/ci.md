@@ -18,6 +18,10 @@ No Herdr, agents, push credentials, Tailscale access or secrets are needed. A no
 
 Pull requests get a read-only token and no publishing rights. There is no `pull_request_target` and no self-hosted runner.
 
+### Android
+
+`.github/workflows/android.yml` runs [the phone tests](frontend.md#on-an-android-emulator-or-phone) on an Android 14 emulator (Google APIs image, Pixel 6 profile) with [android-emulator-runner](https://github.com/ReactiveCircus/android-emulator-runner). It runs on pushes to `main`, by hand, and on pull requests that change the app, the fixture, dependencies or the workflow itself. The emulator takes a few minutes to boot and occasionally fails to on hosted runners, so this check is not required on `main` and the release workflow does not run it.
+
 ## Releasing
 
 `.github/workflows/release.yml` runs on every push to `main`, and releases when `package.json` has a version that has no GitHub release yet. To release:
