@@ -14,7 +14,7 @@ const messages = async (): Promise<Message[]> => (await fetch(`${fixture}/__test
 function hasDevice() { try { return adb('get-state').trim() === 'device'; } catch { return false; } }
 
 const test = base.extend<{ phone: Page }>({
-  phone: async ({}, use) => {
+  phone: async ({}, use, testInfo) => {
     // On CI the emulator job must actually test something, so a missing device fails there.
     if (!hasDevice()) { if (process.env.CI) throw new Error('No Android emulator is connected'); test.skip(true, 'No Android device or emulator is connected'); }
     await fetch(`${fixture}/__test/reset`, { method: 'POST' });
@@ -23,6 +23,8 @@ const test = base.extend<{ phone: Page }>({
     // debug app (until reboot) or the image is a userdebug build; a Play image ignores them.
     adb('shell', `echo '_ --disable-fre --no-first-run --no-default-browser-check' > /data/local/tmp/chrome-command-line`);
     adb('shell', 'am', 'set-debug-app', 'com.android.chrome');
+    // Android 13+ asks a freshly installed Chrome about notifications over the page it opens.
+    try { adb('shell', 'pm', 'grant', 'com.android.chrome', 'android.permission.POST_NOTIFICATIONS'); } catch {}
     adb('reverse', `tcp:${new URL(fixture).port}`, `tcp:${new URL(fixture).port}`);
     adb('forward', `tcp:${devtools}`, 'localabstract:chrome_devtools_remote');
     // Android opens the pairing link in a new foreground tab, as tapping a link would. Playwright
@@ -39,6 +41,9 @@ const test = base.extend<{ phone: Page }>({
       await use(page!);
       await page!.close();
     } finally {
+      if (testInfo.status !== testInfo.expectedStatus) {
+        await testInfo.attach('phone screen', { body: execFileSync('adb', ['exec-out', 'screencap', '-p']), contentType: 'image/png' });
+      }
       await browser?.close();
       // A Chrome tab left on the fixture would keep talking to it after the run.
       adb('shell', 'am', 'force-stop', 'com.android.chrome');
