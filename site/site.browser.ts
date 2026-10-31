@@ -33,16 +33,22 @@ for (const colorScheme of ['light', 'dark'] as const) {
     // The hero illustration is local navigation and state over sample data only.
     const demo = page.getByRole('figure', { name: /with sample data\. Not a live terminal/ });
     await expect(demo).toBeVisible();
-    await expect(demo.getByText('Your herd', { exact: true })).toBeVisible();
+    await expect(demo.getByText('Your herd', { exact: true })).toHaveCount(0);
     await expect(demo.getByRole('button', { name: 'Take control' })).toBeHidden();
     await demo.getByRole('button', { name: /Checkout tests/ }).click();
     const badge = demo.locator('[data-demo-badge]');
     await expect(badge).toHaveText('Watching');
     await expect(demo.getByRole('button', { name: 'Take control' })).toBeFocused();
+    await expect(demo.getByRole('button', { name: 'Release control' })).toBeHidden();
+    // As in the app: controlling swaps the watching bar for the toolbar, and Release is in the header.
     await demo.getByRole('button', { name: 'Take control' }).click();
-    await expect(demo.getByRole('button', { name: 'Release control' })).toBeVisible();
-    await expect(badge).toHaveText('Controlling');
-    expect(await badge.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+    await expect(demo.getByRole('button', { name: 'Release control' })).toBeFocused();
+    await expect(demo.getByRole('button', { name: 'Take control' })).toBeHidden();
+    await expect(demo.locator('.screen-session .app-toolbar')).toBeVisible();
+    await expect(demo.locator('.screen-session .app-toolbar')).not.toContainText('Type');
+    await demo.getByRole('button', { name: 'Release control' }).click();
+    await expect(demo.getByRole('button', { name: 'Take control' })).toBeFocused();
+    await demo.getByRole('button', { name: 'Take control' }).click();
     await demo.getByRole('button', { name: 'Simulate a dropped connection' }).click();
     await expect(badge).toHaveText('Watching');
     await expect(demo.getByText('Reconnected, watching. Nothing was resent.', { exact: true })).toBeVisible();
@@ -68,14 +74,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(download.getByRole('link', { name: 'Download as a single file' })).toHaveAttribute('href', /\/whistle-linux-arm64$/);
     await expect(download.getByText('sudo pacman -U ./whistle-aarch64.pkg.tar.zst')).toBeVisible();
     await expect(download.getByText(/releases\/latest\/download\/install\.sh \| sh$/)).toBeVisible();
-    const guide = download.locator('.download-guide');
-    await expect(guide.getByText(/^chmod \+x whistle-linux-arm64\n\.\/whistle-linux-arm64 install --host/)).toBeVisible();
-    await expect(guide.getByText(/^curl -fLO https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/latest\/download\/whistle-linux-arm64\n/)).toBeVisible();
-    await expect(guide.getByText(/^tar -xzf whistle-linux-arm64\.tar\.gz\n\.\/whistle-\d+\.\d+\.\d+-linux-arm64\/whistle install/)).toBeVisible();
+    await expect(download.getByText('chmod +x whistle-linux-arm64')).toBeVisible();
     expect(await download.innerHTML()).not.toContain('__WHISTLE');
 
     await page.getByRole('heading', { name: 'Set it up on your computer' }).scrollIntoViewIfNeeded();
     await expect(page.getByText('This website only describes Whistle.')).toBeVisible();
+    // Whistle brings no network: the phone reaches the PC over one the user sets up.
+    const network = page.getByRole('complementary', { name: 'Your phone needs a way to reach your PC' });
+    await expect(network.getByRole('link', { name: 'Tailscale' })).toHaveAttribute('href', 'https://tailscale.com/');
+    await expect(network.getByRole('link', { name: 'Cloudflare Tunnel' })).toHaveAttribute('href', 'https://www.cloudflare.com/products/tunnel/');
     expect(requests.every(url => url.startsWith(baseURL!))).toBe(true);
     expect(requests.some(url => /\/api\/|\/terminal(?:\?|$)|github\.com/.test(url))).toBe(false);
     expect(sockets).toEqual([]);

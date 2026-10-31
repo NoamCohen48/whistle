@@ -3,8 +3,8 @@
 type Arch = 'x64' | 'arm64';
 
 const files: Record<Arch, Record<string, string>> = {
-  x64: { deb: 'whistle_amd64.deb', rpm: 'whistle.x86_64.rpm', arch: 'whistle-x86_64.pkg.tar.zst', tar: 'whistle-linux-x64.tar.gz', bin: 'whistle-linux-x64', target: 'linux-x64' },
-  arm64: { deb: 'whistle_arm64.deb', rpm: 'whistle.aarch64.rpm', arch: 'whistle-aarch64.pkg.tar.zst', tar: 'whistle-linux-arm64.tar.gz', bin: 'whistle-linux-arm64', target: 'linux-arm64' },
+  x64: { deb: 'whistle_amd64.deb', rpm: 'whistle.x86_64.rpm', arch: 'whistle-x86_64.pkg.tar.zst', tar: 'whistle-linux-x64.tar.gz', bin: 'whistle-linux-x64' },
+  arm64: { deb: 'whistle_arm64.deb', rpm: 'whistle.aarch64.rpm', arch: 'whistle-aarch64.pkg.tar.zst', tar: 'whistle-linux-arm64.tar.gz', bin: 'whistle-linux-arm64' },
 };
 
 const section = document.querySelector<HTMLElement>('#download');

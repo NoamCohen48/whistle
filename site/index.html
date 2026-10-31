@@ -18,14 +18,18 @@
     <!-- Icons for the app illustrations, drawn to match the phone app's 20px stroke set. -->
     <svg class="sprite" aria-hidden="true" focusable="false">
       <symbol id="i-back" viewBox="0 0 20 20"><path d="M12.5 4.5 7 10l5.5 5.5" /></symbol>
-      <symbol id="i-forward" viewBox="0 0 20 20"><path d="M7.5 4.5 13 10l-5.5 5.5" /></symbol>
       <symbol id="i-refresh" viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3h-3" /></symbol>
       <symbol id="i-more" viewBox="0 0 20 20"><path d="M10 4.5v.01M10 10v.01M10 15.5v.01" stroke-width="3" /></symbol>
       <symbol id="i-bell" viewBox="0 0 20 20"><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 2h-13zM8.5 17.5a1.6 1.6 0 0 0 3 0" /></symbol>
       <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12" /></symbol>
-      <symbol id="i-width" viewBox="0 0 20 20"><path d="M3 10h14M6 7l-3 3 3 3M14 7l3 3-3 3" /></symbol>
       <symbol id="i-text" viewBox="0 0 20 20"><path d="M4 5h12M4 8.5h12M4 12h8M4 15.5h5" /></symbol>
-      <symbol id="i-keyboard" viewBox="0 0 20 20"><path d="M3 5.5h14v9H3zM6 8.5h.01M9 8.5h.01M12 8.5h.01M14.5 8.5h.01M6.5 11.5h7" /></symbol>
+      <symbol id="i-font-size" viewBox="0 0 20 20"><path d="M3 15.5 7 4.5l4 11M4.4 11.5h5.2M12.5 15.5l2.5-6 2.5 6M13.3 13.5h3.4" /></symbol>
+      <symbol id="i-hand" viewBox="0 0 20 20"><path d="M7.5 10.5V4a1.25 1.25 0 0 1 2.5 0v5M10 9V7.75a1.25 1.25 0 0 1 2.5 0V9.5M12.5 9.5V8.75a1.25 1.25 0 0 1 2.5 0V13a4.5 4.5 0 0 1-4.5 4.5H9.6a4 4 0 0 1-2.9-1.25L4.1 13.5a1.2 1.2 0 0 1 1.7-1.7l1.7 1.7V10.5" /></symbol>
+      <symbol id="i-hand-off" viewBox="0 0 20 20"><path d="M7.5 10.5V4a1.25 1.25 0 0 1 2.5 0v5M10 9V7.75a1.25 1.25 0 0 1 2.5 0V9.5M12.5 9.5V8.75a1.25 1.25 0 0 1 2.5 0V13a4.5 4.5 0 0 1-4.5 4.5H9.6a4 4 0 0 1-2.9-1.25L4.1 13.5a1.2 1.2 0 0 1 1.7-1.7l1.7 1.7V10.5M3 3l14 14" /></symbol>
+      <symbol id="i-enter" viewBox="0 0 20 20"><path d="M15.5 4.5V10a2.5 2.5 0 0 1-2.5 2.5H4.5M8 9l-3.5 3.5L8 16" /></symbol>
+      <symbol id="i-diff" viewBox="0 0 20 20"><path d="M10 3.5v7M6.5 7h7M6.5 15.5h7" /></symbol>
+      <symbol id="i-pin" viewBox="0 0 20 20"><path d="M7.5 3.5h5M8.5 3.5V8L6 11h8l-2.5-3V3.5M10 11v5.5" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 20 20"><path d="M15.52 7.92L17.38 8.19L17.38 11.81L15.52 12.08L15.37 12.43L16.50 13.94L13.94 16.50L12.43 15.37L12.08 15.52L11.81 17.38L8.19 17.38L7.92 15.52L7.57 15.37L6.06 16.50L3.50 13.94L4.63 12.43L4.48 12.08L2.62 11.81L2.62 8.19L4.48 7.92L4.63 7.57L3.50 6.06L6.06 3.50L7.57 4.63L7.92 4.48L8.19 2.62L11.81 2.62L12.08 4.48L12.43 4.63L13.94 3.50L16.50 6.06L15.37 7.57ZM12.5 10a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0" /></symbol>
       <symbol id="i-compose" viewBox="0 0 20 20"><path d="M4 16h3.5L16 7.5 12.5 4 4 12.5zM11 5.5 14.5 9" /></symbol>
       <symbol id="i-keys" viewBox="0 0 20 20"><path d="M7 7v6m6-6v6M7 7H5.5A1.5 1.5 0 1 1 7 5.5zm6 0h1.5A1.5 1.5 0 1 0 13 5.5zM7 13H5.5A1.5 1.5 0 1 0 7 14.5zm6 0h1.5a1.5 1.5 0 1 1-1.5 1.5zM7 7h6M7 13h6" /></symbol>
       <symbol id="i-agent" viewBox="0 0 20 20"><path d="M10 3v3m0 8v3M3 10h3m8 0h3M5.5 5.5l2 2m5 5 2 2m0-9-2 2m-5 5-2 2" /></symbol>
@@ -63,10 +67,15 @@
                 <div class="app-header" aria-hidden="true">
                   <span class="app-wordmark">whistle</span>
                   <svg class="i i-muted"><use href="#i-bell" /></svg>
+                  <svg class="i i-muted"><use href="#i-settings" /></svg>
                   <svg class="i i-muted"><use href="#i-refresh" /></svg>
                 </div>
                 <div class="app-herd">
-                  <p class="app-h1" aria-hidden="true">Your herd</p>
+                  <div class="app-filters" aria-hidden="true">
+                    <span class="app-filter is-current">All <span>3</span></span>
+                    <span class="app-filter">Needs you <span>1</span></span>
+                    <span class="app-filter">Working <span>1</span></span>
+                  </div>
                   <p class="app-group is-strong" aria-hidden="true">Needs you <span>1</span></p>
                   <div class="app-list">
                     <button type="button" class="app-row" data-demo-open>
@@ -76,18 +85,18 @@
                         <small><span class="is-attention">needs you</span><span>pi</span><span>shop</span></small>
                         <span class="row-preview" aria-hidden="true">Commit the fix? (y/n)</span>
                       </span>
-                      <svg class="i i-faint" aria-hidden="true"><use href="#i-forward" /></svg>
+                      <svg class="i i-faint" aria-hidden="true"><use href="#i-pin" /></svg>
                     </button>
                   </div>
                   <div aria-hidden="true">
                     <p class="app-group">shop <span>2</span></p>
                     <div class="app-list">
-                      <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Moving handlers into routes/</span></span><svg class="i i-faint"><use href="#i-forward" /></svg></span>
-                      <span class="app-row"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you</span><span>pi</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Commit the fix? (y/n)</span></span><svg class="i i-faint"><use href="#i-forward" /></svg></span>
+                      <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Moving handlers into routes/</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
+                      <span class="app-row"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you</span><span>pi</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Commit the fix? (y/n)</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
                     </div>
                     <p class="app-group">docs <span>1</span></p>
                     <div class="app-list">
-                      <span class="app-row"><i class="dot"></i><span class="row-copy"><strong>Release notes</strong><small><span>idle</span><span>pi</span><span class="cwd">~/code/docs</span></small><span class="row-preview">Draft saved to CHANGELOG.md</span></span><svg class="i i-faint"><use href="#i-forward" /></svg></span>
+                      <span class="app-row"><i class="dot"></i><span class="row-copy"><strong>Release notes</strong><small><span>idle</span><span>pi</span><span class="cwd">~/code/docs</span></small><span class="row-preview">Draft saved to CHANGELOG.md</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
                     </div>
                   </div>
                 </div>
@@ -99,7 +108,9 @@
                 <div class="app-header">
                   <button type="button" class="app-icon-button" data-demo-back aria-label="Back to your herd"><svg class="i" aria-hidden="true"><use href="#i-back" /></svg></button>
                   <div class="app-title" aria-hidden="true"><strong>Checkout tests</strong><small>shop · pi · <code>w1:p2</code></small></div>
-                  <svg class="i i-muted" aria-hidden="true"><use href="#i-refresh" /></svg>
+                  <svg class="i i-muted is-watch-only" aria-hidden="true"><use href="#i-diff" /></svg>
+                  <svg class="i i-muted is-watch-only" aria-hidden="true"><use href="#i-refresh" /></svg>
+                  <button type="button" class="app-release" data-demo-release aria-label="Release control" title="Release control"><svg class="i" aria-hidden="true"><use href="#i-hand-off" /></svg></button>
                   <svg class="i i-muted" aria-hidden="true"><use href="#i-more" /></svg>
                 </div>
                 <div class="app-strip" aria-hidden="true">
@@ -128,16 +139,15 @@
                   <div class="app-session">
                     <span class="app-pill" data-demo-badge aria-hidden="true">Watching</span>
                     <span class="app-notice" aria-hidden="true">Reconnecting…</span>
-                    <span class="app-quiet" aria-hidden="true"><svg class="i i-sm"><use href="#i-width" /></svg>Fit</span>
+                    <svg class="i i-muted" aria-hidden="true"><use href="#i-font-size" /></svg>
                     <svg class="i i-muted" aria-hidden="true"><use href="#i-text" /></svg>
-                    <button type="button" class="app-control" data-demo-toggle>Take control</button>
+                    <button type="button" class="app-control" data-demo-take aria-label="Take control" title="Take control"><svg class="i" aria-hidden="true"><use href="#i-hand" /></svg></button>
                   </div>
                   <div class="app-toolbar" aria-hidden="true">
-                    <span class="app-tool"><svg class="i"><use href="#i-keyboard" /></svg>Type</span>
                     <span class="app-tool"><svg class="i"><use href="#i-compose" /></svg>Compose</span>
                     <span class="app-tool"><svg class="i"><use href="#i-keys" /></svg>Keys</span>
                     <span class="app-keycap">Esc</span>
-                    <span class="app-keycap is-enter">Enter</span>
+                    <span class="app-keycap is-enter"><svg class="i"><use href="#i-enter" /></svg></span>
                   </div>
                 </div>
               </div>
@@ -197,15 +207,14 @@
 
   Commit the fix? (y/n) <span class="t-cursor is-live"></span></pre>
                 <div class="app-toolbar is-shown">
-                  <span class="app-tool"><svg class="i"><use href="#i-keyboard" /></svg>Type</span>
                   <span class="app-tool"><svg class="i"><use href="#i-compose" /></svg>Compose</span>
                   <span class="app-tool"><svg class="i"><use href="#i-keys" /></svg>Keys</span>
                   <span class="app-keycap">Esc</span>
-                  <span class="app-keycap is-enter">Enter</span>
+                  <span class="app-keycap is-enter"><svg class="i"><use href="#i-enter" /></svg></span>
                 </div>
               </div>
               <h3>Answer in its real terminal</h3>
-              <p>Open a pane and you're in the same session that runs on your PC. Type a reply, send Esc, Tab, arrows or Ctrl, or write something longer in Compose.</p>
+              <p>Open a pane and you're in the same session that runs on your PC. Take control, tap the terminal and type a reply, send Esc, Tab, arrows or Ctrl, or write something longer in Compose.</p>
             </article>
 
             <article class="pillar">
@@ -242,7 +251,7 @@
             <dl>
               <div><dt>Watching comes first</dt><dd>Opening a pane never resizes or focuses your desktop terminal. Typing starts only after you tap Take control, and a reconnect never resends anything.</dd></div>
               <div><dt>Your existing sessions</dt><dd>Whistle works with the agents and panes you already run in Herdr. It adds no model calls of its own.</dd></div>
-              <div><dt>Runs on your computer</dt><dd>Whistle runs on your PC and reaches your phone over your private Tailscale network.</dd></div>
+              <div><dt>Runs on your computer</dt><dd>Whistle runs on your PC, with no relay or cloud service of its own. Your phone reaches it over a network you already use, such as Tailscale.</dd></div>
               <div><dt>Paired phones only</dt><dd>Each phone pairs once by scanning a single-use QR code. You can list and revoke paired devices at any time.</dd></div>
             </dl>
           </div>
@@ -267,7 +276,7 @@
 
           <div class="installer">
             <h3 id="installer-heading">Install with one command</h3>
-            <p>Downloads the right build, checks its checksum, and starts Whistle as a service for your user on your Tailscale address.</p>
+            <p>Downloads the right build, checks its checksum, and starts Whistle as a service for your user. If Tailscale is running, Whistle listens on the PC's Tailscale address.</p>
             <div class="command-line">
               <pre class="command" aria-labelledby="installer-heading"><code id="install-command"><span class="prompt" aria-hidden="true">$ </span>curl -fsSL https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/install.sh | sh</code></pre>
               <button class="copy" type="button" data-copy="install-command" hidden>Copy</button>
@@ -318,61 +327,27 @@
             <a href="https://github.com/__WHISTLE_REPOSITORY__/releases">Older versions</a>
             <a href="https://github.com/__WHISTLE_REPOSITORY__">Source code</a>
           </p>
-          <div class="download-guide" aria-labelledby="guide-heading">
-            <h3 id="guide-heading">How to download</h3>
-            <div class="guide-grid">
-              <div class="guide-choose">
-                <h4>Which processor do I have?</h4>
-                <p>Run <code>uname -m</code> on the PC. <code>x86_64</code> means x86-64, the usual choice for desktops and laptops. <code>aarch64</code> means ARM64, as on a Raspberry Pi or an ARM laptop. Pick the matching one with the switch above, and every file name and command on this page follows it.</p>
-                <h4>Which file should I pick?</h4>
-                <dl class="file-kinds">
-                  <div><dt>One command</dt><dd>The easiest. It picks your processor, checks the download and starts Whistle for you. It never asks for root.</dd></div>
-                  <div><dt>A package</dt><dd>For Debian, Ubuntu, Fedora, openSUSE and Arch. Your package manager knows about Whistle and can remove it cleanly.</dd></div>
-                  <div><dt>The single file</dt><dd>The raw program, nothing wrapped around it. It works on any Linux with systemd and needs no root at all.</dd></div>
-                  <div><dt>The archive</dt><dd>The same program, with the README and license, packed as a <code>.tar.gz</code>.</dd></div>
-                </dl>
-              </div>
-              <div class="guide-binary">
-                <h4>Install the single file</h4>
-                <ol class="guide-steps">
-                  <li>
-                    <p>Download it, and the checksums from the same release.</p>
-                    <pre class="command"><code data-command="bin" data-template="curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/{file}
-curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/SHA256SUMS">curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/whistle-linux-x64
-curl -fLO https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/SHA256SUMS</code></pre>
-                  </li>
-                  <li>
-                    <p>Check that the file is intact. It should print <code>OK</code>.</p>
-                    <pre class="command"><code>sha256sum --check --ignore-missing SHA256SUMS</code></pre>
-                  </li>
-                  <li>
-                    <p>Make it runnable and install it. Whistle copies itself into <code>~/.local/share/whistle</code>, adds a <code>whistle</code> command to <code>~/.local/bin</code> and starts on your Tailscale address. You can delete the download afterwards.</p>
-                    <pre class="command"><code data-command="bin" data-template="chmod +x {file}
-./{file} install --host &quot;$(tailscale ip -4)&quot; --now">chmod +x whistle-linux-x64
-./whistle-linux-x64 install --host "$(tailscale ip -4)" --now</code></pre>
-                  </li>
-                </ol>
-                <p class="guide-note">With the archive, unpack it first and run the program inside the same way:</p>
-                <pre class="command"><code data-command="target" data-template="tar -xzf whistle-{file}.tar.gz
-./whistle-__WHISTLE_VERSION__-{file}/whistle install --host &quot;$(tailscale ip -4)&quot; --now">tar -xzf whistle-linux-x64.tar.gz
-./whistle-__WHISTLE_VERSION__-linux-x64/whistle install --host "$(tailscale ip -4)" --now</code></pre>
-                <p class="guide-note">To upgrade, download the new file and run the same install command again. Paired phones stay paired.</p>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
       <section id="setup" class="shell setup" aria-labelledby="setup-heading">
         <h2 id="setup-heading">Set it up on your computer</h2>
+        <aside class="network-note" aria-labelledby="network-heading">
+          <h3 id="network-heading">Your phone needs a way to reach your PC</h3>
+          <p>Whistle doesn't provide a network connection. It listens on your PC, and your phone connects to it over a network you set up yourself, for example:</p>
+          <dl>
+            <div><dt><a href="https://tailscale.com/">Tailscale</a></dt><dd>A private network between your own devices. Install it on the PC and the phone, and Whistle listens on the PC's Tailscale address.</dd></div>
+            <div><dt><a href="https://www.cloudflare.com/products/tunnel/">Cloudflare Tunnel</a></dt><dd>Gives the PC an HTTPS address without opening a port. Whistle listens on <code>127.0.0.1</code> and the tunnel connects to it; install with <code>--public-origin</code> set to the tunnel's address. The address is on the public internet, so put <a href="https://www.cloudflare.com/zero-trust/products/access/">Cloudflare Access</a> in front of it.</dd></div>
+          </dl>
+        </aside>
         <ol class="steps">
           <li>
             <h3>Install Whistle on the PC</h3>
-            <p>Use the one-line installer or a package from above. The PC needs Linux with systemd, Herdr for your agents, and Tailscale on both the PC and your phone.</p>
+            <p>Use the one-line installer or a package from above. The PC needs Linux with systemd, Herdr for your agents, and a network your phone can reach it on.</p>
           </li>
           <li>
             <h3>Start the service</h3>
-            <p>The one-line installer already did this. After a package install, run this once as your regular user. Whistle starts at login and listens only on your Tailscale address.</p>
+            <p>The one-line installer already did this. After a package install, run this once as your regular user. Whistle starts at login and listens only on your Tailscale address. For Cloudflare Tunnel, change the options as described above.</p>
             <pre class="command"><code>whistle install --host "$(tailscale ip -4)" --now</code></pre>
           </li>
           <li>
