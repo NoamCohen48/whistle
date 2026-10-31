@@ -44,6 +44,7 @@ let pairings = 0;
 let acknowledge = true;
 let workerRevision = 1;
 let failNextAction = '';
+let agentFails = false;
 // Off: frames never turn bracketed paste on, like a Herdr render of a pane attached mid-session.
 let bracketedFrames = true;
 let pushSubscribed = false;
@@ -85,7 +86,11 @@ function addWorkspace(label: string, linkedTo?: string) {
 function applyAction(body: Record<string, string>): { paneId?: string; warning?: string } {
   switch (body.type) {
     case 'terminal': return { paneId: addPane(body.workspaceId) };
-    case 'agent': return { paneId: addPane(body.workspaceId, { agent: body.kind, agent_status: 'idle', label: body.kind }) };
+    case 'agent': {
+      // Like the host, an agent that fails to start keeps its shell and reports why.
+      if (agentFails) return { paneId: addPane(body.workspaceId, {}), warning: `${body.kind} did not start: ${body.kind} exited` };
+      return { paneId: addPane(body.workspaceId, { agent: body.kind, agent_status: 'idle', label: body.kind }) };
+    }
     case 'workspace': return { paneId: addPane(addWorkspace(body.label || body.cwd.split('/').pop() || 'workspace')) };
     case 'worktree-create': return { paneId: addPane(addWorkspace(body.branch, body.workspaceId)) };
     case 'worktree-open': return { paneId: addPane(addWorkspace(body.path.split('/').pop()!, body.workspaceId)) };
@@ -113,7 +118,7 @@ function frame(ws: ServerWebSocket<Peer>) {
   ws.send(JSON.stringify({ type: 'terminal.frame', width, height, bytes: Buffer.from(screen).toString('base64') }));
 }
 const server = Bun.serve<Peer>({
-  hostname: '127.0.0.1', port: 8792,
+  hostname: '127.0.0.1', port: Number(process.env.FIXTURE_PORT || 8792),
   async fetch(request, server) {
     try {
     const url = new URL(request.url);
@@ -121,11 +126,12 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; bracketedFrames = true; created = 0; uploads = 0;
+      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; agentFails = false; bracketedFrames = true; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
     if (path === '/__test/fail-action') { failNextAction = url.searchParams.get('message') || 'Fixture action failed'; return new Response('armed'); }
+    if (path === '/__test/agent-fails') { agentFails = true; return new Response('armed'); }
     if (path === '/__test/no-bracketed') { bracketedFrames = false; return new Response('off'); }
     if (path === '/__test/fail-push') { failPushTest = true; return new Response('armed'); }
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
