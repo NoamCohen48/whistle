@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type Message = { type: string; pane?: string; control?: boolean; height?: number; rows?: number; id?: number; key?: string; text?: string; submit?: boolean;
+type Message = { type: string; pane?: string; control?: boolean; width?: number; height?: number; cols?: number; rows?: number; direction?: string; lines?: number; id?: number; key?: string; text?: string; submit?: boolean;
   contentType?: string; jpeg?: boolean; size?: number; path?: string };
 const fixtureUrl = (path: string) => `http://127.0.0.1:8792${path}`;
 async function messages(page: Page): Promise<Message[]> { return (await page.request.get(fixtureUrl('/__test/messages'))).json(); }
@@ -137,6 +137,18 @@ test('watch is read-only and control/release retains a tall PTY', async ({ page 
   expect((await messages(page)).filter(message => message.type === 'connect').at(-1)?.control).toBe(false);
 });
 
+test('tapping the terminal while watching opens no keyboard and sends nothing', async ({ page }) => {
+  await open(page);
+  await page.locator('#terminal-viewport').click();
+  await expect(page.locator('.xterm-helper-textarea')).not.toBeFocused();
+  await expect(page.locator('#keyboard')).toBeHidden();
+  await page.keyboard.type('ls');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  expect((await messages(page)).filter(message => ['input', 'key', 'resize', 'scroll'].includes(message.type))).toEqual([]);
+});
+
 test('live text, chords and compose stay in one ordered input lane', async ({ page }) => {
   await control(page);
   await page.locator('#terminal-viewport').click();
@@ -262,6 +274,53 @@ test('local scrolling stays put, edge scrolling is remote, and Keys does not res
   await expect.poll(async () => (await messages(page)).filter(message => message.type === 'scroll').length).toBeGreaterThan(0);
   await page.locator('#latest').click();
   await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+});
+
+test('Keys scroll buttons read local history first and only then scroll the PC', async ({ page }) => {
+  await control(page);
+  const viewport = page.locator('#terminal-viewport');
+  const top = () => viewport.evaluate(node => node.scrollTop);
+  const scrolls = async () => (await messages(page)).filter(message => message.type === 'scroll').map(({ direction, lines }) => ({ direction, lines }));
+  await expect.poll(top).toBeGreaterThan(100);
+  await page.locator('#more-keys').click();
+  const bottom = await top();
+  await page.locator('#scroll-up').click();
+  await expect.poll(top).toBeLessThan(bottom);
+  const reading = await top();
+  await page.locator('#scroll-down').click();
+  await expect.poll(top).toBeGreaterThan(reading);
+  expect(await scrolls()).toEqual([]);
+  // Only past the top of local history does a button scroll the PC's own history.
+  await viewport.evaluate(node => { node.scrollTop = 0; });
+  await page.locator('#scroll-up').click();
+  await expect.poll(scrolls).toEqual([{ direction: 'up', lines: 8 }]);
+});
+
+test('Use the PC’s width sends the PC’s columns, keeps them on resizes and across release, and Fit width undoes it', async ({ page }) => {
+  await control(page);
+  const phone = (await messages(page)).filter(message => message.type === 'connect').at(-1)!;
+  expect(phone.width).not.toBe(120);
+  const lastResize = async () => (await messages(page)).filter(message => message.type === 'resize').at(-1);
+  await page.locator('#pane-actions').click();
+  await page.locator('#menu-width').click();
+  await expect.poll(lastResize).toMatchObject({ cols: 120, rows: phone.height });
+  // A narrower phone would fit fewer columns, but the PC keeps its own width.
+  const size = page.viewportSize()!;
+  const before = (await messages(page)).length;
+  await page.setViewportSize({ width: size.width - 80, height: size.height });
+  await page.waitForTimeout(400);
+  expect((await messages(page)).slice(before).filter(message => message.type === 'resize' && message.cols !== 120)).toEqual([]);
+
+  await page.locator('#release').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  expect((await messages(page)).filter(message => message.type === 'connect').at(-1)).toMatchObject({ control: true, width: 120 });
+
+  await page.locator('#pane-actions').click();
+  await expect(page.locator('#menu-width')).toHaveText('Fit width to phone');
+  await page.locator('#menu-width').click();
+  await expect.poll(async () => (await lastResize())?.cols).toBeLessThan(phone.width!);
 });
 
 test('inventory updates keep xterm mounted and replacement panes disconnect', async ({ page }) => {
@@ -394,6 +453,19 @@ test('new agents, terminals and workspaces open watch-only without desktop focus
     { action: 'workspace', cwd: '~/projects/site' },
   ]);
   expect((await messages(page)).filter(message => message.type === 'connect').every(message => !message.control)).toBe(true);
+});
+
+test('an agent that fails to start opens its shell watch-only and says why', async ({ page, request }) => {
+  await request.post(fixtureUrl('/__test/agent-fails'));
+  await pair(page);
+  await page.locator('#new').click();
+  await page.locator('[data-agent="claude"]').click();
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#create-sheet')).toBeHidden();
+  await expect(page.locator('#pane-info')).toHaveText('w1:n1');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await expect(page.locator('#error')).toContainText('claude did not start: claude exited');
+  expect((await messages(page)).filter(message => message.type === 'connect').at(-1)).toMatchObject({ pane: 'w1:n1', control: false });
 });
 
 test('worktrees can be created, opened and reached when already open', async ({ page }) => {
