@@ -32,11 +32,14 @@ async function json<T>(response: Response): Promise<T> {
   try { return await response.json(); }
   catch { throw new Error('The PC returned an incomplete response. Refresh and check the result before trying again.'); }
 }
-export async function runAction(action: Action): Promise<ActionResult> {
+// A request ID makes a launch safe to repeat: the PC answers a repeat with the first result.
+export async function runAction(action: Action, requestId?: string): Promise<ActionResult> {
   return json(await request('/api/actions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestId ? { ...action, requestId } : action),
   }));
 }
+// randomUUID needs HTTPS; Whistle also runs over plain HTTP on a private network.
+export const newRequestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 export async function loadPreviews(signal?: AbortSignal): Promise<Record<string, string>> {
   return json(await request('/api/previews', { signal, cache: 'no-store' }));
 }

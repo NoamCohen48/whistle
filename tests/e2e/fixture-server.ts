@@ -45,6 +45,9 @@ let acknowledge = true;
 let workerRevision = 1;
 let failNextAction = '';
 let agentFails = false;
+// Like the host: a repeated request ID gets the first result. Armed, the next reply is lost after the action ran.
+let launches = new Map<string, unknown>();
+let loseReply = false;
 // Off: frames never turn bracketed paste on, like a Herdr render of a pane attached mid-session.
 let bracketedFrames = true;
 let pushSubscribed = false;
@@ -113,7 +116,10 @@ function frame(ws: ServerWebSocket<Peer>) {
   if (ws.data.silent) return;
   const { width, height, pane } = ws.data;
   const screen = (bracketedFrames ? '\x1b[?2004h' : '') + '\x1b[2J\x1b[H' + `Whistle fixture ${pane}\r\n` + 'Saved screenshot to docs/home-screen.png\r\n' +
-    Array.from({ length: height - 3 }, (_, row) => `row ${row + 3}\r\n`).join('') +
+    'Edited src/routes.ts:3 via http://x.io/a.md\r\n' +
+    // A link the program embeds (OSC 8): the text shows, the address does not.
+    '\x1b]8;;https://example.com/docs\x1b\\Read the docs\x1b]8;;\x1b\\\r\n' +
+    Array.from({ length: height - 5 }, (_, row) => `row ${row + 5}\r\n`).join('') +
     `\x1b[${Math.min(height - 2, 48)};1Hinput> `;
   ws.send(JSON.stringify({ type: 'terminal.frame', width, height, bytes: Buffer.from(screen).toString('base64') }));
 }
@@ -126,12 +132,13 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; agentFails = false; bracketedFrames = true; created = 0; uploads = 0;
+      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; agentFails = false; launches = new Map(); loseReply = false; bracketedFrames = true; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
     if (path === '/__test/fail-action') { failNextAction = url.searchParams.get('message') || 'Fixture action failed'; return new Response('armed'); }
     if (path === '/__test/agent-fails') { agentFails = true; return new Response('armed'); }
+    if (path === '/__test/lose-reply') { loseReply = true; return new Response('armed'); }
     if (path === '/__test/no-bracketed') { bracketedFrames = false; return new Response('off'); }
     if (path === '/__test/fail-push') { failPushTest = true; return new Response('armed'); }
     if (path === '/__test/unconfirmed') { acknowledge = false; return new Response('ACKs disabled'); }
@@ -184,7 +191,7 @@ const server = Bun.serve<Peer>({
     }
     if (path === '/api/previews' || path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
       || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/uploads'
-      || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/folders') {
+      || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/file' || path === '/api/folders') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/previews') return Response.json(Object.fromEntries(inventory.panes.map(pane => [pane.pane_id, `${pane.label || pane.pane_id}: checking the fixture`])), { headers: { 'Cache-Control': 'no-store' } });
       if (path === '/api/panes') return Response.json(inventory);
@@ -225,6 +232,13 @@ const server = Bun.serve<Peer>({
         if (!file.startsWith('/home/sam/projects/atlas/') && !/^[^/]/.test(file)) return new Response('Only pictures inside this pane’s project can be shown.', { status: 403 });
         return new Response(picture, { headers: { 'Content-Type': 'image/png' } });
       }
+      if (path === '/api/file') {
+        const file = url.searchParams.get('path') || '';
+        messages.push({ type: 'file', pane: url.searchParams.get('pane'), path: file });
+        if (file === 'src/routes.ts') return new Response(Array.from({ length: 80 }, (_, line) => `// routes line ${line + 1}`).join('\n') + '\n');
+        if (file.startsWith('/') && !file.startsWith('/home/sam/projects/atlas/')) return new Response('Only files inside this pane’s project can be shown.', { status: 403 });
+        return new Response('That file does not exist.', { status: 404 });
+      }
       if (path.startsWith('/api/changes')) {
         const pane = url.searchParams.get('pane');
         messages.push({ type: 'changes', pane, path: url.searchParams.get('path') || undefined });
@@ -239,8 +253,13 @@ const server = Bun.serve<Peer>({
         const type = request.headers.get('content-type') || '';
         const bytes = new Uint8Array(await request.arrayBuffer());
         messages.push({ type: 'upload', contentType: type, size: bytes.length, png: bytes[0] === 0x89, jpeg: bytes[0] === 0xff });
-        if (!/^image\/(png|jpeg)$/.test(type)) return new Response('Only PNG, JPEG, WebP and GIF pictures can be attached.', { status: 415 });
-        return Response.json({ path: `/home/sam/.local/state/whistle/uploads/20261017-143210-${(++uploads).toString(16).padStart(8, '0')}.${type === 'image/png' ? 'png' : 'jpg'}` });
+        const stamp = `/home/sam/.local/state/whistle/uploads/20261017-143210-${(uploads + 1).toString(16).padStart(8, '0')}`;
+        if (type.startsWith('text/plain')) {
+          messages.push({ type: 'upload-text', name: url.searchParams.get('name'), text: new TextDecoder().decode(bytes) });
+          uploads++; return Response.json({ path: `${stamp}-${(url.searchParams.get('name') || 'file.txt').replace(/[^A-Za-z0-9._-]+/g, '-')}` });
+        }
+        if (!/^image\/(png|jpeg)$/.test(type)) return new Response('Only pictures and text files can be attached.', { status: 415 });
+        uploads++; return Response.json({ path: `${stamp}.${type === 'image/png' ? 'png' : 'jpg'}` });
       }
       if (path === '/api/actions') {
         if (request.method !== 'POST' || request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
@@ -248,7 +267,12 @@ const server = Bun.serve<Peer>({
         messages.push({ ...body, action: body.type, type: 'action' });
         if (body.type === 'workspace' && !/^~?\//.test(body.cwd)) return new Response('Use an absolute path or ~/…', { status: 400 });
         if (failNextAction) { const message = failNextAction; failNextAction = ''; return new Response(message, { status: 400 }); }
-        return Response.json(applyAction(body));
+        const { requestId, ...action } = body;
+        const key = requestId && JSON.stringify([requestId, action]);
+        const result = key && launches.has(key) ? launches.get(key) : applyAction(action);
+        if (key) launches.set(key, result);
+        if (loseReply) { loseReply = false; return new Response('The connection dropped before the PC answered.', { status: 502 }); }
+        return Response.json(result);
       }
       if (request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
       const pane = url.searchParams.get('pane') || '';

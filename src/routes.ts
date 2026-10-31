@@ -10,11 +10,13 @@ import { stat } from 'node:fs/promises';
 import { DEVICE_LIFETIME_MS, deviceName, type DeviceStore } from './devices.ts';
 import { listFolders } from './folders.ts';
 import { findPane, snapshot, watchSize } from './herdr.ts';
+import { isRequestId, Launches } from './launches.ts';
 import { HttpError } from './http-error.ts';
 import { bearerToken, checkInput, errorResponse, json, readJson, securityHeaders, sessionCookie, sessionFrom, text } from './http.ts';
 import type { PairingTickets } from './pairing-tickets.ts';
 import { requestPath } from './paths.ts';
 import { readPicture } from './pictures.ts';
+import { readTextFile } from './text-files.ts';
 import { panePreviews } from './previews.ts';
 import type { PushStore } from './push-store.ts';
 import { TerminalSockets, type Peer } from './terminal-socket.ts';
@@ -72,6 +74,7 @@ export function createRequestHandler(services: Services) {
     if (result === 'wrong') throw new HttpError(wrongMessage, 401);
   };
   const credentials = (value: unknown) => value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const launches = new Launches();
 
   const routes: Route[] = [
     // Pairing.
@@ -113,8 +116,12 @@ export function createRequestHandler(services: Services) {
       if (!isId(workspaceId)) throw new HttpError('Invalid workspace');
       return json({ worktrees: await worktrees(workspaceId) });
     } },
-    { method: 'POST', path: '/api/actions', access: 'device', sameOrigin: true, handle: async ({ request }) =>
-      json(await runAction(await readJson(request, parseAction))) },
+    { method: 'POST', path: '/api/actions', access: 'device', sameOrigin: true, handle: async ({ request, device }) => {
+      const { action, requestId } = await readJson(request, body => ({
+        action: parseAction(body), requestId: isRequestId(credentials(body).requestId) ? credentials(body).requestId as string : undefined,
+      }));
+      return json(await launches.run(device.id, requestId, action, () => runAction(action)));
+    } },
     { method: 'GET', path: '/terminal', access: 'device', sameOrigin: true, handle: async ({ request, url, server, device }) => {
       const paneId = url.searchParams.get('pane') || '';
       const mode = url.searchParams.get('mode') === 'control' ? 'control' : 'observe';
@@ -139,8 +146,11 @@ export function createRequestHandler(services: Services) {
       json(await changes(await paneFolder(url.searchParams.get('pane')))) },
     { method: 'GET', path: '/api/changes/file', access: 'device', sameOrigin: false, handle: async ({ url }) =>
       json(await fileDiff(await paneFolder(url.searchParams.get('pane')), requestPath(url.searchParams.get('path')))) },
-    { method: 'POST', path: '/api/uploads', access: 'device', sameOrigin: true, handle: async ({ request }) =>
-      json({ path: await saveUpload(uploadDir, request.headers.get('content-type') || '', Buffer.from(await request.arrayBuffer())) }) },
+    { method: 'GET', path: '/api/file', access: 'device', sameOrigin: false, handle: async ({ url }) =>
+      new Response(await readTextFile(await paneFolder(url.searchParams.get('pane')), url.searchParams.get('path')), { headers: { ...securityHeaders,
+        'Content-Type': 'text/plain; charset=utf-8', 'Cross-Origin-Resource-Policy': 'same-origin' } }) },
+    { method: 'POST', path: '/api/uploads', access: 'device', sameOrigin: true, handle: async ({ request, url }) =>
+      json({ path: await saveUpload(uploadDir, request.headers.get('content-type') || '', Buffer.from(await request.arrayBuffer()), new Date(), url.searchParams.get('name')) }) },
 
     // Alerts.
     { method: 'GET', path: '/api/push', access: 'device', sameOrigin: false, handle: ({ device }) =>

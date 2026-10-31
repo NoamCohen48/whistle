@@ -4,7 +4,8 @@ import { errorMessage, loadPanes, pairBrowser, PairingRequired, runAction, type 
 import { CreateSheet, PaneMenu, type CreateRequest } from './components/Actions.tsx';
 import { ChangesSheet } from './components/Changes.tsx';
 import { AlertsSheet } from './components/AlertsSheet.tsx';
-import { PictureViewer, type PictureRequest } from './components/PictureViewer.tsx';
+import { PictureViewer, isPicturePath, type PictureRequest } from './components/PictureViewer.tsx';
+import { FileViewer, type FileRequest } from './components/FileViewer.tsx';
 import { TerminalTextSheet } from './components/TerminalText.tsx';
 import { Icon } from './components/Icon.tsx';
 import { AgentSwitcher, Inventory, needsYou, paneName, statusTone, workspaceName } from './components/Inventory.tsx';
@@ -31,10 +32,13 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [inventoryError, setInventoryError] = useState('');
   const [inventoryStale, setInventoryStale] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [leftHanded, setLeftHanded] = useState(() => readPreference<boolean>('left-handed', false));
   const [recent, setRecent] = useState<string[]>(() => readPreference('recent-panes', []));
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [selection, setSelection] = useState<Pane>();
   const [error, setError] = useState('');
+  // The last message shown, for Report a problem; it outlives the banner's dismissal.
+  const [lastMessage, setLastMessage] = useState('');
   const [engine, setEngine] = useState<TerminalSession>();
   const [session, setSession] = useState(INITIAL_SESSION);
   const [drafts, setDrafts] = useState<Record<string, string>>(readDrafts);
@@ -45,6 +49,11 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [fontOpen, setFontOpen] = useState(false);
   const [changesFor, setChangesFor] = useState<string>();
   const [picture, setPicture] = useState<PictureRequest>();
+  const [file, setFile] = useState<FileRequest>();
+  // A path an agent printed: pictures open in the picture viewer, anything else as text.
+  const openPath = useCallback(({ paneId, path, line }: FileRequest) => {
+    if (isPicturePath(path)) setPicture({ paneId, path }); else setFile({ paneId, path, line });
+  }, []);
   const [terminalText, setTerminalText] = useState<{ paneId: string; text: string }>();
   const [alerts, setAlerts] = useState<AlertState>('unsupported');
   const [alertsBusy, setAlertsBusy] = useState(false);
@@ -189,7 +198,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     // Every history transition releases control; Forward may only reopen watch-only.
     engine?.close();
     setCreateRequest(undefined); setMenuOpen(false); setChangesFor(undefined);
-    setPicture(undefined); setTerminalText(undefined); setAlertsOpen(false); setSettingsOpen(false);
+    setPicture(undefined); setFile(undefined); setTerminalText(undefined); setAlertsOpen(false); setSettingsOpen(false);
     const target = event.state?.whistlePane;
     const pane = paired && target ? snapshot?.panes.find(item =>
       item.pane_id === target.paneId && item.terminal_id === target.terminalId) : undefined;
@@ -231,6 +240,16 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       setCreateRequest({ kind: 'agent', workspaceId: state.workspaces.some(item => item.workspace_id === workspaceId) ? workspaceId! : undefined });
     }
   });
+  // Two fingers swiped sideways on the terminal: the neighbouring pane in the switcher's order,
+  // watch-only like any other way of opening a pane. The ends do not wrap around.
+  const swipe = useEffectEvent((direction: 'next' | 'previous') => {
+    if (!snapshot || !selected) return;
+    const agents = snapshot.panes.filter(pane => pane.agent);
+    const order = agents.some(pane => pane.pane_id === selected.pane_id) ? agents : snapshot.panes;
+    const next = order[order.findIndex(pane => pane.pane_id === selected.pane_id) + (direction === 'next' ? 1 : -1)];
+    if (next) select(next); else navigator.vibrate?.(30);
+  });
+  useEffect(() => engine?.onSwipe(direction => swipe(direction)), [engine]);
   // New panes open like any other: watch-only, without focusing the desktop.
   const created = async (paneId?: string, warning?: string) => {
     // Creation already succeeded. A failed inventory read must never invite another creation.
@@ -267,6 +286,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   };
   const draftKey = selected?.pane_id || '';
   const message = error || session.error || inventoryError;
+  useEffect(() => { if (message) setLastMessage(message); }, [message]);
   const banner = <div id="error" role="alert" hidden={!message}>
     <span>{message}</span>
     {inventoryError && !error && !session.error ? <button type="button" className="quiet" disabled={refreshing} onClick={() => void refresh()}>Retry</button> : null}
@@ -278,7 +298,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   return <>
     <Pairing hidden={paired} loading={loading || refreshing} error={error || inventoryError} unavailable={!needsPairing && !loading} onPair={pair}
       onRetry={() => { setError(''); void refresh(); }} />
-    <div id="app" hidden={!paired} data-view={selected ? 'terminal' : 'inventory'} data-phase={selected ? session.phase : undefined}>
+    <div id="app" hidden={!paired} data-hand={leftHanded ? 'left' : 'right'} data-view={selected ? 'terminal' : 'inventory'} data-phase={selected ? session.phase : undefined}>
       <header>
         {selected ? <button type="button" id="back" className="icon-button" aria-label="Back to panes" onClick={() => {
           engine?.close(); setSelection(undefined); sessionStorage.removeItem('whistle-pane'); void refresh();
@@ -306,12 +326,13 @@ export function App({ startup }: { startup: Promise<Startup> }) {
         onMenu={pane => { setMenuPaneId(pane.pane_id); setMenuOpen(true); }} banner={selected ? null : banner} recent={recent}
         lastUpdated={lastUpdated} stale={inventoryStale} refreshing={refreshing} onCreate={() => setCreateRequest({ kind: 'workspace' })} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
-        banner={selected ? banner : null} onText={showText} fontOpen={fontOpen} onFontOpen={setFontOpen}
+        banner={selected ? banner : null} onText={showText} onPath={openPath} fontOpen={fontOpen} onFontOpen={setFontOpen}
         draft={drafts[draftKey] || ''} onDraft={value => { if (draftKey) { saveDraft(draftKey, value); setDrafts(previous => ({ ...previous, [draftKey]: value })); } }} />
       {selected ? null : <button type="button" id="new" className="primary fab" aria-haspopup="dialog"
         onClick={() => setCreateRequest({ kind: 'agent', workspaceId: sessionStorage.getItem('whistle-workspace') || undefined })}>
         <Icon name="plus" />New</button>}
       <SettingsSheet open={settingsOpen && paired} onClose={() => setSettingsOpen(false)} alerts={alerts} alertsBusy={alertsBusy}
+        lastMessage={lastMessage} leftHanded={leftHanded} onHand={left => { setLeftHanded(left); writePreference('left-handed', left); }}
         onAlerts={async () => { if (alerts === 'on') { setSettingsOpen(false); setAlertsOpen(true); } else return await toggleAlerts(); }} />
       <AlertsSheet open={alertsOpen && alerts === 'on'} onClose={() => setAlertsOpen(false)}
         onTurnOff={async () => { const failure = await toggleAlerts(); if (failure) throw new Error(failure); setAlertsOpen(false); }} />
@@ -327,8 +348,9 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       <ChangesSheet pane={selected} open={Boolean(selected) && changesFor === selected?.pane_id} onClose={() => setChangesFor(undefined)}
         onPicture={setPicture} />
       <TerminalTextSheet text={terminalText?.paneId === selected?.pane_id ? terminalText?.text : undefined} paneId={selected?.pane_id}
-        onClose={() => setTerminalText(undefined)} onPicture={setPicture} />
+        onClose={() => setTerminalText(undefined)} onPath={openPath} />
       <PictureViewer picture={picture?.paneId === selected?.pane_id ? picture : undefined} onClose={() => setPicture(undefined)} />
+      <FileViewer file={file?.paneId === selected?.pane_id ? file : undefined} onClose={() => setFile(undefined)} />
     </div>
   </>;
 }

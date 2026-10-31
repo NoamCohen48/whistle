@@ -60,7 +60,7 @@ const PaneMenuContext = createContext<((pane: Pane) => void) | undefined>(undefi
 
 function PaneRow({ pane, detail, preview, onSelect, pinned, onPin }: { pane: Pane; detail?: string; preview?: string; onSelect: (pane: Pane) => void; pinned?: boolean; onPin?: (pane: Pane) => void }) {
   const onMenu = useContext(PaneMenuContext);
-  return <div className="pane-entry"><button type="button" className="pane" aria-haspopup={onMenu ? 'dialog' : undefined} onClick={() => onSelect(pane)}
+  return <div className="pane-entry" data-tone={statusTone(pane)}><button type="button" className="pane" aria-haspopup={onMenu ? 'dialog' : undefined} onClick={() => onSelect(pane)}
     onContextMenu={onMenu ? event => { event.preventDefault(); navigator.vibrate?.(12); onMenu(pane); } : undefined}>
     <StatusDot pane={pane} />
     <span className="pane-copy">
@@ -147,9 +147,9 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
   const shortcuts = (ids: string[]) => ids.map(id => snapshot?.panes.find(pane => pane.pane_id === id)).filter((pane): pane is Pane => Boolean(pane));
   const pinnedPanes = shortcuts(pinned);
   const recentPanes = shortcuts(recent).filter(pane => !pinned.includes(pane.pane_id)).slice(0, 3);
-  // Blocked agents are waiting on an answer, so they come before finished ones.
-  const waiting = (snapshot?.panes.filter(needsYou) || [])
-    .sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
+  // A pane never moves when its status changes: it is marked where it is, and the Needs you
+  // filter collects them. A list that reorders itself moves the row about to be tapped.
+  const waiting = snapshot?.panes.filter(needsYou).length || 0;
   return <PaneMenuContext value={onMenu}><main id="panes" hidden={hidden} aria-busy={!snapshot}>
     {banner}
     <h1 className="sr-only">Your herd</h1>
@@ -166,10 +166,11 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
         onClick={() => setQuery('')}><Icon name="close" size={18} /></button> : null}
     </div> : null}
     {count ? <div className="herd-filters" role="group" aria-label="Filter panes">{[
-      ['all', 'All', count], ['needs', 'Needs you', snapshot!.panes.filter(needsYou).length],
+      ['all', 'All', count], ['needs', 'Needs you', waiting],
       ['busy', 'Working', snapshot!.panes.filter(pane => statusTone(pane) === 'busy').length],
       ['idle', 'Idle', snapshot!.panes.filter(pane => statusTone(pane) === 'idle').length],
-    ].map(([value, name, total]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(String(value))}>{name}<span>{total}</span></button>)}</div> : null}
+    ].map(([value, name, total]) => <button type="button" key={value} aria-pressed={filter === value}
+      data-alert={value === 'needs' && waiting > 0} onClick={() => setFilter(String(value))}>{name}<span>{total}</span></button>)}</div> : null}
     {results ? <section id="search-results" className="workspace-group" aria-live="polite">
       <h2 className="workspace"><span className="workspace-name">
         {results.length ? `${results.length} ${results.length === 1 ? 'match' : 'matches'}` : 'No matches'}</span></h2>
@@ -180,13 +181,6 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
     {!results && pinnedPanes.length ? <section className="workspace-group" id="pinned-panes"><h2 className="workspace">Pinned</h2>
       <ul className="pane-list">{pinnedPanes.map(pane => <li key={pane.pane_id}><PaneRow pane={pane} preview={previews[pane.pane_id]} detail={workspaceName(snapshot, pane)} onSelect={onSelect} pinned onPin={onPin} /></li>)}</ul></section> : null}
     {!results && recentPanes.length ? <details className="recent-panes"><summary>Recent panes<Icon name="chevron" size={18} /></summary><ul className="pane-list">{recentPanes.map(pane => <li key={pane.pane_id}><PaneRow pane={pane} preview={previews[pane.pane_id]} detail={workspaceName(snapshot, pane)} onSelect={onSelect} /></li>)}</ul></details> : null}
-    {!results && snapshot && waiting.length ? <section id="needs-you" className="workspace-group" aria-labelledby="needs-you-heading">
-      <h2 className="workspace" id="needs-you-heading"><span className="workspace-name">Needs you</span>
-        <span className="workspace-count">{waiting.length}</span></h2>
-      <ul className="pane-list">{waiting.map(pane => <li key={pane.pane_id}>
-        <PaneRow pane={pane} preview={previews[pane.pane_id]} detail={workspaceName(snapshot, pane)} onSelect={onSelect} />
-      </li>)}</ul>
-    </section> : null}
     <div id="pane-list" hidden={Boolean(results)}>{!snapshot ? <div className="skeleton" role="status" aria-label="Loading panes…">
       {[0, 1, 2].map(row => <span key={row} />)}</div>
       : count ? groupWorkspaces(snapshot.workspaces).map(group =>

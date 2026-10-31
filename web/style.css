@@ -41,13 +41,14 @@ label { display: block; font-size: 13px; font-weight: 600; color: var(--text); m
 .icon { flex-shrink: 0 }
 
 /* Buttons */
-button {
+button, .button-link {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   min-height: 44px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--radius);
   background: var(--surface); font-size: 15px; cursor: pointer; white-space: nowrap; touch-action: manipulation;
   transition: background-color .12s, border-color .12s, color .12s, transform .08s;
 }
-@media (hover: hover) { button:not(:disabled):hover { background: var(--surface-2) } }
+.button-link { color: var(--text); text-decoration: none }
+@media (hover: hover) { button:not(:disabled):hover, .button-link:hover { background: var(--surface-2) } }
 button:not(:disabled):active { transform: scale(.97) }
 button:disabled { opacity: .38; cursor: not-allowed }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
@@ -143,9 +144,12 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .pane .state { color: var(--text) }
 .pane .state[data-tone=attention] { color: var(--alert); font-weight: 600 }
 .pane .state[data-tone=done] { color: var(--watch); font-weight: 600 }
-#needs-you { margin-bottom: 28px }
-#needs-you .workspace { color: var(--text) }
-#needs-you .pane-list { border-color: color-mix(in srgb, var(--alert) 35%, var(--line)) }
+/* Waiting panes are marked in place, never moved. */
+.pane-entry[data-tone=attention] { background: color-mix(in srgb, var(--alert) 9%, transparent); box-shadow: inset 3px 0 0 var(--alert) }
+.pane-entry[data-tone=done] { box-shadow: inset 3px 0 0 var(--watch) }
+.pane-list li:first-child > .pane-entry { border-radius: var(--radius) var(--radius) 0 0 }
+.pane-list li:last-child > .pane-entry { border-radius: 0 0 var(--radius) var(--radius) }
+.pane-list li:only-child > .pane-entry { border-radius: var(--radius) }
 .pane-entry { display: flex; align-items: stretch; min-width: 0 }
 .pane-entry .pane { flex: 1; min-width: 0 }
 .pane > .dot { margin-top: 8px } /* Level with the pane name. */
@@ -161,6 +165,8 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .herd-filters button { min-height: 40px; padding: 0 10px; font-size: 13px; background: transparent; border-color: var(--line) }
 .herd-filters button span { font-variant-numeric: tabular-nums; color: var(--muted) }
 .herd-filters [aria-pressed=true] { background: var(--surface-2); border-color: var(--accent) }
+.herd-filters [data-alert=true] { color: var(--alert); border-color: color-mix(in srgb, var(--alert) 55%, var(--line)) }
+.herd-filters [data-alert=true] span { color: var(--alert); font-weight: 600 }
 .recent-panes { margin: 0 0 6px }
 .recent-panes summary { display: flex; align-items: center; gap: 6px; min-height: 44px; font-size: 13px; color: var(--muted); cursor: pointer; list-style: none }
 .recent-panes summary::-webkit-details-marker { display: none }
@@ -249,6 +255,7 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0 8px; list-style: none }
 #attachments li { display: flex; align-items: center; gap: 8px; padding: 3px 2px 3px 3px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--bg); font-size: 14px }
 #attachments img, #attachments .no-preview { width: 40px; height: 40px; border-radius: 7px; object-fit: cover; display: grid; place-items: center; background: var(--surface); color: var(--muted) }
+#attachments .attachment-name { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 #attachments button { min-height: 40px; min-width: 40px; padding: 0 }
 .compose-actions { display: flex; align-items: center; gap: 2px; padding: 0 4px 2px }
 .compose-hint { font-size: 13px; color: var(--muted) }
@@ -273,6 +280,11 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .settings-section + .settings-section { border-top: 1px solid var(--line) }
 .settings-section h3 { margin-bottom: 10px; font-size: 16px }
 .settings-section .sheet-note { margin-bottom: 14px }
+.choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px }
+.choice button { background: transparent; border-color: var(--line); color: var(--muted) }
+.choice button[aria-pressed=true] { color: var(--text); background: var(--surface-2); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent) }
+/* Left hand: the dock is mirrored, so Take control, Enter and Send sit under the left thumb. */
+#app[data-hand=left] .session-bar, #app[data-hand=left] .main-keys, #app[data-hand=left] .key-pair { flex-direction: row-reverse }
 .device-list { list-style: none; margin: 0; padding: 0 }
 .device-list li { display: flex; align-items: center; gap: 8px; padding: 14px 0 }
 .device-list li + li { border-top: 1px solid var(--line) }
@@ -498,9 +510,9 @@ select {
 .change-picture { display: block; width: calc(100% - 16px); margin: 4px 8px 12px; padding: 0; min-height: 0; border: 1px solid var(--line); background: var(--bg) repeating-conic-gradient(var(--surface) 0 25%, transparent 0 50%) 0 0 / 16px 16px; overflow: hidden }
 .change-picture img { display: block; width: 100%; max-height: 50dvh; object-fit: contain }
 /* Picture viewer */
-#picture-viewer { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 0; border: 0; background: #070a0a; color: var(--text) }
-#picture-viewer[open] { display: flex; flex-direction: column }
-#picture-viewer::backdrop { background: #070a0a }
+#picture-viewer, #file-viewer { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 0; border: 0; background: #070a0a; color: var(--text) }
+#picture-viewer[open], #file-viewer[open] { display: flex; flex-direction: column }
+#picture-viewer::backdrop, #file-viewer::backdrop { background: #070a0a }
 .viewer-head { display: flex; align-items: center; gap: 4px; padding: max(6px, env(safe-area-inset-top)) 6px 6px 16px }
 .viewer-head strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600 }
 .viewer-head a.icon-button { display: inline-grid; place-items: center; height: 44px; color: inherit }
@@ -508,6 +520,12 @@ select {
 .viewer-body img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in }
 .viewer-body[data-full=true] { place-items: start }
 .viewer-body[data-full=true] img { max-width: none; max-height: none; cursor: zoom-out }
+.viewer-line { color: var(--muted); font-weight: 400 }
+.viewer-path { margin: 0; padding: 0 16px 8px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere }
+#file-body { flex: 1; min-height: 0; margin: 0; padding: 4px 0 calc(12px + env(safe-area-inset-bottom)); overflow: auto; overscroll-behavior: contain; counter-reset: line; font: 13px/1.5 ui-monospace, "Cascadia Code", "DejaVu Sans Mono", monospace; tab-size: 4 }
+#file-body span { display: block; padding: 0 12px 0 0; white-space: pre }
+#file-body span::before { counter-increment: line; content: counter(line); display: inline-block; width: 5ch; margin-right: 12px; padding-right: 8px; text-align: right; color: var(--muted); border-right: 1px solid var(--line-strong); user-select: none }
+#file-body span[data-current] { background: color-mix(in srgb, var(--accent) 18%, transparent) }
 .viewer-body .sheet-error { margin: 16px }
 .menu button { width: 100%; justify-content: flex-start; gap: 14px; min-height: 52px; padding: 0 12px; border: 0; background: transparent; font-size: 16px }
 .menu .icon { color: var(--muted) }
