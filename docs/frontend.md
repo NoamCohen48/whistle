@@ -94,4 +94,10 @@ Browser fixtures bind to `127.0.0.1:8792`; Vite tests use `127.0.0.1:5174`. The 
 
 The suite runs in each browser configuration: QR redemption/fragment removal and worktree nesting; token fallback; watch/control/release; ordered live input/chords/paste; drafts and switching; reconnect/reload without replay; local/edge scroll and stable Keys geometry; polling without terminal remount and replacement-pane detection; uncertain input warnings; short viewport and synthetic touch scrolling; creating, closing, removing and renaming; Needs you; picture attachments; reviewing changes and pictures; terminal text and copy; home-screen shortcuts; the folder browser; search; control vibration; and opening a pane from an alert. `tests/e2e/alerts.browser.ts` covers turning alerts on/off and the worker showing a pushed alert; it runs on the full Chromium build because the old headless shell reports granted notifications as denied.
 
-These are browser/emulator checks, not physical Android IME, camera, momentum scrolling, lock/unlock or network-handoff validation. The opt-in mutating real-Herdr test remains skipped by default.
+These are browser checks, not physical Android IME, camera, momentum scrolling, lock/unlock or network-handoff validation. The opt-in mutating real-Herdr test remains skipped by default.
+
+### On an Android emulator or phone
+
+`bun run test:android` runs `tests/android/` in the real Chrome app on the one device `adb devices` lists, and skips when there is none. It taps through Android's input system (`adb shell input tap`), types with `adb shell input text`, and reads whether the Android keyboard is up from `dumpsys input_method`. It checks that tapping the terminal raises the keyboard only while controlling, that the keyboard types live input, that Keys replaces it, and that Release puts it away.
+
+Playwright attaches to Chrome's DevTools socket through `adb forward`, because its own Android mode needs Chrome to read command-line flags, which Google Play images ignore. The fixture runs on `127.0.0.1:8793` and reaches the device through `adb reverse`, so it never shares a fixture with the browser projects. Each test force-stops Chrome and removes both forwards when it finishes. It is not part of CI.

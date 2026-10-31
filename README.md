@@ -141,6 +141,7 @@ bun run typecheck
 bun test                          # unit and host tests
 bunx playwright install chromium  # once
 bun run test:e2e                  # browser tests against a fake host
+bun run test:android              # opt-in: real Chrome on an Android emulator or phone over adb
 bun run test:site                 # the website
 bun run test:package              # the standalone executable
 ```
