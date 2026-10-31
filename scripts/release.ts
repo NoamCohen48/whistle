@@ -1,6 +1,7 @@
 /// <reference types="bun" />
 // Turns standalone executables into release downloads in dist/release/:
-// raw binaries, tarballs, .deb, .rpm and Arch packages, install.sh and SHA256SUMS.
+// raw binaries, tarballs, .deb, .rpm and Arch packages, install.sh and SHA256SUMS, plus the
+// AUR package's PKGBUILD and .SRCINFO in dist/aur/.
 //
 //   bun run package -- --target linux-x64 && bun run package -- --target linux-arm64
 //   bun run scripts/release.ts linux-x64 linux-arm64
@@ -11,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { chmod, copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { projectRoot } from '../src/config.ts';
+import { parseSums, writeAur } from './aur.ts';
 
 const architectures = {
   'linux-x64': { deb: 'amd64', rpm: 'x86_64', arch: 'x86_64', nfpm: 'amd64' },
@@ -95,5 +97,6 @@ if (import.meta.main) {
   const names = (await readdir(out)).filter(name => name !== 'SHA256SUMS').sort();
   const sums = await Promise.all(names.map(async name => `${await sha256(join(out, name))}  ${name}`));
   await writeFile(join(out, 'SHA256SUMS'), sums.join('\n') + '\n');
+  if (targets.length === Object.keys(architectures).length) await writeAur(pkg.version, repository, parseSums(sums.join('\n')), join(projectRoot, 'dist', 'aur'));
   console.log(`Whistle ${pkg.version} for ${repository}:\n${sums.join('\n')}`);
 }
