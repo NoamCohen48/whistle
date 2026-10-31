@@ -22,7 +22,7 @@ Agent-chat rendering, inferred approval buttons, transcript parsing, a full file
 
 ## Related projects
 
-- [Collie](https://github.com/AltanS/collie) attaches to existing Herdr sessions. Its raw view uses rendered rows, and its input delivery infers agent behaviour. Its ADR 0008 discusses snapshot mirroring against observe/control.
+- [Collie](https://github.com/AltanS/collie) attaches to existing Herdr sessions. Its raw view uses rendered rows, and its input delivery infers agent behaviour. Its ADR 0008 discusses snapshot mirroring against observe/control. See the [full comparison](collie-comparison.md).
 - [VibeTunnel](https://github.com/amantus-ai/vibetunnel) is terminal first, but forwards wrapped sessions rather than discovering existing Herdr panes.
 - [ttyd](https://github.com/tsl0922/ttyd) is a straightforward browser terminal.
 - [Happy](https://github.com/slopus/happy) is a mobile interaction reference built around a harness, which is not this project's direction.
