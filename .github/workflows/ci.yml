@@ -93,3 +93,23 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  nix:
+    name: Build the Nix package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Build with the flake and run it
+        # A stale dependency hash in packaging/nix/package.nix fails here with the new hash.
+        run: |
+          docker run --rm -v "$PWD:/src:ro" \
+            nixos/nix:2.35.4@sha256:f159a58f390677f41e8e900a74b6e2f9c7f27b364122ae6acf7a652ce6c551c0 sh -euc '
+            echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+            cp -r /src /work && rm -rf /work/.git && cd /work
+            nix build -L path:/work#whistle
+            ./result/bin/whistle --version'

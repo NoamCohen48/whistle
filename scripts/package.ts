@@ -8,6 +8,8 @@ import { projectRoot } from '../src/config.ts';
 import type { EmbeddedBuild } from '../src/build-info.ts';
 
 async function revision() {
+  // Builds without Git, such as Nix, pass the revision in.
+  if (process.env.WHISTLE_REVISION) return process.env.WHISTLE_REVISION;
   const head = Bun.spawn(['git', 'rev-parse', '--short', 'HEAD'], { cwd: projectRoot, stdout: 'pipe', stderr: 'ignore' });
   const value = (await new Response(head.stdout).text()).trim();
   if (await head.exited !== 0) return 'unknown';
