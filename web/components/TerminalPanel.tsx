@@ -5,7 +5,7 @@ import { TerminalSession, type SessionState } from '../terminal/session.ts';
 import { Icon } from './Icon.tsx';
 import { attachFile, attachPicture, attachedName, attachedPaths, previewFor } from '../attach.ts';
 import { clearPrompts, draftStatus, readPrompts, rememberPrompt } from '../drafts.ts';
-import { readPreference, writePreference } from '../preferences.ts';
+import { addSavedKey, keyLabel, onShortcutsChanged, readQuickReplies, readSavedKeys, removeSavedKey } from '../shortcuts.ts';
 import { Sheet } from './Actions.tsx';
 import type { FileRequest } from './FileViewer.tsx';
 
@@ -116,8 +116,17 @@ function TerminalHistory({ engine, active }: { engine?: TerminalSession; active:
   </>;
 }
 
+// A list kept in shortcuts.ts, read again whenever it is saved anywhere.
+function useShortcutList(read: () => string[]) {
+  const [list, setList] = useState(read);
+  useEffect(() => onShortcutsChanged(() => setList(read())), [read]);
+  return list;
+}
+
 function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSession; state: SessionState; open: boolean; maxHeight?: number }) {
   const customKey = useRef<HTMLInputElement>(null);
+  const savedKeys = useShortcutList(readSavedKeys);
+  const [keyError, setKeyError] = useState('');
   const disabled = state.phase !== 'controlling';
   const sendKey = (key: string) => {
     if (key === 'Interrupt') engine?.shortcut('ctrl+c');
@@ -130,10 +139,17 @@ function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSessio
         {modifierOrder.map(modifier => <button type="button" key={modifier} data-modifier={modifier} disabled={disabled}
           aria-pressed={state.modifiers.includes(modifier)} onPointerDown={event => event.preventDefault()}
           onClick={() => engine?.toggleModifier(modifier)}>{title(modifier)}</button>)}
-        <button type="button" id="clear-modifiers" className="quiet" disabled={disabled || !state.modifiers.length}
+        <button type="button" id="lock-modifiers" disabled={disabled} aria-pressed={state.modifiersLocked}
+          title="Keep modifiers on after each key" onPointerDown={event => event.preventDefault()}
+          onClick={() => engine?.toggleModifierLock()}>Lock</button>
+        <button type="button" id="clear-modifiers" className="quiet" disabled={disabled || (!state.modifiers.length && !state.modifiersLocked)}
           onClick={() => engine?.clearModifiers()}>Clear</button>
       </div>
     </div>
+    {savedKeys.length ? <div id="saved-keys" className="keys extra-keys" aria-label="Saved keys">
+      {savedKeys.map(key => <button type="button" key={key} data-saved-key={key} disabled={disabled}
+        onPointerDown={event => event.preventDefault()} onClick={() => engine?.shortcut(key)}>{keyLabel(key)}</button>)}
+    </div> : null}
     <div className="keys extra-keys" aria-label="Common keys">
       {quickKeys.map(([key, label]) => <button type="button" key={key} data-key={key} disabled={disabled}
         aria-label={['Up', 'Down', 'Left', 'Right'].includes(key) ? `Arrow ${key.toLowerCase()}`
@@ -147,9 +163,19 @@ function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSessio
       <form id="custom-key-form" onSubmit={event => { event.preventDefault(); engine?.sendKey(customKey.current?.value || ''); }}>
         <label htmlFor="custom-key">Key or chord</label>
         <div className="key-entry"><input id="custom-key" ref={customKey} autoComplete="off" autoCapitalize="off"
-          placeholder="ctrl+shift+p" spellCheck={false} maxLength={80} disabled={disabled} />
-          <button type="submit" disabled={disabled}>Send</button></div>
+          placeholder="ctrl+shift+p" spellCheck={false} maxLength={80} disabled={disabled} onInput={() => setKeyError('')} />
+          <button type="submit" disabled={disabled}>Send</button>
+          <button type="button" id="save-key" className="quiet" disabled={disabled} onClick={() => {
+            try { addSavedKey(customKey.current?.value || ''); setKeyError(''); if (customKey.current) customKey.current.value = ''; }
+            catch (error) { setKeyError((error as Error).message); }
+          }}>Save</button></div>
+        {keyError ? <p className="key-hint" data-error role="alert">{keyError}</p>
+          : <p className="key-hint">Save puts a chord at the top of Keys on this phone.</p>}
       </form>
+      {savedKeys.length ? <ul id="saved-key-list" aria-label="Saved keys to remove">{savedKeys.map(key => <li key={key}>
+        <code>{keyLabel(key)}</code>
+        <button type="button" className="quiet" aria-label={`Remove ${keyLabel(key)}`} onClick={() => removeSavedKey(key)}><Icon name="close" size={16} /></button>
+      </li>)}</ul> : null}
       <div id="key-grid" aria-label="All terminal keys">
         {keyGroups.map(([heading, keys]) => <div className="key-group" key={heading} role="group" aria-label={heading}>
           <p className="group-label">{heading}</p>
@@ -186,6 +212,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const [restorePrompt, setRestorePrompt] = useState<string>();
   // The draft last handed to Send. It stays editable; the button just stops looking unsent.
   const [sent, setSent] = useState('');
+  const replies = useShortcutList(readQuickReplies);
   useBackCloses(keysOpen, () => setKeysOpen(false));
   useBackCloses(compose, () => setCompose(false));
   useEffect(() => {
@@ -289,6 +316,11 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
       <div id="compose" hidden={!compose || !controlling}>
         {/* Compose closes from its toolbar button; this line appears only when the draft cannot be saved. */}
         <div className="compose-meta" hidden={!saved}><small role="status">{saved}</small></div>
+        {/* One tap sends a reply as it is, like Send; the draft is left alone. Edited in Settings. */}
+        {replies.length ? <div id="quick-replies" role="group" aria-label="Quick replies">
+          {replies.map(reply => <button type="button" key={reply} className="quick-reply" disabled={!controlling} title={reply}
+            onClick={() => { if (engine?.paste(reply, true, Boolean(pane?.agent)) && paneId) setHistory(rememberPrompt(paneId, reply)); }}>{reply}</button>)}
+        </div> : null}
         <div className="composer">
           <textarea id="draft" ref={editor} rows={2} aria-label="Draft" spellCheck={false} autoCapitalize="off" value={draft}
             placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
@@ -339,7 +371,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
       </div>
       <div id="keyboard" aria-label="Terminal controls" hidden={!controlling}>
         <div id="armed-keys" role="status" hidden={!armed.length}>
-          <span className="armed-chord">{armed.map(title).join(' + ')} + …</span>
+          <span className="armed-chord">{armed.map(title).join(' + ')} + …{state.modifiersLocked ? ' (locked)' : ''}</span>
         </div>
         <KeyPicker engine={engine} state={state} open={keysOpen} maxHeight={keypadMax} />
         <div className="keys main-keys">

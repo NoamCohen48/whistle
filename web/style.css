@@ -251,6 +251,10 @@ header .title code { color: var(--faint); font-size: 11.5px }
   field-sizing: content; min-height: calc(2lh + 14px); max-height: calc(var(--app-height, 100dvh) * .28);
 }
 #draft:focus-visible { outline: none }
+/* Quick replies: one row that scrolls sideways, so a long list never pushes the draft away. */
+#quick-replies { display: flex; gap: 6px; margin: 0 -8px 8px; padding: 0 8px; overflow-x: auto; scrollbar-width: none }
+#quick-replies::-webkit-scrollbar { display: none }
+.quick-reply { flex: 0 0 auto; max-width: 70vw; min-height: 44px; padding: 0 14px; border-radius: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px }
 #attach-error { margin: 6px 4px 0; color: var(--alert); font-size: 14px }
 #attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0 8px; list-style: none }
 #attachments li { display: flex; align-items: center; gap: 8px; padding: 3px 2px 3px 3px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--bg); font-size: 14px }
@@ -285,11 +289,11 @@ header .title code { color: var(--faint); font-size: 11.5px }
 .choice button[aria-pressed=true] { color: var(--text); background: var(--surface-2); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent) }
 /* Left hand: the dock is mirrored, so Take control, Enter and Send sit under the left thumb. */
 #app[data-hand=left] .session-bar, #app[data-hand=left] .main-keys, #app[data-hand=left] .key-pair { flex-direction: row-reverse }
-.device-list { list-style: none; margin: 0; padding: 0 }
-.device-list li { display: flex; align-items: center; gap: 8px; padding: 14px 0 }
-.device-list li + li { border-top: 1px solid var(--line) }
-.device-list li > div { flex: 1; min-width: 0 }
-.device-list strong { font-size: 14px; overflow-wrap: anywhere }
+.device-list, .reply-list { list-style: none; margin: 0; padding: 0 }
+.device-list li, .reply-list li { display: flex; align-items: center; gap: 8px; padding: 14px 0 }
+.device-list li + li, .reply-list li + li { border-top: 1px solid var(--line) }
+.device-list li > div, .reply-list li > div { flex: 1; min-width: 0 }
+.device-list strong, .reply-list strong { font-size: 14px; overflow-wrap: anywhere }
 .device-list small { display: block; font-size: 12px; color: var(--muted); margin-top: 5px }
 .device-confirm { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 16px }
 .text-search { display: flex; align-items: center; gap: 6px; margin-block: 8px }
@@ -335,7 +339,8 @@ header .title code { color: var(--faint); font-size: 11.5px }
 }
 .keypad-head { position: sticky; top: 0; z-index: 1; padding: 12px 0 8px; background: var(--surface) }
 .modifiers button { flex: 1; font-weight: 600 }
-.modifiers #clear-modifiers { flex: 0 0 auto; color: var(--text) }
+.modifiers #clear-modifiers, .modifiers #lock-modifiers { flex: 0 0 auto; color: var(--text) }
+.modifiers #lock-modifiers[aria-pressed=true] { background: var(--surface-2); border-color: var(--live); color: var(--live) }
 .modifiers #clear-modifiers:disabled { color: var(--muted) }
 .modifiers button[aria-pressed=true] { background: var(--live); border-color: var(--live); color: var(--live-ink) }
 .extra-keys { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 4px 0 10px }
@@ -349,6 +354,13 @@ header .title code { color: var(--faint); font-size: 11.5px }
 #custom-key-form { margin-bottom: 14px }
 .key-entry { display: flex; gap: 6px }
 .key-entry input { min-width: 0; font-family: var(--mono) }
+.key-hint { margin: 6px 2px 0; color: var(--muted); font-size: 13px }
+.key-hint[data-error] { color: var(--alert) }
+#saved-keys { display: flex; flex-wrap: wrap; margin-top: 0 }
+#saved-keys button { flex: 0 1 auto; max-width: 100%; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px }
+#saved-key-list { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; padding: 0; list-style: none }
+#saved-key-list li { display: flex; align-items: center; gap: 2px; padding-left: 10px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 13px }
+#saved-key-list button { min-height: 40px; min-width: 40px; padding: 0 }
 .key-group + .key-group { margin-top: 14px }
 .group-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px }
 .key-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 5px }
@@ -580,6 +592,20 @@ button.danger { background: var(--alert); border-color: var(--alert); color: #2a
   .pair h1 { font-size: 44px }
 }
 
+/* Wide screens: the herd stays beside the open terminal, so switching is one tap and the
+   switcher strip is not needed. App.tsx sets data-wide from the same media query. */
+#app[data-wide][data-view=terminal] { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) }
+#app[data-wide][data-view=terminal] header { grid-column: 1 / -1 }
+#app[data-wide][data-view=terminal] #agent-switcher { display: none }
+#app[data-wide][data-view=terminal] #panes { grid-column: 1; grid-row: 2; max-width: none; margin: 0; padding: 16px 12px 24px; border-right: 1px solid var(--line) }
+#app[data-wide][data-view=terminal] #session { grid-column: 2; grid-row: 2 }
+#app[data-wide][data-view=terminal] .herd-filters { flex-wrap: wrap }
+.pane-entry:has(.pane[aria-current=true]) { background: var(--surface-2) }
+.pane[aria-current=true] strong { color: var(--live) }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important }
 }
+#reply-form { display: flex; gap: 6px; margin-top: 8px }
+#reply-form input { flex: 1; min-width: 0 }
+#reply-list strong { font-weight: 500 }

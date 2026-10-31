@@ -6,7 +6,15 @@ export type { Action, Changes, FileDiff, FolderList, WorktreeChoice };
 
 export async function loadPanes(signal?: AbortSignal): Promise<Snapshot> {
   const response = await request('/api/panes', { signal });
-  return json(response);
+  return toLocalClock(await json<Snapshot>(response));
+}
+// The host dates status changes by its own clock; the phone's may differ, so each start time
+// is moved to this phone's clock using how long ago it was when the host answered.
+export function toLocalClock(state: Snapshot, now = Date.now()): Snapshot {
+  if (typeof state.now !== 'number') return state;
+  const hostNow = state.now;
+  return { ...state, panes: state.panes.map(pane => typeof pane.status_since === 'number'
+    ? { ...pane, status_since: now - Math.max(0, hostNow - pane.status_since) } : pane) };
 }
 export async function pairBrowser(path: '/api/login' | '/api/redeem-pairing', credential: Record<string, string>) {
   await request(path, {

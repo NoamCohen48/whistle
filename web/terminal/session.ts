@@ -13,9 +13,11 @@ export interface SessionState {
   fitWidth: boolean;
   fontSize: number;
   modifiers: Modifier[];
+  // Locked modifiers stay armed after each key, for a run of chords such as Ctrl+N, Ctrl+N.
+  modifiersLocked: boolean;
   error: string;
 }
-export const INITIAL_SESSION: SessionState = { phase: 'idle', fitWidth: true, fontSize: 13, modifiers: [], error: '' };
+export const INITIAL_SESSION: SessionState = { phase: 'idle', fitWidth: true, fontSize: 13, modifiers: [], modifiersLocked: false, error: '' };
 
 // This class owns all high-frequency terminal state. React receives only UI transitions,
 // never terminal frames, cursor positions, scroll offsets, pending ACKs or typed bytes.
@@ -200,7 +202,13 @@ export class TerminalSession {
   }
   private fail(message: string) { this.update({ error: message }); }
   clearError() { this.update({ error: '' }); }
-  clearModifiers() { if (this.state.modifiers.length) this.update({ modifiers: [] }); }
+  clearModifiers() { if (this.state.modifiers.length || this.state.modifiersLocked) this.update({ modifiers: [], modifiersLocked: false }); }
+  // After a key: armed modifiers are used up, unless they are locked.
+  private releaseModifiers() { if (!this.state.modifiersLocked) this.clearModifiers(); }
+  toggleModifierLock() {
+    if (this.state.phase !== 'controlling') return;
+    this.update({ modifiersLocked: !this.state.modifiersLocked });
+  }
   toggleModifier(modifier: Modifier) {
     if (this.state.phase !== 'controlling') return;
     const armed = new Set(this.state.modifiers);
@@ -233,7 +241,7 @@ export class TerminalSession {
     old?.close(1000, 'Leaving pane');
     if (this.pending.size) this.fail('Some input writes were not confirmed. Check the pane before retrying; nothing will be replayed.');
     this.pending.clear();
-    this.update({ phase: 'idle', modifiers: [] });
+    this.update({ phase: 'idle', modifiers: [], modifiersLocked: false });
   }
   private connect(control: boolean) {
     const pane = this.pane;
@@ -281,7 +289,7 @@ export class TerminalSession {
     ws.onclose = () => {
       if (epoch !== this.generation || this.disposed) return;
       this.stopFling();
-      this.update({ phase: 'disconnected', modifiers: [] });
+      this.update({ phase: 'disconnected', modifiers: [], modifiersLocked: false });
       if (this.pending.size) this.fail('Input delivery is uncertain. Check the pane before retrying. Nothing is replayed.');
       this.pending.clear();
       if (!document.hidden) {
@@ -307,15 +315,19 @@ export class TerminalSession {
       const parts = validateChord(key).split('+');
       const base = parts.pop() || '';
       this.send({ type: 'key', key: chord(base, new Set<Modifier>([...this.state.modifiers, ...parts as Modifier[]])) });
-      this.clearModifiers();
+      this.releaseModifiers();
     } catch (error) { this.fail((error as Error).message); }
   }
-  shortcut(key: string) { this.clearModifiers(); this.sendKey(key); }
+  // A key that is a chord already, such as Ctrl+C: armed modifiers are not added to it.
+  shortcut(key: string) {
+    try { this.send({ type: 'key', key: validateChord(key) }); this.releaseModifiers(); }
+    catch (error) { this.fail((error as Error).message); }
+  }
   // Herdr frames are rendered screens, so a mirror attached mid-session may never see the program
   // turn bracketed paste on. Coding agents always accept it; the caller says when the pane is one.
   paste(value: string, submit: boolean, agent = false) {
     if (!value || this.state.phase !== 'controlling') return false;
-    this.clearModifiers();
+    this.releaseModifiers();
     const text = value.replace(/\r?\n/g, '\r');
     const bracketed = this.terminal.modes.bracketedPasteMode || agent;
     if (!bracketed && /[\r\n]/.test(text)) { this.fail('This terminal did not say it accepts pasted lines, so nothing was sent. Send one line at a time.'); return; }
@@ -392,7 +404,6 @@ export class TerminalSession {
     this.stopFling(); this.followInput = false;
     this.setLocalTop(Math.max(0, Math.min(1, fraction)) * this.scrollInfo().max);
   }
-  // A two-finger swipe to the left asks for the next pane, to the right for the previous one.
   // Opens the link under a tap or click: a web address in a new tab, a file path with onPath.
   // True when the tap was on a link, including one xterm itself just opened.
   openLinkAt(clientX: number, clientY: number, onPath: (path: PathMatch) => void) {
@@ -413,6 +424,7 @@ export class TerminalSession {
     return findLinks(text).find(match => column >= match.start && column < match.end);
   }
 
+  // A two-finger swipe to the left asks for the next pane, to the right for the previous one.
   onSwipe(listener: (direction: 'next' | 'previous') => void) {
     this.swipeListeners.add(listener);
     return () => { this.swipeListeners.delete(listener); };

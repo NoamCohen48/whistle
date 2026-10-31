@@ -4,6 +4,7 @@ import { groupWorkspaces } from '../workspaces.ts';
 import { loadPreviews } from '../api.ts';
 import { Icon } from './Icon.tsx';
 import { readPreference, writePreference } from '../preferences.ts';
+import { age, type Seen } from '../seen.ts';
 
 export function paneName(pane: Pane) { return pane.label || pane.terminal_title_stripped || pane.agent || pane.pane_id; }
 export function workspaceName(snapshot: Snapshot | undefined, pane: Pane) {
@@ -12,36 +13,45 @@ export function workspaceName(snapshot: Snapshot | undefined, pane: Pane) {
 }
 
 // Herdr reports idle, working, blocked, done or unknown; older builds used free-form strings,
-// so map loosely to a few visual tones without parsing agent output.
+// so map loosely to a few visual tones without parsing agent output. A finished agent this
+// browser already opened since it finished is just idle; one nobody here has seen still needs you.
 type Tone = 'busy' | 'attention' | 'done' | 'idle' | 'shell';
-export function statusTone(pane: Pane): Tone {
+export function statusTone(pane: Pane, seen?: Seen): Tone {
   const status = pane.agent_status?.toLowerCase() || '';
   if (!pane.agent) return 'shell';
-  if (status === 'done') return 'done';
+  if (status === 'done') return seen && !unseen(pane, seen) ? 'idle' : 'done';
   if (/work|run|busy|think|stream|generat/.test(status)) return 'busy';
   if (/block|wait|input|attention|approv|error|fail|ask/.test(status)) return 'attention';
   return 'idle';
 }
-// Blocked agents wait for an answer; done agents finished a turn nobody has looked at yet.
-export function needsYou(pane: Pane) { const tone = statusTone(pane); return tone === 'attention' || tone === 'done'; }
-function statusText(pane: Pane) {
+const unseen = (pane: Pane, seen: Seen) => (seen[pane.pane_id] ?? -1) < (pane.status_since ?? 0);
+// Blocked agents wait for an answer; unseen finished agents finished a turn nobody has looked at yet.
+export function needsYou(pane: Pane, seen?: Seen) { const tone = statusTone(pane, seen); return tone === 'attention' || tone === 'done'; }
+function statusText(pane: Pane, seen?: Seen) {
   if (!pane.agent) return 'shell';
-  const tone = statusTone(pane);
-  return tone === 'attention' ? 'needs you' : tone === 'done' ? 'finished' : pane.agent_status || 'unknown';
+  const tone = statusTone(pane, seen);
+  const text = tone === 'attention' ? 'needs you' : tone === 'done' ? 'unseen'
+    : pane.agent_status?.toLowerCase() === 'done' ? 'finished' : pane.agent_status || 'unknown';
+  return pane.status_since === undefined ? text : `${text} · ${age(pane.status_since)}`;
 }
 function StatusDot({ pane }: { pane: Pane }) {
-  return <i className="dot" data-tone={statusTone(pane)} aria-hidden="true" />;
+  const seen = useContext(SeenContext);
+  return <i className="dot" data-tone={statusTone(pane, seen)} aria-hidden="true" />;
 }
+// What this browser has opened, for telling unseen finished agents from read ones.
+const SeenContext = createContext<Seen>({});
+// The pane open beside the list on wide screens.
+const SelectedContext = createContext<string | undefined>(undefined);
 
-export function AgentSwitcher({ snapshot, selected, onSelect }: {
-  snapshot?: Snapshot; selected?: Pane; onSelect: (pane: Pane) => void;
+export function AgentSwitcher({ snapshot, selected, onSelect, seen = {} }: {
+  snapshot?: Snapshot; selected?: Pane; onSelect: (pane: Pane) => void; seen?: Seen;
 }) {
   const bar = useRef<HTMLElement>(null);
   useEffect(() => {
     bar.current?.querySelector('[aria-current=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selected?.pane_id, selected?.terminal_id]);
   const agents = snapshot?.panes.filter(pane => pane.agent) || [];
-  return <nav id="agent-switcher" ref={bar} aria-label="Live agents" hidden={!agents.length}>
+  return <SeenContext value={seen}><nav id="agent-switcher" ref={bar} aria-label="Live agents" hidden={!agents.length}>
     {agents.map(pane => {
       const workspace = workspaceName(snapshot, pane);
       return <button type="button" key={pane.pane_id} data-pane={pane.pane_id}
@@ -50,7 +60,7 @@ export function AgentSwitcher({ snapshot, selected, onSelect }: {
         <StatusDot pane={pane} /><span className="chip-workspace">{workspace}</span><span className="chip-name">{paneName(pane)}</span>
       </button>;
     })}
-  </nav>;
+  </nav></SeenContext>;
 }
 
 const shortPath = (path: string) => path.replace(/^\/(?:home|Users)\/[^/]+(?=\/|$)/, '~');
@@ -60,12 +70,15 @@ const PaneMenuContext = createContext<((pane: Pane) => void) | undefined>(undefi
 
 function PaneRow({ pane, detail, preview, onSelect, pinned, onPin }: { pane: Pane; detail?: string; preview?: string; onSelect: (pane: Pane) => void; pinned?: boolean; onPin?: (pane: Pane) => void }) {
   const onMenu = useContext(PaneMenuContext);
-  return <div className="pane-entry" data-tone={statusTone(pane)}><button type="button" className="pane" aria-haspopup={onMenu ? 'dialog' : undefined} onClick={() => onSelect(pane)}
+  const seen = useContext(SeenContext);
+  const current = useContext(SelectedContext) === pane.pane_id;
+  return <div className="pane-entry" data-tone={statusTone(pane, seen)}><button type="button" className="pane" aria-haspopup={onMenu ? 'dialog' : undefined} onClick={() => onSelect(pane)}
+    aria-current={current || undefined}
     onContextMenu={onMenu ? event => { event.preventDefault(); navigator.vibrate?.(12); onMenu(pane); } : undefined}>
     <StatusDot pane={pane} />
     <span className="pane-copy">
       <strong>{paneName(pane)}</strong>
-      <small><span className="state" data-tone={statusTone(pane)}>{statusText(pane)}</span>
+      <small><span className="state" data-tone={statusTone(pane, seen)}>{statusText(pane, seen)}</span>
         <span>{pane.agent || 'terminal'}</span>
         {detail !== undefined ? <span>{detail}</span> : pane.cwd ? <span className="cwd" title={pane.cwd}>{shortPath(pane.cwd)}</span> : null}</small>
       {preview ? <span className="pane-preview">{Array.from(preview).slice(0, 120).join('')}</span> : null}
@@ -101,14 +114,14 @@ function WorkspaceGroup({ workspace, snapshot, previews, nested = false, nestedP
 
 // Search appears once the list is long enough to need it.
 export const SEARCH_THRESHOLD = 6;
-function matches(snapshot: Snapshot, pane: Pane, words: string[], preview?: string) {
-  const text = [paneName(pane), workspaceName(snapshot, pane), pane.agent, statusText(pane), pane.cwd, pane.pane_id, preview]
+function matches(snapshot: Snapshot, pane: Pane, words: string[], seen: Seen, preview?: string) {
+  const text = [paneName(pane), workspaceName(snapshot, pane), pane.agent, statusText(pane, seen), pane.cwd, pane.pane_id, preview]
     .filter(Boolean).join(' ').toLowerCase();
   return words.every(word => text.includes(word));
 }
 
-export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent = [], lastUpdated, stale = false, refreshing = false, onCreate }: {
-  snapshot?: Snapshot; hidden: boolean; banner?: ReactNode; onSelect: (pane: Pane) => void;
+export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent = [], seen = {}, selected, lastUpdated, stale = false, refreshing = false, onCreate }: {
+  snapshot?: Snapshot; hidden: boolean; seen?: Seen; selected?: string; banner?: ReactNode; onSelect: (pane: Pane) => void;
   recent?: string[]; lastUpdated?: number; stale?: boolean; refreshing?: boolean; onCreate?: () => void; onMenu?: (pane: Pane) => void;
 }) {
   const [pinned, setPinned] = useState<string[]>(() => readPreference('pinned-panes', []));
@@ -142,15 +155,15 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
   const words = useDeferredValue(query).toLowerCase().split(/\s+/).filter(Boolean);
   const searchable = count >= SEARCH_THRESHOLD;
   const results = snapshot && ((searchable && words.length) || filter !== 'all') ? snapshot.panes.filter(pane =>
-    (filter === 'all' || (filter === 'needs' ? needsYou(pane) : filter === 'busy' ? statusTone(pane) === 'busy' : statusTone(pane) === 'idle'))
-    && matches(snapshot, pane, searchable ? words : [], previews[pane.pane_id])) : undefined;
+    (filter === 'all' || (filter === 'needs' ? needsYou(pane, seen) : filter === 'busy' ? statusTone(pane) === 'busy' : statusTone(pane, seen) === 'idle'))
+    && matches(snapshot, pane, searchable ? words : [], seen, previews[pane.pane_id])) : undefined;
   const shortcuts = (ids: string[]) => ids.map(id => snapshot?.panes.find(pane => pane.pane_id === id)).filter((pane): pane is Pane => Boolean(pane));
   const pinnedPanes = shortcuts(pinned);
   const recentPanes = shortcuts(recent).filter(pane => !pinned.includes(pane.pane_id)).slice(0, 3);
   // A pane never moves when its status changes: it is marked where it is, and the Needs you
   // filter collects them. A list that reorders itself moves the row about to be tapped.
-  const waiting = snapshot?.panes.filter(needsYou).length || 0;
-  return <PaneMenuContext value={onMenu}><main id="panes" hidden={hidden} aria-busy={!snapshot}>
+  const waiting = snapshot?.panes.filter(pane => needsYou(pane, seen)).length || 0;
+  return <SeenContext value={seen}><SelectedContext value={selected}><PaneMenuContext value={onMenu}><main id="panes" hidden={hidden} aria-busy={!snapshot}>
     {banner}
     <h1 className="sr-only">Your herd</h1>
     {/* Freshness is shown only when it matters: the list is a saved copy that may be out of date. */}
@@ -168,7 +181,7 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
     {count ? <div className="herd-filters" role="group" aria-label="Filter panes">{[
       ['all', 'All', count], ['needs', 'Needs you', waiting],
       ['busy', 'Working', snapshot!.panes.filter(pane => statusTone(pane) === 'busy').length],
-      ['idle', 'Idle', snapshot!.panes.filter(pane => statusTone(pane) === 'idle').length],
+      ['idle', 'Idle', snapshot!.panes.filter(pane => statusTone(pane, seen) === 'idle').length],
     ].map(([value, name, total]) => <button type="button" key={value} aria-pressed={filter === value}
       data-alert={value === 'needs' && waiting > 0} onClick={() => setFilter(String(value))}>{name}<span>{total}</span></button>)}</div> : null}
     {results ? <section id="search-results" className="workspace-group" aria-live="polite">
@@ -190,5 +203,5 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
             nested snapshot={snapshot} previews={previews} onSelect={onSelect} pinned={pinned} onPin={onPin} />)}
         </WorkspaceGroup>)
       : <div className="empty"><strong>No panes yet</strong><p>Open a workspace on your PC, or choose a project folder to create one here. Then start an agent or terminal.</p><button type="button" onClick={onCreate}>Open a project</button></div>}</div>
-  </main></PaneMenuContext>;
+  </main></PaneMenuContext></SelectedContext></SeenContext>;
 }

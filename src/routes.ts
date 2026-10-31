@@ -22,7 +22,7 @@ import type { PushStore } from './push-store.ts';
 import { TerminalSockets, type Peer } from './terminal-socket.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
 import { PushFailed, PushGone, parseSubscription, type VapidKeys } from './webpush.ts';
-import type { Device } from '../shared/api.ts';
+import type { Device, Snapshot } from '../shared/api.ts';
 import { dimensions } from '../shared/protocol.ts';
 
 export interface Services {
@@ -35,6 +35,8 @@ export interface Services {
   sendAlert: AlertSender;
   sockets: TerminalSockets;
   uploadDir: string;
+  // Herdr's snapshot with each status's start time; tests may leave it out.
+  panes?: () => Promise<Snapshot>;
 }
 
 // Who may call a route: anyone (pairing itself), the whistle command on the PC with the access
@@ -108,7 +110,7 @@ export function createRequestHandler(services: Services) {
     } },
 
     // Herdr.
-    { method: 'GET', path: '/api/panes', access: 'device', sameOrigin: false, handle: async () => json(await snapshot()) },
+    { method: 'GET', path: '/api/panes', access: 'device', sameOrigin: false, handle: async () => json(await (services.panes ?? snapshot)()) },
     { method: 'GET', path: '/api/previews', access: 'device', sameOrigin: false, handle: async () => json(await panePreviews((await snapshot()).panes)) },
     { method: 'GET', path: '/api/agents', access: 'device', sameOrigin: false, handle: async () => json({ kinds: await agentKinds() }) },
     { method: 'GET', path: '/api/worktrees', access: 'device', sameOrigin: false, handle: async ({ url }) => {
