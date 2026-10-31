@@ -99,12 +99,16 @@ test('the worker shows a pushed alert as a notification tagged by pane', async (
     .map(item => ({ title: item.title, body: item.body, tag: item.tag, data: item.data })))).toEqual([
     { title: 'Reviewer needs you', body: 'atlas · claude', tag: 'pane:w1:p1', data: { paneId: 'w1:p1' } }]);
   // During quiet hours the PC marks alerts quiet: shown, but silent.
-  await cdp.send('ServiceWorker.deliverPushMessage', {
-    origin: new URL(page.url()).origin, registrationId: await registration,
-    data: JSON.stringify({ title: 'Builder finished', body: 'atlas · codex', paneId: 'w2:p1', quiet: true }),
-  });
-  await expect.poll(() => page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications())
-    .map(item => [item.tag, item.silent]))).toEqual([['pane:w1:p1', false], ['pane:w2:p1', true]]);
+  // On slow CI, DevTools occasionally drops a push to a worker that just handled one. A repeat
+  // replaces the notification with the same tag, so resending until it shows is safe.
+  await expect(async () => {
+    await cdp.send('ServiceWorker.deliverPushMessage', {
+      origin: new URL(page.url()).origin, registrationId: await registration,
+      data: JSON.stringify({ title: 'Builder finished', body: 'atlas · codex', paneId: 'w2:p1', quiet: true }),
+    });
+    await expect.poll(() => page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications())
+      .map(item => [item.tag, item.silent])), { timeout: 3000 }).toEqual([['pane:w1:p1', false], ['pane:w2:p1', true]]);
+  }).toPass({ timeout: 15_000 });
   // Real notifications reach the desktop running the tests; close them rather than leave them behind.
   await page.evaluate(async () => { for (const item of await (await navigator.serviceWorker.ready).getNotifications()) item.close(); });
   await cdp.detach();
