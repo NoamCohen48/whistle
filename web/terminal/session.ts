@@ -67,6 +67,8 @@ export class TerminalSession {
       else { this.clearModifiers(); this.fail('Modified paste was not sent. Use Keys to choose the exact chord.'); }
     });
     const signal = this.listeners.signal;
+    // xterm focuses its input on any tap; while watching that would only raise the phone keyboard.
+    textarea?.addEventListener('focus', () => { if (this.state.phase !== 'controlling') textarea.blur(); }, { signal });
     viewport.addEventListener('scroll', () => {
       if (this.expectedScrollTop !== undefined && Math.abs(viewport.scrollTop - this.expectedScrollTop) < 1) {
         this.expectedScrollTop = undefined; return;
@@ -167,6 +169,7 @@ export class TerminalSession {
     if (this.disposed) return;
     this.state = { ...this.state, ...patch };
     this.terminal.options.disableStdin = this.state.phase !== 'controlling';
+    if (this.state.phase !== 'controlling' && document.activeElement === this.terminal.textarea) this.terminal.textarea?.blur();
     this.onState(this.state);
   }
   private fail(message: string) { this.update({ error: message }); }
