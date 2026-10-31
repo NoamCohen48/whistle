@@ -14,11 +14,23 @@ export class RequestError extends Error {
 
 export const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message : 'The request failed. Try again.';
 
+// Aborts when either signal does. AbortSignal.any is missing before Chrome 116, which some
+// Android phones still run.
+function either(first: AbortSignal, second: AbortSignal) {
+  if ('any' in AbortSignal) return AbortSignal.any([first, second]);
+  const controller = new AbortController();
+  for (const signal of [first, second]) {
+    if (signal.aborted) { controller.abort(signal.reason); break; }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true, signal: controller.signal });
+  }
+  return controller.signal;
+}
+
 // Never automatically retry mutations: a lost reply does not mean the PC did not act.
 export async function request(path: string, options: RequestInit = {}, pairing = true): Promise<Response> {
   const mutation = Boolean(options.method && options.method !== 'GET');
   const timeout = AbortSignal.timeout(mutation ? 30_000 : 12_000);
-  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  const signal = options.signal ? either(options.signal, timeout) : timeout;
   let response: Response;
   try { response = await fetch(path, { cache: 'no-store', ...options, signal }); }
   catch (cause) {

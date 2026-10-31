@@ -38,3 +38,17 @@ test('read and mutation requests have bounded deadlines with distinct recovery g
     expect(timeout.mock.calls.map(call => call[0])).toEqual([12_000, 30_000]);
   } finally { timeout.mockRestore(); }
 });
+
+test('a caller signal still works in browsers without AbortSignal.any', async () => {
+  const any = Object.getOwnPropertyDescriptor(AbortSignal, 'any')!;
+  delete (AbortSignal as { any?: unknown }).any;
+  try {
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    mockFetch((_input, init) => { seen = init!.signal!; return Promise.resolve(new Response('{}')); });
+    await request('/api/panes', { signal: controller.signal });
+    expect(seen!.aborted).toBe(false);
+    controller.abort();
+    expect(seen!.aborted).toBe(true);
+  } finally { Object.defineProperty(AbortSignal, 'any', any); }
+});
