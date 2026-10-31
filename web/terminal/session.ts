@@ -5,6 +5,7 @@ import { chord, inputKey, validateChord, type Modifier } from '../../shared/keys
 import type { ClientCommand, ServerMessage } from '../../shared/protocol.ts';
 import { controlSize, inputScrollTop, pageScroll } from './viewport.ts';
 import { readPreference, writePreference } from '../preferences.ts';
+import { findLinks, openUrl, type PathMatch } from '../paths.ts';
 
 export type Phase = 'idle' | 'connecting' | 'requesting-control' | 'watching' | 'controlling' | 'disconnected' | 'paused';
 export interface SessionState {
@@ -43,6 +44,10 @@ export class TerminalSession {
   private touchMoved = false;
   private touchSamples: { y: number; time: number }[] = [];
   private flingFrame?: number;
+  // Two fingers moved sideways switch panes: where they started and where they are now.
+  private swipe?: { x: number; y: number; dx: number; dy: number };
+  private linkOpenedAt = 0;
+  private readonly swipeListeners = new Set<(direction: 'next' | 'previous') => void>();
   private disposed = false;
 
   constructor(private readonly viewport: HTMLElement, private readonly host: HTMLElement,
@@ -51,10 +56,18 @@ export class TerminalSession {
       fontFamily: 'ui-monospace, "Cascadia Code", "DejaVu Sans Mono", monospace',
       fontSize: this.state.fontSize, lineHeight: 1.18, cursorBlink: true, scrollback: 1500,
       allowProposedApi: false, allowTransparency: false, convertEol: false, disableStdin: true,
+      // Links a program embeds (OSC 8) open in a new tab, web addresses only.
+      linkHandler: { allowNonHttpProtocols: false, activate: (_event, url) => { if (openUrl(url)) this.linkOpenedAt = performance.now(); } },
       theme: { background: '#141819', foreground: '#e5ebea', cursor: '#bad7a1', selectionBackground: '#4b665a' },
     });
     this.terminal.loadAddon(this.fit);
     this.terminal.open(host);
+    // File paths and web addresses are underlined under a mouse; a tap or click opens them (see openLinkAt).
+    this.terminal.registerLinkProvider({ provideLinks: (y, callback) => {
+      const text = this.terminal.buffer.active.getLine(y - 1)?.translateToString(true) ?? '';
+      callback(findLinks(text).map(match => ({ text: match.kind === 'url' ? match.url : match.path, range: { start: { x: match.start + 1, y }, end: { x: match.end, y } },
+        decorations: { underline: true, pointerCursor: true }, activate: () => {} })));
+    } });
     const textarea = this.terminal.textarea;
     textarea?.setAttribute('aria-label', 'Live terminal input');
     textarea?.setAttribute('autocapitalize', 'off');
@@ -83,12 +96,21 @@ export class TerminalSession {
       if (event.deltaMode === 2) scale = viewport.clientHeight;
       this.scroll(event.deltaY < 0 ? 'up' : 'down', Math.abs(event.deltaY) * scale);
     }, { passive: false, capture: true, signal });
+    const middle = (touches: TouchList) => ({ x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 });
     viewport.addEventListener('touchstart', event => {
+      if (event.touches.length === 2) this.swipe = { ...middle(event.touches), dx: 0, dy: 0 };
+      else if (event.touches.length > 2) this.swipe = undefined;
       this.stopFling(); this.touchSamples = []; this.touchMoved = false;
       this.touchY = event.touches.length === 1 ? event.touches[0].clientY : undefined;
       if (this.touchY !== undefined) this.sampleTouch(this.touchY);
     }, { passive: true, signal });
     viewport.addEventListener('touchmove', event => {
+      if (event.touches.length === 2 && this.swipe) {
+        const point = middle(event.touches);
+        this.swipe.dx = point.x - this.swipe.x; this.swipe.dy = point.y - this.swipe.y;
+        // A sideways two-finger move is a pane switch, not a page pan or zoom.
+        if (Math.abs(this.swipe.dx) > 12 && Math.abs(this.swipe.dx) > Math.abs(this.swipe.dy)) event.preventDefault();
+      }
       if (event.touches.length !== 1) { this.touchY = undefined; this.touchSamples = []; return; }
       if (this.touchY === undefined) return;
       this.sampleTouch(event.touches[0].clientY);
@@ -98,6 +120,10 @@ export class TerminalSession {
       this.scroll(delta < 0 ? 'up' : 'down', Math.abs(delta));
     }, { passive: false, capture: true, signal });
     viewport.addEventListener('touchend', event => {
+      if (this.swipe && event.touches.length < 2) {
+        const { dx, dy } = this.swipe; this.swipe = undefined;
+        if (Math.abs(dx) >= 64 && Math.abs(dx) > 1.5 * Math.abs(dy)) for (const listener of this.swipeListeners) listener(dx < 0 ? 'next' : 'previous');
+      }
       if (this.touchMoved && this.touchY !== undefined && !event.touches.length) {
         this.sampleTouch(event.changedTouches[0]?.clientY ?? this.touchY);
         const first = this.touchSamples[0], last = this.touchSamples.at(-1);
@@ -106,7 +132,7 @@ export class TerminalSession {
       this.touchY = undefined; this.touchSamples = [];
     }, { passive: true, signal });
     viewport.addEventListener('touchcancel', () => {
-      this.stopFling(); this.touchY = undefined; this.touchSamples = [];
+      this.swipe = undefined; this.stopFling(); this.touchY = undefined; this.touchSamples = [];
     }, { passive: true, signal });
     window.addEventListener('resize', this.resize, { signal });
     window.visualViewport?.addEventListener('resize', this.resize, { signal });
@@ -365,6 +391,31 @@ export class TerminalSession {
     if (!Number.isFinite(fraction)) return;
     this.stopFling(); this.followInput = false;
     this.setLocalTop(Math.max(0, Math.min(1, fraction)) * this.scrollInfo().max);
+  }
+  // A two-finger swipe to the left asks for the next pane, to the right for the previous one.
+  // Opens the link under a tap or click: a web address in a new tab, a file path with onPath.
+  // True when the tap was on a link, including one xterm itself just opened.
+  openLinkAt(clientX: number, clientY: number, onPath: (path: PathMatch) => void) {
+    if (performance.now() - this.linkOpenedAt < 500) return true;
+    const link = this.linkAt(clientX, clientY);
+    if (link?.kind === 'url') return openUrl(link.url);
+    if (link) onPath(link);
+    return Boolean(link);
+  }
+
+  private linkAt(clientX: number, clientY: number) {
+    const screen = this.host.querySelector('.xterm-screen')?.getBoundingClientRect();
+    if (!screen || clientX < screen.left || clientX >= screen.right || clientY < screen.top || clientY >= screen.bottom) return undefined;
+    const column = Math.floor((clientX - screen.left) / (screen.width / this.terminal.cols));
+    const row = Math.floor((clientY - screen.top) / (screen.height / this.terminal.rows));
+    const buffer = this.terminal.buffer.active;
+    const text = buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '';
+    return findLinks(text).find(match => column >= match.start && column < match.end);
+  }
+
+  onSwipe(listener: (direction: 'next' | 'previous') => void) {
+    this.swipeListeners.add(listener);
+    return () => { this.swipeListeners.delete(listener); };
   }
   // Notifications carry no scroll offsets into React; consumers read them on demand.
   onScroll(listener: () => void) {

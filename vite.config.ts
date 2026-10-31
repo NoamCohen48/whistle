@@ -1,5 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+
+// The version and repository the phone app names when someone reports a problem.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string; repository: { url: string } };
 
 // Development only. Production serves the built UI and API from one Bun origin.
 const target = process.env.WHISTLE_API_URL || 'http://127.0.0.1:8790';
@@ -10,6 +14,10 @@ if (!/^https?:\/\//.test(targetOrigin)) throw new Error('WHISTLE_API_URL must us
 export default defineConfig({
   root: 'web',
   plugins: [react()],
+  define: {
+    WHISTLE_VERSION: JSON.stringify(pkg.version),
+    WHISTLE_REPOSITORY: JSON.stringify(pkg.repository.url.replace(/^git\+/, '').replace(/\.git$/, '')),
+  },
   server: {
     host: '127.0.0.1', strictPort: true,
     proxy: {

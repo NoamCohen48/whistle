@@ -3,10 +3,11 @@ import type { Pane } from '../../shared/api.ts';
 import { modifierOrder, namedKeys } from '../../shared/keys.ts';
 import { TerminalSession, type SessionState } from '../terminal/session.ts';
 import { Icon } from './Icon.tsx';
-import { attachPicture, attachedPaths, previewFor } from '../attach.ts';
+import { attachFile, attachPicture, attachedName, attachedPaths, previewFor } from '../attach.ts';
 import { clearPrompts, draftStatus, readPrompts, rememberPrompt } from '../drafts.ts';
 import { readPreference, writePreference } from '../preferences.ts';
 import { Sheet } from './Actions.tsx';
+import type { FileRequest } from './FileViewer.tsx';
 
 const keyGroups = [
   ['Editing and navigation', namedKeys],
@@ -160,10 +161,10 @@ function KeyPicker({ engine, state, open, maxHeight }: { engine?: TerminalSessio
   </div>;
 }
 
-export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner, onText, fontOpen, onFontOpen }: {
+export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, onDraft, banner, onText, onPath, fontOpen, onFontOpen }: {
   pane?: Pane; state: SessionState; onState: Dispatch<SetStateAction<SessionState>>;
   engine?: TerminalSession; onEngine: Dispatch<SetStateAction<TerminalSession | undefined>>;
-  draft: string; onDraft: (value: string) => void; banner?: ReactNode; onText: (text: string) => void;
+  draft: string; onDraft: (value: string) => void; banner?: ReactNode; onText: (text: string) => void; onPath: (file: FileRequest) => void;
   fontOpen: boolean; onFontOpen: (open: boolean) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -175,6 +176,7 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const [compose, setCompose] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
   const [attaching, setAttaching] = useState(false);
   const [attachError, setAttachError] = useState('');
   const [undo, setUndo] = useState('');
@@ -207,15 +209,14 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const latest = useRef({ paneId, draft });
   useLayoutEffect(() => { latest.current = { paneId, draft }; });
   const attach = async (files: File[]) => {
-    const pictures = files.filter(file => file.type.startsWith('image/'));
-    if (!pictures.length) return;
+    if (!files.length) return;
     const forPane = paneId;
     setAttaching(true); setAttachError('');
     try {
-      // One unreadable picture is reported, but never drops the others picked with it.
-      for (const file of pictures) {
+      // One unreadable file is reported, but never drops the others picked with it.
+      for (const file of files) {
         let path: string;
-        try { path = await attachPicture(file); }
+        try { path = await (file.type.startsWith('image/') ? attachPicture(file) : attachFile(file)); }
         catch (error) { if (latest.current.paneId === forPane) setAttachError((error as Error).message); continue; }
         if (latest.current.paneId !== forPane) return;
         // Record the new draft at once: the next upload may finish before React re-renders.
@@ -263,7 +264,8 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   return <section id="session" ref={section} hidden={!pane} aria-label="Terminal session" data-phase={state.phase}>
     <div className="terminal-frame">
       {/* While controlling, a tap on the terminal brings up the phone keyboard; a scroll swipe never clicks. */}
-      <div id="terminal-viewport" ref={viewport} onClick={() => {
+      <div id="terminal-viewport" ref={viewport} onClick={event => {
+        if (paneId && engine?.openLinkAt(event.clientX, event.clientY, ({ path, line }) => onPath({ paneId, path, line }))) return;
         if (!controlling) return;
         setKeysOpen(false); engine?.focusKeyboard();
       }}><div id="terminal" ref={host} /></div>
@@ -291,21 +293,31 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
           <textarea id="draft" ref={editor} rows={2} aria-label="Draft" spellCheck={false} autoCapitalize="off" value={draft}
             placeholder="Write a prompt or paste text…" onChange={event => onDraft(event.target.value)}
             onPaste={event => {
-              const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+              const files = [...event.clipboardData.files];
               if (files.length) { event.preventDefault(); void attach(files); }
             }} />
-          {attached.length ? <ul id="attachments" aria-label="Attached pictures">
-            {attached.map((path, index) => <li key={path}>
-              {previewFor(path) ? <img src={previewFor(path)} alt="" width={40} height={40} /> : <span className="no-preview"><Icon name="image" size={18} /></span>}
-              <span>Picture {index + 1}</span>
-              <button type="button" className="quiet" aria-label={`Remove picture ${index + 1}`}
-                onClick={() => onDraft(withoutPath(draft, path))}><Icon name="close" size={16} /></button>
-            </li>)}
+          {attached.length ? <ul id="attachments" aria-label="Attachments">
+            {attached.map(path => {
+              const name = attachedName(path);
+              const label = name || `Picture ${attached.filter(item => !attachedName(item)).indexOf(path) + 1}`;
+              return <li key={path} data-kind={name ? 'file' : 'picture'}>
+                {name ? <span className="no-preview"><Icon name="clip" size={18} /></span>
+                  : previewFor(path) ? <img src={previewFor(path)} alt="" width={40} height={40} /> : <span className="no-preview"><Icon name="image" size={18} /></span>}
+                <span className="attachment-name" title={name}>{label}</span>
+                <button type="button" className="quiet" aria-label={`Remove ${name || label.toLowerCase()}`}
+                  onClick={() => onDraft(withoutPath(draft, path))}><Icon name="close" size={16} /></button>
+              </li>;
+            })}
           </ul> : null}
           <div className="compose-actions">
             <button type="button" id="attach" className="icon-button" disabled={attaching} aria-busy={attaching}
               aria-label={attaching ? 'Attaching picture' : 'Attach picture'} onClick={() => picker.current?.click()}><Icon name="image" /></button>
             <input type="file" id="picture-input" ref={picker} accept="image/*" multiple hidden onChange={event => {
+              void attach([...event.target.files || []]); event.target.value = '';
+            }} />
+            <button type="button" id="attach-file" className="icon-button" disabled={attaching}
+              aria-label="Attach text or code file" onClick={() => filePicker.current?.click()}><Icon name="clip" /></button>
+            <input type="file" id="file-input" ref={filePicker} multiple hidden onChange={event => {
               void attach([...event.target.files || []]); event.target.value = '';
             }} />
             <button type="button" id="clear-draft" className="icon-button" aria-label="Clear draft" disabled={!draft}

@@ -41,6 +41,23 @@ export async function attachPicture(file: Blob): Promise<string> {
   return path;
 }
 
+// Text and code files go up as they are, after the same checks the PC makes: up to 1 MB of
+// UTF-8 with no NUL bytes. The PC keeps a cleaned-up copy of the name.
+const MAX_TEXT_BYTES = 1024 * 1024;
+export async function attachFile(file: File): Promise<string> {
+  if (!file.size) throw new Error(`${file.name} is empty.`);
+  if (file.size > MAX_TEXT_BYTES) throw new Error(`${file.name} is larger than 1 MB.`);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let text = !bytes.includes(0);
+  try { if (text) new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { text = false; }
+  if (!text) throw new Error(`${file.name} is not a text file. Attach pictures with the picture button.`);
+  const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, body: bytes });
+  const { path } = await response.json() as { path: string };
+  return path;
+}
+
 // Paths Whistle saved, as they appear in a draft. Used to show what is attached.
-export const attachedPaths = (draft: string) => [...new Set(draft.match(/(?:^|\s)(\/\S+\/uploads\/\d{8}-\d{6}-[0-9a-f]{8}\.(?:png|jpg|webp|gif))(?=\s|$)/g)
-  ?.map(match => match.trim()) ?? [])];
+const SAVED = /(?:^|\s)(\/\S+\/uploads\/\d{8}-\d{6}-[0-9a-f]{8}(?:\.(?:png|jpg|webp|gif)|-[A-Za-z0-9._-]{1,80}))(?=\s|$)/g;
+export const attachedPaths = (draft: string) => [...new Set(draft.match(SAVED)?.map(match => match.trim()) ?? [])];
+// The name to show for an attached path: a file's own name, or undefined for a picture.
+export const attachedName = (path: string) => /\/\d{8}-\d{6}-[0-9a-f]{8}-([^/]+)$/.exec(path)?.[1];

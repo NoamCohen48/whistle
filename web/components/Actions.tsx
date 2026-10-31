@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Pane, Snapshot, Workspace } from '../../shared/api.ts';
-import { loadAgentKinds, loadWorktrees, runAction, type Action, type WorktreeChoice } from '../api.ts';
+import { loadAgentKinds, loadWorktrees, newRequestId, runAction, type Action, type WorktreeChoice } from '../api.ts';
 import { FolderPicker, folderValue } from './FolderPicker.tsx';
 import { Icon, type IconName } from './Icon.tsx';
 import { paneName } from './Inventory.tsx';
@@ -72,9 +72,13 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
   const name = useRef<HTMLInputElement>(null);
   const branch = useRef<HTMLInputElement>(null);
   const base = useRef<HTMLInputElement>(null);
+  // One ID per launch, kept across failed attempts: if the reply was lost after the PC already
+  // opened the pane, trying again returns that pane instead of a second one.
+  const requestId = useRef(newRequestId());
 
   useEffect(() => {
     if (!request) return;
+    requestId.current = newRequestId();
     setKind(request.kind); setError(''); setBusy(false); setExisting(false); setChoices(undefined);
     setFolder(folders[0]?.label || '~/');
     const preferred = request.workspaceId && workspaces.some(item => item.workspace_id === request.workspaceId)
@@ -113,7 +117,8 @@ export function CreateSheet({ request, snapshot, onClose, onCreated }: {
     if (busy) return;
     setBusy(true); setError('');
     try {
-      const result = await runAction(action);
+      const result = await runAction(action, requestId.current);
+      requestId.current = newRequestId();
       await onCreated(result.paneId, result.warning);
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }

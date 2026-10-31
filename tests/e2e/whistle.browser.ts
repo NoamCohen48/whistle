@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 type Message = { type: string; pane?: string; control?: boolean; width?: number; height?: number; cols?: number; rows?: number; direction?: string; lines?: number; id?: number; key?: string; text?: string; submit?: boolean;
-  contentType?: string; jpeg?: boolean; size?: number; path?: string };
+  contentType?: string; jpeg?: boolean; size?: number; path?: string; name?: string };
 const fixtureUrl = (path: string) => `http://127.0.0.1:8792${path}`;
 async function messages(page: Page): Promise<Message[]> { return (await page.request.get(fixtureUrl('/__test/messages'))).json(); }
 async function pair(page: Page) {
@@ -410,9 +410,33 @@ test('errors and armed modifiers overlay the terminal without resizing the PTY',
   expect((await messages(page)).filter(message => ['input', 'key'].includes(message.type))).toEqual([]);
 });
 
-type ActionMessage = Message & { action?: string; workspaceId?: string; kind?: string; cwd?: string; branch?: string; base?: string; path?: string; paneId?: string };
+type ActionMessage = Message & { requestId?: string; action?: string; workspaceId?: string; kind?: string; cwd?: string; branch?: string; base?: string; path?: string; paneId?: string };
 const actions = async (page: Page) => (await messages(page) as ActionMessage[]).filter(message => message.type === 'action')
-  .map(({ type: _type, ...rest }) => rest);
+  .map(({ type: _type, requestId: _requestId, ...rest }) => rest);
+
+test('starting again after a lost reply returns the first pane instead of opening a second', async ({ page, request }) => {
+  await pair(page);
+  await request.post(fixtureUrl('/__test/lose-reply'));
+  await page.locator('#new').click();
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#create-sheet .sheet-error')).toContainText('The connection dropped');
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#create-sheet')).toBeHidden();
+  const sent = (await messages(page) as ActionMessage[]).filter(message => message.type === 'action');
+  expect(sent).toHaveLength(2);
+  expect(sent[0].requestId).toMatch(/^[0-9a-f]{32}$/);
+  expect(sent[1].requestId).toBe(sent[0].requestId);
+  await page.locator('#back').click();
+  await expect(page.locator('#pane-list .pane')).toHaveCount(3);
+  // The next launch is a new one.
+  await page.locator('#new').click();
+  await page.locator('#create-submit').click();
+  await expect(page.locator('#create-sheet')).toBeHidden();
+  const third = (await messages(page) as ActionMessage[]).filter(message => message.type === 'action')[2];
+  expect(third.requestId).not.toBe(sent[0].requestId);
+  await page.locator('#back').click();
+  await expect(page.locator('#pane-list .pane')).toHaveCount(4);
+});
 
 test('new agents, terminals and workspaces open watch-only without desktop focus', async ({ page }) => {
   await pair(page);
@@ -537,27 +561,36 @@ test('closing a pane and removing a worktree need confirmation; failures return 
   ]);
 });
 
-test('agents that need you are listed first and open watch-only', async ({ page, request }) => {
+test('agents that need you are marked where they are, never moved, and open watch-only', async ({ page, request }) => {
   await pair(page);
-  await expect(page.locator('#needs-you')).toHaveCount(0);
+  const order = () => page.locator('#pane-list .pane-entry').evaluateAll(rows => rows.map(row => row.querySelector('strong')?.textContent));
+  const before = await order();
+  const needs = page.locator('.herd-filters button', { hasText: 'Needs you' });
+  await expect(needs).toHaveAttribute('data-alert', 'false');
   await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=blocked'));
   await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=done'));
   await page.locator('#refresh').click();
-  const waiting = page.locator('#needs-you .pane');
+  await expect(page.locator('#pane-list .pane-entry[data-tone="attention"]')).toHaveCount(1);
+  await expect(page.locator('#pane-list .pane-entry[data-tone="done"]')).toHaveCount(1);
+  expect(await order()).toEqual(before);
+  await expect(needs).toHaveAttribute('data-alert', 'true');
+  await expect(needs).toContainText('2');
+  await needs.click();
+  const waiting = page.locator('#search-results .pane');
   await expect(waiting).toHaveCount(2);
-  await expect(waiting.first()).toContainText('Second agentneeds you');
-  await expect(page.locator('#needs-you')).toContainText('atlas-search');
-  await expect(page.locator('#needs-you')).toContainText('finished');
-  await expect(page.locator('#needs-you .dot[data-tone="attention"]')).toHaveCount(1);
+  await expect(page.locator('#search-results')).toContainText('Second agentneeds you');
+  await expect(page.locator('#search-results')).toContainText('finished');
   await waiting.filter({ hasText: 'Second agent' }).click();
   await expect(page.locator('#connection')).toHaveText('Watching');
   expect((await messages(page)).filter(message => message.type === 'connect')).toEqual([
     expect.objectContaining({ pane: 'w2:p1', control: false })]);
   await page.locator('#back').click();
+  await page.locator('.herd-filters button', { hasText: 'All' }).click();
   await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=working'));
   await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=idle'));
   await page.locator('#refresh').click();
-  await expect(page.locator('#needs-you')).toHaveCount(0);
+  await expect(page.locator('#pane-list .pane-entry[data-tone="attention"]')).toHaveCount(0);
+  await expect(needs).toHaveAttribute('data-alert', 'false');
 });
 
 test('new workspaces pick a folder by browsing the PC', async ({ page }) => {
@@ -1059,4 +1092,158 @@ test('Latest appears while reading, returns to the input without focus or resize
   await page.waitForTimeout(200);
   expect(await viewport.evaluate(node => node.scrollTop)).toBeCloseTo(switched, 0);
   expect((await messages(page)).filter(message => ['resize', 'input', 'scroll'].includes(message.type))).toEqual([]);
+});
+
+test('text and code files attach by name, and files that are not text are refused on the phone', async ({ page }) => {
+  await control(page);
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('review this');
+  await page.locator('#file-input').setInputFiles([
+    { name: 'main loop.rs', mimeType: '', buffer: Buffer.from('fn main() {}\n') },
+    { name: 'app.bin', mimeType: 'application/octet-stream', buffer: Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1]) },
+  ]);
+  const saved = '/home/sam/.local/state/whistle/uploads/20261017-143210-00000001-main-loop.rs';
+  await expect(page.locator('#draft')).toHaveValue(`review this ${saved} `);
+  await expect(page.locator('#attachments li')).toHaveText(['main-loop.rs']);
+  await expect(page.locator('#attach-error')).toHaveText('app.bin is not a text file. Attach pictures with the picture button.');
+  expect((await messages(page)).filter(message => message.type === 'upload-text').map(({ name, text }) => ({ name, text })))
+    .toEqual([{ name: 'main loop.rs', text: 'fn main() {}\n' }]);
+  expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
+  await page.getByRole('button', { name: 'Remove main-loop.rs' }).click();
+  await expect(page.locator('#draft')).toHaveValue('review this ');
+});
+
+// Clicks a character of the first terminal row showing `text`, `offset` characters into it,
+// once that row is scrolled into the terminal's view and has stopped moving.
+async function clickText(page: Page, text: string, offset: number) {
+  await expect(page.locator('#terminal .xterm-rows')).toContainText(text);
+  const locate = () => page.locator('#terminal .xterm-screen').evaluate((screen, { text, offset }) => {
+    const viewport = document.querySelector('#terminal-viewport')!;
+    // xterm draws spaces as no-break spaces.
+    const line = (node: Element) => node.textContent!.replace(/\u00a0/g, ' ');
+    const row = [...screen.querySelectorAll('.xterm-rows > div')].find(node => line(node).includes(text))!;
+    const view = viewport.getBoundingClientRect();
+    let box = row.getBoundingClientRect();
+    if (box.top < view.top || box.bottom > view.bottom) { viewport.scrollTop += box.top - view.top - 40; box = row.getBoundingClientRect(); }
+    const measure = screen.parentElement!.querySelector('.xterm-char-measure-element')!;
+    const cell = measure.getBoundingClientRect().width / measure.textContent!.length;
+    const column = line(row).indexOf(text) + offset;
+    return { x: Math.round(screen.getBoundingClientRect().left + cell * (column + .5)), y: Math.round(box.top + box.height / 2) };
+  }, { text, offset });
+  let point = await locate();
+  await expect.poll(async () => {
+    const before = point;
+    await page.waitForTimeout(100);
+    point = await locate();
+    return point.y === before.y && point.x === before.x;
+  }).toBe(true);
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.click(point.x, point.y);
+}
+
+test('file paths the agent prints open read-only at their line, from terminal text or the live terminal', async ({ page }) => {
+  await open(page);
+  await page.locator('#terminal-text').click();
+  const text = page.locator('#terminal-text-sheet pre');
+  await expect(text.getByRole('button', { name: 'src/routes.ts:3' })).toBeVisible();
+  await text.getByRole('button', { name: 'src/routes.ts:3' }).click();
+  const viewer = page.locator('#file-viewer');
+  await expect(viewer.locator('.viewer-head strong')).toHaveText('routes.ts:3');
+  await expect(viewer.locator('[data-current]')).toHaveText('// routes line 3');
+  await expect(viewer.locator('#file-body span')).toHaveCount(80);
+  await viewer.getByRole('button', { name: 'Close' }).click();
+  await expect(viewer).not.toBeVisible();
+  await page.locator('#terminal-text-sheet').getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('#terminal-text-sheet')).not.toBeVisible();
+
+  // A tap on the path in the live terminal opens it too, while watching.
+  await clickText(page, 'src/routes.ts:3', 3);
+  await expect(viewer.locator('[data-current]')).toHaveText('// routes line 3');
+  expect((await messages(page)).filter(message => message.type === 'file').map(({ pane, path }) => ({ pane, path })))
+    .toEqual([{ pane: 'w1:p1', path: 'src/routes.ts' }, { pane: 'w1:p1', path: 'src/routes.ts' }]);
+  expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
+  await expect(page.locator('#connection')).toHaveText('Watching');
+});
+
+async function twoFingerSwipe(page: Page, dx: number) {
+  await page.locator('#terminal-viewport').evaluate((node, dx) => {
+    const touches = (x: number) => [new Touch({ identifier: 1, target: node, clientX: 150 + x, clientY: 200 }),
+      new Touch({ identifier: 2, target: node, clientX: 200 + x, clientY: 260 })];
+    node.dispatchEvent(new TouchEvent('touchstart', { touches: touches(0), changedTouches: touches(0), bubbles: true, cancelable: true }));
+    for (const step of [dx / 3, (2 * dx) / 3, dx]) node.dispatchEvent(new TouchEvent('touchmove', { touches: touches(step), changedTouches: touches(step), bubbles: true, cancelable: true }));
+    node.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: touches(dx), bubbles: true, cancelable: true }));
+  }, dx);
+}
+
+test('a two-finger swipe moves between agents in switcher order, watch-only, and stops at the ends', async ({ page }) => {
+  await open(page);
+  const current = page.locator('#agent-switcher [aria-current=true]');
+  const order = await page.locator('#agent-switcher [data-pane]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-pane')));
+  expect(order[0]).toBe('w1:p1');
+  await twoFingerSwipe(page, -120);
+  await expect(current).toHaveAttribute('data-pane', order[1]!);
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  // A short or mostly vertical move does nothing.
+  await twoFingerSwipe(page, 30);
+  await expect(current).toHaveAttribute('data-pane', order[1]!);
+  await twoFingerSwipe(page, 120);
+  await expect(current).toHaveAttribute('data-pane', 'w1:p1');
+  await twoFingerSwipe(page, 120);
+  await expect(current).toHaveAttribute('data-pane', 'w1:p1');
+  expect((await messages(page)).filter(message => message.type === 'connect').every(message => message.control === false)).toBe(true);
+});
+
+test('the left-hand option mirrors the dock and is remembered', async ({ page }) => {
+  await pair(page);
+  await page.locator('#settings').click();
+  await expect(page.locator('#hand-right')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#hand-left').click();
+  await expect(page.locator('#hand-left')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#app')).toHaveAttribute('data-hand', 'left');
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-hand', 'left');
+  await page.locator('#agent-switcher [data-pane="w1:p1"]').click();
+  const control = await page.locator('#control').boundingBox();
+  const status = await page.locator('.session-state').boundingBox();
+  expect(control!.x).toBeLessThan(status!.x);
+});
+
+test('Report a problem opens a GitHub issue with the app version and no terminal text', async ({ page }) => {
+  await pair(page);
+  await page.locator('#settings').click();
+  const link = page.locator('#report-problem');
+  await expect(link).toHaveAttribute('target', '_blank');
+  const href = new URL((await link.getAttribute('href'))!);
+  expect(href.origin + href.pathname).toBe('https://github.com/NoamCohen48/whistle/issues/new');
+  const body = href.searchParams.get('body')!;
+  expect(body).toMatch(/- Whistle app: \d+\.\d+\.\d+/);
+  expect(body).toContain('- HTTPS: no');
+  expect(body).not.toContain('Whistle fixture');
+});
+
+test('web addresses and embedded links open in a new tab, from terminal text or the live terminal', async ({ page, context }) => {
+  await context.route(/^https?:\/\/(x\.io|example\.com)\//, route => route.fulfill({ body: 'opened', contentType: 'text/plain' }));
+  await open(page);
+  const opens = async (action: () => Promise<void>) => {
+    const [tab] = await Promise.all([context.waitForEvent('page'), action()]);
+    await tab.waitForLoadState();
+    const url = tab.url();
+    await tab.close();
+    return url;
+  };
+
+  await page.locator('#terminal-text').click();
+  const link = page.locator('#terminal-text-sheet pre').getByRole('link', { name: 'http://x.io/a.md' });
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(await opens(() => link.click())).toBe('http://x.io/a.md');
+  await page.locator('#terminal-text-sheet').getByRole('button', { name: 'Close' }).click();
+  await expect(page.locator('#terminal-text-sheet')).not.toBeVisible();
+
+  expect(await opens(() => clickText(page, 'http://x.io/a.md', 3))).toBe('http://x.io/a.md');
+  // "Read the docs" carries its address in an OSC 8 link; only xterm knows it.
+  expect(await opens(() => clickText(page, 'Read the docs', 3))).toBe('https://example.com/docs');
+  await expect(page.locator('#file-viewer')).not.toBeVisible();
+  expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
+  await expect(page.locator('#connection')).toHaveText('Watching');
 });

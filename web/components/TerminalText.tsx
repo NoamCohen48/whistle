@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Sheet } from './Actions.tsx';
 import { Icon } from './Icon.tsx';
-import type { PictureRequest } from './PictureViewer.tsx';
+import type { FileRequest } from './FileViewer.tsx';
+import { findLinks } from '../paths.ts';
 
 // The terminal's text as plain, selectable text: xterm's canvas is hard to select on a phone.
 // A copy taken when the sheet opens; reading it never sends anything to the terminal.
-const PICTURE = /[^\s'"`()<>[\]]+\.(?:png|jpe?g|webp|gif)(?=$|[\s'"`)\],:;]|\.(?:\s|$))/gi;
 
 function markMatches(text: string, query: string) {
   if (!query) return text;
@@ -18,17 +18,17 @@ function markMatches(text: string, query: string) {
   parts.push(text.slice(start)); return parts;
 }
 
-function linkPictures(line: string, onPicture: (path: string) => void, query = '') {
-  const parts: (string | { path: string })[] = [];
+function linkLine(line: string, onPath: (path: string, line?: number) => void, query = '') {
+  const parts: (string | ReturnType<typeof findLinks>[number])[] = [];
   let last = 0;
-  for (const match of line.matchAll(PICTURE)) {
-    if (match[0].includes('://') || match[0].startsWith('~')) continue; // URLs and ~ are not PC paths here.
-    parts.push(line.slice(last, match.index), { path: match[0] });
-    last = match.index + match[0].length;
+  for (const match of findLinks(line)) {
+    parts.push(line.slice(last, match.start), match);
+    last = match.end;
   }
   parts.push(line.slice(last));
   return parts.map((part, index) => typeof part === 'string' ? markMatches(part, query)
-    : <button type="button" key={index} className="path-link" onClick={() => onPicture(part.path)}>{markMatches(part.path, query)}</button>);
+    : part.kind === 'url' ? <a key={index} className="path-link" href={part.url} target="_blank" rel="noopener noreferrer">{markMatches(line.slice(part.start, part.end), query)}</a>
+    : <button type="button" key={index} className="path-link" onClick={() => onPath(part.path, part.line)}>{markMatches(line.slice(part.start, part.end), query)}</button>);
 }
 
 async function copy(text: string) {
@@ -40,8 +40,8 @@ async function copy(text: string) {
   finally { area.remove(); }
 }
 
-export function TerminalTextSheet({ text, paneId, onClose, onPicture }: {
-  text?: string; paneId?: string; onClose: () => void; onPicture: (picture: PictureRequest) => void;
+export function TerminalTextSheet({ text, paneId, onClose, onPath }: {
+  text?: string; paneId?: string; onClose: () => void; onPath: (file: FileRequest) => void;
 }) {
   const body = useRef<HTMLPreElement>(null);
   const [status, setStatus] = useState('');
@@ -73,7 +73,7 @@ export function TerminalTextSheet({ text, paneId, onClose, onPicture }: {
       <button type="button" aria-label="Next match" disabled={!matches} onClick={() => setActiveMatch(index => (index + 1) % matches)}>↓</button></div>
     <p className="sheet-status" aria-live="polite">{query ? matches ? `${activeMatch + 1} of ${matches} matches` : 'No matches' : ''}</p>
     {text ? <pre id="terminal-text-body" ref={body}>{text.split('\n').map((line, index) =>
-      <span key={index}>{paneId ? linkPictures(line, path => onPicture({ paneId, path }), query) : markMatches(line, query)}{'\n'}</span>)}</pre>
+      <span key={index}>{paneId ? linkLine(line, (path, line) => onPath({ paneId, path, line }), query) : markMatches(line, query)}{'\n'}</span>)}</pre>
       : <p className="sheet-status">Nothing on screen yet</p>}
     <div className="text-actions">
       <p className="sheet-status" role="status">{status}</p>

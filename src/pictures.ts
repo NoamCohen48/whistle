@@ -10,25 +10,31 @@ import { sniffPicture } from './picture-types.ts';
 const MAX_PICTURE_BYTES = 15 * 1024 * 1024;
 const EXTENSIONS = /\.(png|jpe?g|webp|gif)$/i;
 
-export async function readPicture(cwd: string, input: string | null) {
-  const path = requestPath(input);
-  if (!EXTENSIONS.test(path)) throw new HttpError('Only PNG, JPEG, WebP and GIF pictures can be shown.', 415);
+// A regular file inside the pane's project, after following links. `noun` names it in errors.
+export async function projectFile(cwd: string, path: string, noun: string, maxBytes: number) {
   const full = isAbsolute(path) ? path : resolve(cwd, path);
   let root: string;
   try { root = await realpath(await fileBoundary(cwd)); }
   catch { throw new HttpError('This pane’s folder no longer exists.', 404); }
   let real: string, info: Awaited<ReturnType<typeof lstat>>;
   try { real = await realpath(full); info = await lstat(real); }
-  catch { throw new HttpError('That picture does not exist.', 404); }
-  if (real === root || !isInside(real, root)) throw new HttpError('Only pictures inside this pane’s project can be shown.', 403);
-  if (!info.isFile()) throw new HttpError('That picture does not exist.', 404);
-  if (info.size > MAX_PICTURE_BYTES) throw new HttpError('That picture is larger than 15 MB.', 413);
+  catch { throw new HttpError(`That ${noun} does not exist.`, 404); }
+  if (real === root || !isInside(real, root)) throw new HttpError(`Only ${noun}s inside this pane’s project can be shown.`, 403);
+  if (!info.isFile()) throw new HttpError(`That ${noun} does not exist.`, 404);
+  if (info.size > maxBytes) throw new HttpError(`That ${noun} is larger than ${maxBytes >= 1024 * 1024 ? `${maxBytes / 1024 / 1024} MB` : `${maxBytes / 1024} KB`}.`, 413);
   const handle = await open(real, 'r');
   try {
     const bytes = Buffer.alloc(info.size);
     await handle.read(bytes, 0, info.size, 0);
-    const kind = sniffPicture(bytes);
-    if (!kind) throw new HttpError('That file is not a picture.', 415);
-    return { bytes, type: kind.type };
+    return bytes;
   } finally { await handle.close(); }
+}
+
+export async function readPicture(cwd: string, input: string | null) {
+  const path = requestPath(input);
+  if (!EXTENSIONS.test(path)) throw new HttpError('Only PNG, JPEG, WebP and GIF pictures can be shown.', 415);
+  const bytes = await projectFile(cwd, path, 'picture', MAX_PICTURE_BYTES);
+  const kind = sniffPicture(bytes);
+  if (!kind) throw new HttpError('That file is not a picture.', 415);
+  return { bytes, type: kind.type };
 }

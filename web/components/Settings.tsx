@@ -3,12 +3,14 @@ import type { Device } from '../../shared/api.ts';
 import { PairingRequired, errorMessage, request } from '../request.ts';
 import type { AlertState } from '../push.ts';
 import { Sheet } from './Actions.tsx';
+import { reportUrl } from '../report.ts';
 
 type BrowserDevice = Device & { current: boolean };
 const date = (value: number) => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(value);
 
-export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts }: {
+export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts, leftHanded, onHand, lastMessage }: {
   open: boolean; onClose: () => void; alerts: AlertState; alertsBusy: boolean; onAlerts: () => Promise<string | undefined>;
+  leftHanded: boolean; onHand: (left: boolean) => void; lastMessage: string;
 }) {
   const [devices, setDevices] = useState<BrowserDevice[]>();
   const [error, setError] = useState('');
@@ -44,6 +46,14 @@ export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts }: {
       {alerts !== 'unsupported' && alerts !== 'blocked' ? <button type="button" disabled={alertsBusy} onClick={() => { void onAlerts().then(message => setError(message || ''), cause => setError(errorMessage(cause))); }}>
         {alertsBusy ? 'Updating…' : alerts === 'on' ? 'Alert settings' : 'Turn on alerts'}</button> : null}
     </section>
+    <section className="settings-section" aria-labelledby="hand-heading">
+      <h3 id="hand-heading">Controls</h3>
+      <p className="sheet-note">Put Take control, Enter and Send on the side of the thumb you use. Saved on this phone.</p>
+      <div className="choice" role="group" aria-label="Controls side">
+        <button type="button" id="hand-left" aria-pressed={leftHanded} onClick={() => onHand(true)}>Left hand</button>
+        <button type="button" id="hand-right" aria-pressed={!leftHanded} onClick={() => onHand(false)}>Right hand</button>
+      </div>
+    </section>
     <section className="settings-section" aria-labelledby="devices-heading">
       <h3 id="devices-heading">Paired devices</h3>
       {error ? <div className="sheet-error" role="alert">{error}</div> : null}
@@ -59,6 +69,11 @@ export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts }: {
         <div className="confirm-actions"><button type="button" disabled={busy} onClick={() => setPending(undefined)}>Cancel</button>
           <button type="button" id="revoke-confirm" className="danger" disabled={busy} onClick={() => void revoke()}>{busy ? 'Revoking…' : 'Revoke device'}</button></div>
       </div> : null}
+    </section>
+    <section className="settings-section" aria-labelledby="help-heading">
+      <h3 id="help-heading">Help</h3>
+      <p className="sheet-note">Opens a new GitHub issue with the Whistle version, your browser and the last message Whistle showed. You can read and change it there before you send it.</p>
+      <a id="report-problem" className="button-link" href={open ? reportUrl(lastMessage) : undefined} target="_blank" rel="noopener noreferrer">Report a problem</a>
     </section>
   </Sheet>;
 }
