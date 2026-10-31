@@ -61,7 +61,7 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     'pane.close': { type: 'ok' }, 'worktree.remove': { type: 'worktree_removed' },
     'pane.rename': { type: 'ok' }, 'workspace.rename': { type: 'workspace_renamed' },
   };
-  const failures: { code: string; message: string }[] = [];
+  const failures: { method: string; code: string; message: string }[] = [];
   const rpcServer = createServer(socket => {
     let input = '';
     socket.on('data', chunk => {
@@ -69,7 +69,8 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
       if (!input.includes('\n')) return;
       const request = JSON.parse(input.split('\n')[0]);
       if (request.method !== 'session.snapshot') calls.push({ method: request.method, params: request.params });
-      const error = request.method === 'worktree.remove' ? failures.shift() : undefined;
+      const failure = failures[0]?.method === request.method ? failures.shift() : undefined;
+      const error = failure && { code: failure.code, message: failure.message };
       socket.end(JSON.stringify(error ? { id: request.id, error }
         : { id: request.id, result: results[request.method] ?? {} }) + '\n');
     });
@@ -93,10 +94,13 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     };
     expect(await ok({ type: 'terminal', workspaceId: 'w1' })).toEqual({ paneId: 'w1:p9' });
     expect(await ok({ type: 'agent', workspaceId: 'w1', kind: 'claude' })).toEqual({ paneId: 'w1:p9' });
+    // An agent that fails to start leaves its shell open and says why, rather than closing the pane.
+    failures.push({ method: 'agent.start', code: 'agent_start_failed', message: 'claude exited' });
+    expect(await ok({ type: 'agent', workspaceId: 'w1', kind: 'claude' })).toEqual({ paneId: 'w1:p9', warning: 'claude did not start: claude exited' });
     expect(await ok({ type: 'workspace', cwd: '/srv/app', label: 'App' })).toEqual({ paneId: 'w3:p1' });
     expect(await ok({ type: 'worktree-create', workspaceId: 'w1', branch: 'feat/x' })).toEqual({ paneId: 'w4:p1' });
     expect(await ok({ type: 'close-pane', paneId: 'w1:p1' })).toEqual({});
-    failures.push({ code: 'dirty_worktree_requires_force', message: "fatal: contains modified or untracked files, use --force to delete it" });
+    failures.push({ method: 'worktree.remove', code: 'dirty_worktree_requires_force', message: "fatal: contains modified or untracked files, use --force to delete it" });
     const dirty = await action({ type: 'remove-worktree', workspaceId: 'w2' }, { Cookie: cookie });
     expect(dirty.status).toBe(409);
     expect(await dirty.text()).toBe('This worktree has uncommitted or untracked files. Commit or clean them on your PC first.');
@@ -107,7 +111,7 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
     const refused = await action({ type: 'remove-worktree', workspaceId: 'w1' }, { Cookie: cookie });
     expect(refused.status).toBe(409);
     expect(await refused.text()).toContain('Only linked worktrees');
-    failures.push({ code: 'not_git_worktree', message: 'not a git worktree' });
+    failures.push({ method: 'worktree.remove', code: 'not_git_worktree', message: 'not a git worktree' });
     const notGit = await action({ type: 'remove-worktree', workspaceId: 'w2' }, { Cookie: cookie });
     expect(notGit.status).toBe(422);
     expect(await notGit.text()).toBe('This workspace is not in a Git repository.');
@@ -116,6 +120,8 @@ test('action API: paired, same-origin, no-focus Herdr calls and never-forced wor
 
     expect(calls).toEqual([
       { method: 'tab.create', params: { workspace_id: 'w1', focus: false } },
+      { method: 'tab.create', params: { workspace_id: 'w1', focus: false } },
+      { method: 'agent.start', params: { pane_id: 'w1:p9', kind: 'claude', name: 'claude', timeout_ms: 30000 } },
       { method: 'tab.create', params: { workspace_id: 'w1', focus: false } },
       { method: 'agent.start', params: { pane_id: 'w1:p9', kind: 'claude', name: 'claude', timeout_ms: 30000 } },
       { method: 'workspace.create', params: { cwd: '/srv/app', label: 'App', focus: false } },

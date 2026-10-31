@@ -235,7 +235,6 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const created = async (paneId?: string, warning?: string) => {
     // Creation already succeeded. A failed inventory read must never invite another creation.
     setCreateRequest(undefined); setMenuOpen(false);
-    if (warning) setError(warning);
     try {
       const next = await loadPanes(); setSnapshot(next); setLastUpdated(Date.now()); setInventoryError(''); setInventoryStale(false);
       const pane = next.panes.find(item => item.pane_id === paneId);
@@ -243,6 +242,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
     } catch (cause) {
       if (!(cause instanceof PairingRequired)) { setInventoryError(`Created successfully, but the list could not refresh. ${errorMessage(cause)}`); setInventoryStale(true); }
     }
+    if (warning) setError(warning); // After select, which clears the previous pane's error.
   };
   const destroy = async (action: Action) => {
     if (menuPaneId) { await runAction(action); setMenuOpen(false); void refresh(); return; } // From the dashboard: no terminal is open.
