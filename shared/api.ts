@@ -12,6 +12,9 @@ export interface Pane {
   cwd?: string;
   terminal_title_stripped?: string;
   scroll?: { viewport_rows: number };
+  // Added by Whistle: when the host saw this status start, by the host's clock. Missing when the
+  // status was already there when the host first looked.
+  status_since?: number;
 }
 export interface Workspace {
   workspace_id: string;
@@ -29,6 +32,8 @@ export interface Snapshot {
   panes: Pane[];
   workspaces: Workspace[];
   tabs: { tab_id: string; label?: string }[];
+  // Added by Whistle: the host's clock when it answered, so the phone can turn status_since into an age.
+  now?: number;
 }
 
 // Herdr lifecycle actions the phone can ask for.

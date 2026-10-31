@@ -4,6 +4,7 @@ import { PairingRequired, errorMessage, request } from '../request.ts';
 import type { AlertState } from '../push.ts';
 import { Sheet } from './Actions.tsx';
 import { reportUrl } from '../report.ts';
+import { addQuickReply, MAX_REPLY_LENGTH, readQuickReplies, removeQuickReply } from '../shortcuts.ts';
 
 type BrowserDevice = Device & { current: boolean };
 const date = (value: number) => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(value);
@@ -17,6 +18,10 @@ export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts, lef
   const [pending, setPending] = useState<BrowserDevice>();
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [replies, setReplies] = useState(readQuickReplies);
+  const [reply, setReply] = useState('');
+  const [replyError, setReplyError] = useState('');
+  useEffect(() => { if (open) { setReplies(readQuickReplies()); setReply(''); setReplyError(''); } }, [open]);
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
@@ -53,6 +58,24 @@ export function SettingsSheet({ open, onClose, alerts, alertsBusy, onAlerts, lef
         <button type="button" id="hand-left" aria-pressed={leftHanded} onClick={() => onHand(true)}>Left hand</button>
         <button type="button" id="hand-right" aria-pressed={!leftHanded} onClick={() => onHand(false)}>Right hand</button>
       </div>
+    </section>
+    <section className="settings-section" aria-labelledby="replies-heading">
+      <h3 id="replies-heading">Quick replies</h3>
+      <p className="sheet-note">One tap in Compose sends a reply and presses Enter. Saved on this phone.</p>
+      {replies.length ? <ul id="reply-list" className="reply-list">{replies.map(text => <li key={text}>
+        <div><strong>{text}</strong></div>
+        <button type="button" className="revoke" aria-label={`Remove ${text}`} onClick={() => setReplies(removeQuickReply(text))}>Remove</button>
+      </li>)}</ul> : null}
+      <form id="reply-form" onSubmit={event => {
+        event.preventDefault();
+        try { setReplies(addQuickReply(reply)); setReply(''); setReplyError(''); }
+        catch (cause) { setReplyError((cause as Error).message); }
+      }}>
+        <input id="new-reply" value={reply} maxLength={MAX_REPLY_LENGTH} placeholder="Looks good, commit it" aria-label="New quick reply"
+          autoComplete="off" onChange={event => { setReply(event.target.value); setReplyError(''); }} />
+        <button type="submit" disabled={!reply.trim()}>Add</button>
+      </form>
+      {replyError ? <p className="key-hint" data-error role="alert">{replyError}</p> : null}
     </section>
     <section className="settings-section" aria-labelledby="devices-heading">
       <h3 id="devices-heading">Paired devices</h3>

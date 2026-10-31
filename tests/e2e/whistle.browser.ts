@@ -165,7 +165,7 @@ test('live text, chords and compose stay in one ordered input lane', async ({ pa
   await expect(page.locator('[data-modifier="ctrl"]')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('#armed-keys')).toBeHidden();
   await page.locator('#custom-key').fill('ctrl+shift+k');
-  await page.locator('#custom-key-form button').click();
+  await page.locator('#custom-key-form button[type=submit]').click();
   await page.locator('#compose-toggle').click();
   // Composing swaps the toolbar's Enter for Send (Paste + Enter): never two Enter actions at once.
   await expect(page.locator('.main-keys [data-key="Enter"]')).toHaveCount(0);
@@ -400,7 +400,7 @@ test('errors and armed modifiers overlay the terminal without resizing the PTY',
   await page.locator('#more-keys').click();
   await page.locator('#all-keys summary').click();
   await page.locator('#custom-key').fill('meta+x'); // Rejected locally: unsupported modifier.
-  await page.locator('#custom-key-form button').click();
+  await page.locator('#custom-key-form button[type=submit]').click();
   await expect(page.locator('.terminal-frame > #error')).toBeVisible();
   expect(await viewport.evaluate(node => node.clientHeight)).toBe(height);
   await page.waitForTimeout(300);
@@ -567,10 +567,13 @@ test('agents that need you are marked where they are, never moved, and open watc
   const before = await order();
   const needs = page.locator('.herd-filters button', { hasText: 'Needs you' });
   await expect(needs).toHaveAttribute('data-alert', 'false');
-  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=blocked'));
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=blocked&ago=240'));
   await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=done'));
   await page.locator('#refresh').click();
   await expect(page.locator('#pane-list .pane-entry[data-tone="attention"]')).toHaveCount(1);
+  // How long each has waited; a finished agent nobody here has opened is unseen.
+  await expect(page.locator('#pane-list .pane-entry[data-tone="attention"] .state')).toHaveText('needs you · 4m');
+  await expect(page.locator('#pane-list .pane-entry[data-tone="done"] .state')).toHaveText('unseen · now');
   await expect(page.locator('#pane-list .pane-entry[data-tone="done"]')).toHaveCount(1);
   expect(await order()).toEqual(before);
   await expect(needs).toHaveAttribute('data-alert', 'true');
@@ -579,13 +582,21 @@ test('agents that need you are marked where they are, never moved, and open watc
   const waiting = page.locator('#search-results .pane');
   await expect(waiting).toHaveCount(2);
   await expect(page.locator('#search-results')).toContainText('Second agentneeds you');
-  await expect(page.locator('#search-results')).toContainText('finished');
+  await expect(page.locator('#search-results')).toContainText('unseen');
   await waiting.filter({ hasText: 'Second agent' }).click();
   await expect(page.locator('#connection')).toHaveText('Watching');
   expect((await messages(page)).filter(message => message.type === 'connect')).toEqual([
     expect.objectContaining({ pane: 'w2:p1', control: false })]);
   await page.locator('#back').click();
+  // Opening the finished agent reads it: it stays finished but no longer needs you, even after a reload.
   await page.locator('.herd-filters button', { hasText: 'All' }).click();
+  await page.locator('#pane-list .pane', { hasText: 'First agent' }).click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#back').click();
+  await page.reload();
+  await expect(page.locator('#pane-list .pane-entry', { hasText: 'First agent' })).toHaveAttribute('data-tone', 'idle');
+  await expect(page.locator('#pane-list .pane-entry', { hasText: 'First agent' }).locator('.state')).toHaveText('finished · now');
+  await expect(needs).toContainText('1');
   await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=working'));
   await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=idle'));
   await page.locator('#refresh').click();
@@ -1246,4 +1257,80 @@ test('web addresses and embedded links open in a new tab, from terminal text or 
   await expect(page.locator('#file-viewer')).not.toBeVisible();
   expect((await messages(page)).filter(message => message.type === 'input')).toHaveLength(0);
   await expect(page.locator('#connection')).toHaveText('Watching');
+});
+
+test('quick replies are kept in Settings and sent with one tap from Compose', async ({ page }) => {
+  await pair(page);
+  await page.locator('#settings').click();
+  await page.locator('#reply-list button[aria-label="Remove Yes, go ahead"]').click();
+  await page.locator('#new-reply').fill('Looks good, commit it');
+  await page.locator('#reply-form button[type=submit]').click();
+  await expect(page.locator('#reply-list strong')).toHaveText(['Continue', 'Run the tests and fix any failures', 'Looks good, commit it']);
+  await page.locator('#new-reply').fill('Continue');
+  await page.locator('#reply-form button[type=submit]').click();
+  await expect(page.locator('#reply-list li')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await page.locator('#agent-switcher [data-pane="w1:p1"]').click();
+  await page.locator('#control').click();
+  await expect(page.locator('#connection')).toHaveText('Controlling');
+  await page.locator('#compose-toggle').click();
+  await page.locator('#draft').fill('half-written');
+  await page.locator('.quick-reply', { hasText: 'Looks good, commit it' }).click();
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'input').map(({ text, submit }) => ({ text, submit })))
+    .toEqual([{ text: '\x1b[200~Looks good, commit it\x1b[201~', submit: true }]);
+  // The draft being written is left alone.
+  await expect(page.locator('#draft')).toHaveValue('half-written');
+  await page.reload();
+  await page.locator('#control').click();
+  await page.locator('#compose-toggle').click();
+  await expect(page.locator('.quick-reply')).toHaveText(['Continue', 'Run the tests and fix any failures', 'Looks good, commit it']);
+});
+
+test('saved chords stay in Keys, and locked modifiers stay on for a run of keys', async ({ page }) => {
+  await control(page);
+  await page.locator('#more-keys').click();
+  await page.locator('#all-keys summary').click();
+  await page.locator('#custom-key').fill('ctrl+plus');
+  await page.locator('#save-key').click();
+  await page.locator('#custom-key').fill('Ctrl+Shift+P');
+  await page.locator('#save-key').click();
+  await page.locator('#custom-key').fill('hyper+x');
+  await page.locator('#save-key').click();
+  await expect(page.locator('#custom-key-form [role=alert]')).toContainText('Invalid modifiers');
+  await expect(page.locator('#saved-keys button')).toHaveText(['Ctrl+Plus', 'Ctrl+Shift+P']);
+  await page.locator('#saved-keys [data-saved-key="ctrl+shift+P"]').click();
+
+  await page.locator('[data-modifier="alt"]').click();
+  await page.locator('#lock-modifiers').click();
+  await page.locator('#key-grid [data-key="n"]').click();
+  await page.locator('#key-grid [data-key="n"]').click();
+  await expect(page.locator('[data-modifier="alt"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#clear-modifiers').click();
+  await expect(page.locator('#lock-modifiers')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#key-grid [data-key="n"]').click();
+  await expect.poll(async () => (await messages(page)).filter(message => message.type === 'key').map(message => message.key))
+    .toEqual(['ctrl+shift+P', 'alt+n', 'alt+n', 'n']);
+
+  await page.locator('#saved-key-list button[aria-label="Remove Ctrl+Plus"]').click();
+  await page.reload();
+  await page.locator('#control').click();
+  await page.locator('#more-keys').click();
+  await expect(page.locator('#saved-keys button')).toHaveText(['Ctrl+Shift+P']);
+});
+
+test('wide screens keep the herd beside the open terminal', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page);
+  await expect(page.locator('#app')).toHaveAttribute('data-wide', 'true');
+  await expect(page.locator('#panes')).toBeVisible();
+  await expect(page.locator('#agent-switcher')).toBeHidden();
+  await expect(page.locator('#pane-list .pane[aria-current=true]')).toContainText('First agent');
+  const [list, terminal] = await Promise.all([page.locator('#panes').boundingBox(), page.locator('#session').boundingBox()]);
+  expect(list!.x + list!.width).toBeLessThanOrEqual(terminal!.x + 1);
+  await page.locator('#pane-list .pane', { hasText: 'Second agent' }).click();
+  await expect(page.locator('#heading')).toHaveText('Second agent');
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.setViewportSize({ width: 412, height: 860 });
+  await expect(page.locator('#panes')).toBeHidden();
+  await expect(page.locator('#agent-switcher')).toBeVisible();
 });

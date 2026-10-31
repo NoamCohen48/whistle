@@ -8,6 +8,7 @@ import { HerdrUnavailable, snapshot, useHerdr } from './herdr.ts';
 import { PairingTickets } from './pairing-tickets.ts';
 import { PushStore } from './push-store.ts';
 import { createRequestHandler } from './routes.ts';
+import { StatusClock } from './status-clock.ts';
 import { TerminalSockets, type Peer } from './terminal-socket.ts';
 import { ensureToken, prepareStateDir, stateFiles, writeServerUrl } from './state-files.ts';
 import { MAX_UPLOAD_BYTES, sweepUploads } from './uploads.ts';
@@ -27,12 +28,14 @@ export async function startServer() {
   const sendAlert = alertSender(deviceId => pushStore.get(deviceId), webPushSender(vapid));
   const sockets = new TerminalSockets(deviceId => devices.isActive(deviceId));
   const uploadDir = join(paths.stateDir, 'uploads');
+  const clock = new StatusClock();
+  const panes = async () => clock.stamp(await snapshot());
 
   const server = Bun.serve<Peer>({
     hostname: config.host,
     port: config.port,
     maxRequestBodySize: MAX_UPLOAD_BYTES,
-    fetch: createRequestHandler({ config, devices, tickets: new PairingTickets(), tokens, pushStore, vapid, sendAlert, sockets, uploadDir }),
+    fetch: createRequestHandler({ config, devices, tickets: new PairingTickets(), tokens, pushStore, vapid, sendAlert, sockets, uploadDir, panes }),
     websocket: sockets.handlers,
   });
 
@@ -43,6 +46,9 @@ export async function startServer() {
     void sweepUploads(uploadDir);
   }, 60_000);
   sweeper.unref();
+  // Looks at Herdr every few seconds so the phone can say how long an agent has been waiting.
+  const statusTimer = setInterval(() => { void panes().catch(() => { /* Herdr restarting; next look. */ }); }, 5000);
+  statusTimer.unref();
   // Polls Herdr only while at least one device has alerts on.
   const watcher = new AgentWatcher({
     snapshot, subscribers: () => pushStore.all(), send: sendAlert,
@@ -63,6 +69,7 @@ export async function startServer() {
     stopping = true;
     const released = sockets.closeAll();
     clearInterval(sweeper);
+    clearInterval(statusTimer);
     watcher.stop();
     await server.stop(true);
     // Let controller CLI children flush terminal.release before the host exits.

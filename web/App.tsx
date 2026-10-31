@@ -16,12 +16,27 @@ import { readDrafts, saveDraft, flushDrafts } from './drafts.ts';
 import { alertState, disableAlerts, enableAlerts, type AlertState } from './push.ts';
 import { SettingsSheet } from './components/Settings.tsx';
 import { readPreference, writePreference } from './preferences.ts';
+import { markSeen, readSeen } from './seen.ts';
 
 // Per-browser memory for home-screen shortcuts; blocked storage just means no shortcut target.
 const remember = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* Not remembered. */ } };
 const recall = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
 
 const paneKey = (pane: Pane) => `${pane.pane_id}:${pane.terminal_id}`;
+
+// Tablets and desktops have room for the herd beside the open terminal. The same query drives
+// the layout (via data-wide) and whether the list stays mounted, so the two never disagree.
+const WIDE = '(min-width: 1024px) and (min-height: 600px)';
+function useWide() {
+  const [wide, setWide] = useState(() => matchMedia(WIDE).matches);
+  useEffect(() => {
+    const query = matchMedia(WIDE);
+    const change = () => setWide(query.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
+  return wide;
+}
 
 export function App({ startup }: { startup: Promise<Startup> }) {
   const [paired, setPaired] = useState(false);
@@ -34,6 +49,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [leftHanded, setLeftHanded] = useState(() => readPreference<boolean>('left-handed', false));
   const [recent, setRecent] = useState<string[]>(() => readPreference('recent-panes', []));
+  const [seen, setSeen] = useState(readSeen);
+  const wide = useWide();
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [selection, setSelection] = useState<Pane>();
   const [error, setError] = useState('');
@@ -126,6 +143,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       inFlight.current?.abort(); inFlight.current = null;
     };
   }, [paired, refresh]);
+  // An open pane is being looked at: whatever it finishes while open is already seen.
+  useEffect(() => { if (selected) setSeen(previous => markSeen(previous, selected.pane_id)); }, [selected?.pane_id, selected?.agent_status]);
   useEffect(() => {
     if (paired && selection && snapshot && !selected) {
       setSelection(undefined); sessionStorage.removeItem('whistle-pane');
@@ -233,7 +252,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       const pane = find(recall('whistle-last-pane'));
       if (pane) select(pane); else setError('The last pane you opened is closed. Choose another.');
     } else if (shortcut === 'needs-you') {
-      const waiting = state.panes.filter(needsYou).sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
+      const waiting = state.panes.filter(pane => needsYou(pane, seen)).sort((a, b) => Number(statusTone(b) === 'attention') - Number(statusTone(a) === 'attention'));
       if (waiting[0]) select(waiting[0]);
     } else if (shortcut === 'new-agent') {
       const workspaceId = recall('whistle-last-workspace');
@@ -298,7 +317,7 @@ export function App({ startup }: { startup: Promise<Startup> }) {
   return <>
     <Pairing hidden={paired} loading={loading || refreshing} error={error || inventoryError} unavailable={!needsPairing && !loading} onPair={pair}
       onRetry={() => { setError(''); void refresh(); }} />
-    <div id="app" hidden={!paired} data-hand={leftHanded ? 'left' : 'right'} data-view={selected ? 'terminal' : 'inventory'} data-phase={selected ? session.phase : undefined}>
+    <div id="app" hidden={!paired} data-hand={leftHanded ? 'left' : 'right'} data-view={selected ? 'terminal' : 'inventory'} data-wide={wide || undefined} data-phase={selected ? session.phase : undefined}>
       <header>
         {selected ? <button type="button" id="back" className="icon-button" aria-label="Back to panes" onClick={() => {
           engine?.close(); setSelection(undefined); sessionStorage.removeItem('whistle-pane'); void refresh();
@@ -321,8 +340,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
         {selected ? <button type="button" id="pane-actions" className="icon-button" aria-label="Pane actions"
           aria-haspopup="dialog" onClick={() => { setMenuPaneId(undefined); setMenuOpen(true); }}><Icon name="more" /></button> : null}
       </header>
-      <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} />
-      <Inventory snapshot={snapshot} hidden={Boolean(selected)} onSelect={select}
+      <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} seen={seen} />
+      <Inventory snapshot={snapshot} hidden={Boolean(selected) && !wide} onSelect={select} seen={seen} selected={selected?.pane_id}
         onMenu={pane => { setMenuPaneId(pane.pane_id); setMenuOpen(true); }} banner={selected ? null : banner} recent={recent}
         lastUpdated={lastUpdated} stale={inventoryStale} refreshing={refreshing} onCreate={() => setCreateRequest({ kind: 'workspace' })} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}

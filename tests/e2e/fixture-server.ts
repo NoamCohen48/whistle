@@ -156,7 +156,8 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/disconnect') { for (const peer of peers) peer.close(); return new Response('closed'); }
     if (path === '/__test/status') {
       const pane = inventory.panes.find(item => item.pane_id === url.searchParams.get('pane'));
-      if (pane) pane.agent_status = url.searchParams.get('status') || 'idle';
+      // ?ago=SECONDS dates the change in the past, as if the host saw it then.
+      if (pane) { pane.agent_status = url.searchParams.get('status') || 'idle'; pane.status_since = Date.now() - Number(url.searchParams.get('ago') || 0) * 1000; }
       return new Response(pane ? 'updated' : 'missing', { status: pane ? 200 : 404 });
     }
     if (path === '/__test/add-panes') {
@@ -194,7 +195,7 @@ const server = Bun.serve<Peer>({
       || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/file' || path === '/api/folders') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
       if (path === '/api/previews') return Response.json(Object.fromEntries(inventory.panes.map(pane => [pane.pane_id, `${pane.label || pane.pane_id}: checking the fixture`])), { headers: { 'Cache-Control': 'no-store' } });
-      if (path === '/api/panes') return Response.json(inventory);
+      if (path === '/api/panes') return Response.json({ ...inventory, now: Date.now() });
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
       if (path === '/api/worktrees') return Response.json({ worktrees: [
         { path: '/atlas-worktrees/docs', label: 'docs', branch: 'docs' },
