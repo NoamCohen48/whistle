@@ -137,6 +137,16 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+      - name: Keep the AUR package files
+        # actions/upload-artifact v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: aur
+          path: dist/aur/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Publish the GitHub release
     needs: [version, build]
@@ -191,6 +201,56 @@ jobs:
           # Creates the v$version tag on the commit that was built.
           gh release create "v$version" dist/release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Whistle $version" --notes-file "$RUNNER_TEMP/notes.md" "${prerelease[@]}"
+
+  aur:
+    name: Update the AUR package
+    needs: [version, publish]
+    # Off for now: Whistle is not published to the AUR yet. Remove this line to turn it on.
+    if: false
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Download the AUR package files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aur
+          path: dist/aur
+
+      - name: Build and install it on Arch Linux from the published release
+        run: |
+          docker run --rm -v "$PWD/dist/aur:/aur:ro" archlinux:latest bash -euc '
+            pacman -Syu --noconfirm --needed base-devel >/dev/null
+            useradd -m builder
+            cp -r /aur /home/builder/package && chown -R builder /home/builder/package
+            su builder -c "cd /home/builder/package && makepkg --noconfirm"
+            pacman -U --noconfirm /home/builder/package/whistle-herdr-bin-*.pkg.tar.zst
+            whistle --version'
+
+      - name: Push to the AUR
+        # Skipped, with a notice, until an AUR_SSH_KEY secret holds the AUR account's private key.
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if [ -z "$AUR_SSH_KEY" ]; then
+            echo "::notice::No AUR_SSH_KEY secret, so the AUR package was checked but not pushed."
+            exit 0
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          # The AUR's published host key fingerprint.
+          ssh-keyscan -t ed25519 aur.archlinux.org > "$RUNNER_TEMP/aur-host" 2>/dev/null
+          ssh-keygen -lf "$RUNNER_TEMP/aur-host" | grep -q 'SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4'
+          cat "$RUNNER_TEMP/aur-host" >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes'
+          git clone ssh://aur@aur.archlinux.org/whistle-herdr-bin.git "$RUNNER_TEMP/aur"
+          cp dist/aur/PKGBUILD dist/aur/.SRCINFO "$RUNNER_TEMP/aur/"
+          cd "$RUNNER_TEMP/aur"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then echo "The AUR already has $RELEASE_VERSION."; exit 0; fi
+          git -c user.name='Noam Cohen' -c user.email='92931230+NoamCohen48@users.noreply.github.com' \
+            commit -q -m "Update to $RELEASE_VERSION"
+          git push origin HEAD:master
 
   site:
     name: Build the website
