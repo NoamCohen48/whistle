@@ -117,9 +117,12 @@ h1 { font-size: clamp(40px, 5.4vw, 68px); line-height: 1.02; letter-spacing: -.0
 .app-header { display: flex; align-items: center; gap: 14px; min-height: 54px; padding: 10px 14px 0; border-bottom: 1px solid var(--a-line); color: var(--a-muted) }
 .app-wordmark { flex: 1; font-size: 17px; font-weight: 750; letter-spacing: -.02em; color: var(--a-text) }
 .app-herd { flex: 1; min-height: 0; overflow: hidden; padding: 18px 12px }
-.app-h1 { margin: 0 4px 14px; font-size: 24px; font-weight: 750; letter-spacing: -.025em; color: var(--a-text) }
+.app-filters { display: flex; gap: 6px; margin: 0 0 14px; overflow: hidden }
+.app-filter { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 11px; border: 1px solid var(--a-line); border-radius: 10px; font-size: 13px; white-space: nowrap }
+.app-filter span { color: var(--a-muted) }
+.app-filter.is-current { border-color: var(--a-accent); background: var(--a-surface-2) }
 .app-group { display: flex; align-items: center; margin: 14px 4px 6px; font-size: 12.5px; font-weight: 600; color: var(--a-muted) }
-.app-h1 + .app-group, .fragment > .app-group:first-child { margin-top: 0 }
+.app-filters + .app-group, .fragment > .app-group:first-child { margin-top: 0 }
 .app-group.is-strong { color: var(--a-text) }
 .app-group span { margin-left: auto; font: 11.5px var(--a-mono); color: var(--a-faint) }
 .app-list { border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); overflow: hidden }
@@ -169,30 +172,35 @@ button.app-row:focus-visible { outline: 2px solid var(--a-accent); outline-offse
 }
 .app-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor }
 .app-notice { display: none; min-width: 0; margin-left: -2px; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px }
-.app-quiet { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px }
-.app-control {
-  flex-shrink: 0; min-width: 112px; min-height: 44px; padding: 0 12px; border: 1px solid var(--a-accent); border-radius: 10px;
-  background: var(--a-accent); color: var(--a-accent-ink); font-weight: 650; white-space: nowrap; cursor: pointer; transition: transform .08s;
+/* Take control and Release are icons, as in the app: a hand, and the slashed hand that lets go. */
+.app-control, .app-release {
+  flex-shrink: 0; display: grid; place-items: center; height: 44px; padding: 0; border: 1px solid var(--a-accent); border-radius: 10px;
+  background: var(--a-accent); color: var(--a-accent-ink); cursor: pointer; transition: transform .08s;
 }
-.app-control:active { transform: scale(.97) }
+.app-control { width: 56px }
+.app-control .i, .app-release .i { width: 22px; height: 22px }
+.app-control:active, .app-release:active { transform: scale(.97) }
 .app-control:disabled { opacity: .38; cursor: default }
 .app-control:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px }
-.app-toolbar { display: none; align-items: stretch; gap: 6px; padding: 2px 8px 8px }
-.app-toolbar.is-shown { display: flex; padding: 0 }
-.app-tool { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 52px; font-size: 11.5px; font-weight: 550; color: var(--a-muted) }
-.app-keycap { display: grid; place-items: center; min-width: 52px; height: 52px; padding: 0 10px; border: 1px solid var(--a-line-strong); border-bottom-width: 2px; border-radius: 10px; background: var(--a-surface); font: 600 13px var(--a-mono) }
-.app-keycap.is-enter { min-width: 66px; background: var(--a-accent); border-color: var(--a-accent); border-bottom-color: #93b47a; color: var(--a-accent-ink) }
+.app-release { display: none; width: 44px; margin: -4px 0; border-color: var(--a-live); background: transparent; color: var(--a-live) }
+.app-release:focus-visible { outline: 2px solid var(--a-live); outline-offset: 2px }
+.app-toolbar { display: none; align-items: center; gap: 6px; min-height: 54px; padding: 4px 8px; border-top: 1px solid var(--a-line) }
+.app-toolbar.is-shown { display: flex; padding: 0; border: 0 }
+.app-tool { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; font-size: 13px; font-weight: 550; color: var(--a-muted); white-space: nowrap }
+.app-keycap { display: grid; place-items: center; min-width: 50px; height: 44px; padding: 0 10px; border: 1px solid var(--a-line-strong); border-bottom-width: 2px; border-radius: 10px; background: var(--a-surface); font: 600 13px var(--a-mono) }
+.app-keycap.is-enter { min-width: 64px; background: var(--a-accent); border-color: var(--a-accent); border-bottom-color: #93b47a; color: var(--a-accent-ink) }
 
 .demo[data-phase='controlling'] .app-terminal::after { box-shadow: inset 0 0 0 2px var(--a-live), inset 0 18px 24px -20px var(--a-live); transition: box-shadow .2s }
 .demo[data-phase='controlling'] .app-pill { --tone: var(--a-live); background: rgb(233 179 91 / .12) }
-.demo[data-phase='controlling'] .app-control { border-color: var(--a-live); background: transparent; color: var(--a-live); font-weight: 600 }
-.demo[data-phase='controlling'] .app-control:focus-visible { outline-color: var(--a-live) }
+/* While controlling, the toolbar replaces the watching bar and Release takes the header's place of Refresh. */
+.demo[data-phase='controlling'] .app-session, .demo[data-phase='controlling'] .is-watch-only { display: none }
+.demo[data-phase='controlling'] .app-release { display: grid }
 .demo[data-phase='controlling'] .screen-session .app-toolbar { display: flex }
 .demo[data-phase='controlling'] .t-cursor { background: var(--a-text) }
 .demo[data-phase='disconnected'] .app-terminal::after { box-shadow: inset 0 2px var(--a-alert) }
 .demo[data-phase='disconnected'] .app-pill { --tone: var(--a-alert); margin-right: 0 }
 .demo[data-phase='disconnected'] .app-notice { display: block }
-.demo[data-phase='disconnected'] .app-session > :is(.app-quiet, .i-muted) { display: none }
+.demo[data-phase='disconnected'] .app-session > .i-muted { display: none }
 
 .demo-note { min-height: 3em; margin-top: 16px; font-size: 15px; line-height: 1.5; color: var(--ink) }
 .demo figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0 16px; min-height: 44px; font-size: 13px; color: var(--muted) }
@@ -267,24 +275,6 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
 .button-quiet:hover { background: var(--ink); color: var(--bg) }
 .download-more { display: flex; flex-wrap: wrap; gap: 4px 28px; margin-top: 20px; font-size: 15px }
 .download-more a { display: inline-flex; align-items: center; min-height: 44px }
-.download-guide { margin-top: 72px; padding-top: 48px; border-top: 1px solid var(--rule) }
-.download-guide h3 { font-size: 28px }
-.download-guide h4 { font-size: 18px; font-weight: 640 }
-.download-guide p, .download-guide dd { color: var(--muted) }
-.download-guide :not(pre) > code { font: 400 .86em/1 var(--mono); color: var(--ink) }
-.guide-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px 64px; margin-top: 28px }
-.guide-choose { display: grid; align-content: start; gap: 12px }
-.guide-choose p { max-width: 52ch; margin-bottom: 20px }
-.file-kinds { display: grid; gap: 16px; margin: 0 }
-.file-kinds dt { font-weight: 640 }
-.file-kinds dd { max-width: 52ch; margin: 2px 0 0 }
-.guide-binary { display: grid; align-content: start; gap: 12px; min-width: 0 }
-.guide-steps { display: grid; gap: 22px; margin: 4px 0 8px; padding-left: 1.4em }
-.guide-steps li::marker { font-weight: 640; color: var(--muted) }
-.guide-steps p { max-width: 60ch }
-.download-guide .command { overflow-wrap: anywhere }
-.guide-steps li { min-width: 0 }
-.guide-note { margin-top: 12px }
 
 /* Setup */
 .setup { padding-block: 96px 112px }
@@ -295,6 +285,14 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
 .steps p { max-width: 62ch; color: var(--muted) }
 .command { margin: 6px 0 0; padding: 14px 18px; border-radius: 8px; border: 1px solid var(--screen-rule); background: var(--screen); color: var(--screen-ink); font: 400 13.5px/1.6 var(--mono); white-space: pre-wrap }
 .setup-more { max-width: 62ch; margin-left: 76px; color: var(--muted) }
+.network-note { max-width: 62ch; margin-top: 40px; padding: 20px 24px; border: 1px solid var(--rule); border-radius: 12px }
+.network-note h3 { font-size: 20px }
+.network-note p, .network-note dd { color: var(--muted) }
+.network-note p { margin-top: 8px }
+.network-note dl { display: grid; gap: 14px; margin: 16px 0 0 }
+.network-note dt { font-weight: 640 }
+.network-note dd { max-width: none; margin: 2px 0 0 }
+.network-note code { font: 400 .86em/1 var(--mono); color: var(--ink); overflow-wrap: anywhere }
 .site-note { max-width: 62ch; margin: 32px 0 0 76px; padding: 4px 0 4px 20px; border-left: 3px solid var(--rule); color: var(--muted) }
 .site-note strong { color: var(--ink); font-weight: 650 }
 
@@ -310,7 +308,6 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
 }
 
 @media (max-width: 900px) {
-  .guide-grid { grid-template-columns: minmax(0, 1fr) }
   .hero { grid-template-columns: minmax(0, 1fr); gap: 56px; padding-block: 32px 72px }
   .pillars { grid-template-columns: minmax(0, 1fr) }
   .feature-groups { grid-template-columns: 1fr }
@@ -322,8 +319,6 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
   .packages td:last-child { grid-row: 1 / span 2; grid-column: 2; align-self: center }
 }
 @media (max-width: 640px) {
-  .download-guide { margin-top: 48px; padding-top: 36px }
-  .download-guide h3 { font-size: 24px }
   .shell { width: calc(100% - 32px) }
   .site-header { min-height: 64px; gap: 12px }
   .site-header nav { gap: 16px; font-size: 14px }
@@ -344,9 +339,6 @@ dd { margin-top: 6px; max-width: 42ch; color: var(--muted) }
   .steps li:not(:last-child)::after { left: 9px; top: 40px }
   .setup-more, .site-note { margin-left: 0 }
   .site-footer { flex-wrap: wrap }
-}
-@media (max-width: 400px) {
-  .demo[data-phase='controlling'] .app-quiet { display: none }
 }
 @media (max-width: 360px) {
   .site-header .wordmark { font-size: 22px }
