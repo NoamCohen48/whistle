@@ -25,14 +25,19 @@ const test = base.extend<{ phone: Page }>({
     adb('shell', 'am', 'set-debug-app', 'com.android.chrome');
     adb('reverse', `tcp:${new URL(fixture).port}`, `tcp:${new URL(fixture).port}`);
     adb('forward', `tcp:${devtools}`, 'localabstract:chrome_devtools_remote');
-    adb('shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', 'about:blank', 'com.android.chrome');
+    // Android opens the pairing link in a new foreground tab, as tapping a link would. Playwright
+    // then attaches to that tab, found by a marker in its URL; older Chrome cannot make tabs over CDP.
+    const marker = crypto.randomUUID();
+    adb('shell', `am start -a android.intent.action.VIEW -d '${fixture.replace('127.0.0.1', 'localhost')}/?run=${marker}#pair=single-use-ticket' com.android.chrome`);
     await expect.poll(() => fetch(`http://127.0.0.1:${devtools}/json/version`).then(response => response.ok, () => false), { timeout: 60_000 }).toBe(true);
     let browser: Browser | undefined;
     try {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${devtools}`);
-      const page = await browser.contexts()[0].newPage();
-      await use(page);
-      await page.close();
+      const context = browser.contexts()[0];
+      let page: Page | undefined;
+      await expect.poll(() => (page = context.pages().find(item => item.url().includes(marker))) !== undefined, { timeout: 30_000 }).toBe(true);
+      await use(page!);
+      await page!.close();
     } finally {
       await browser?.close();
       // A Chrome tab left on the fixture would keep talking to it after the run.
@@ -53,9 +58,12 @@ async function tap(page: Page, locator: Locator) {
   const { scale, top } = screens.get(page)!;
   adb('shell', 'input', 'tap', String(Math.round((box.x + box.width / 2) * scale)), String(Math.round((box.y + box.height / 2 + top) * scale)));
 }
-const connection = (page: Page, text: string) => page.waitForFunction(text => document.querySelector('#connection')?.textContent === text, text);
+const connection = (page: Page, text: string) => page.waitForFunction(text => document.querySelector('#connection')?.textContent === text, text, { timeout: 15_000 });
 async function open(page: Page) {
-  await page.goto('http://localhost:8793/#pair=single-use-ticket');
+  await page.locator('#agent-switcher [data-pane="w1:p1"]').waitFor();
+  // The new tab slides in; taps and the screen offset are only right once it is on screen and still.
+  await page.waitForFunction(() => document.visibilityState === 'visible' && document.hasFocus());
+  await page.waitForTimeout(1000);
   screens.set(page, await page.evaluate(() => ({ scale: devicePixelRatio, top: outerHeight - innerHeight })));
   await tap(page, page.locator('#agent-switcher [data-pane="w1:p1"]'));
   await connection(page, 'Watching');
