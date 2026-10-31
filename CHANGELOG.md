@@ -2,6 +2,24 @@
 
 Whistle follows [semantic versioning](https://semver.org). Each release's notes on GitHub come from its section here.
 
+## 0.3.0 (2026-10-31)
+
+- Agents that need you are marked where they are on the home screen, so rows never move under your finger.
+- Swipe sideways with two fingers on the terminal to move to the next or previous agent.
+- A left-hand layout for the dock, in Settings.
+- Tapping Start again after a lost reply opens the agent it already started, not a second one.
+- Report a problem, in Settings, opens a GitHub issue filled in with your app and browser versions. You read it and submit it yourself.
+- Attach text and code files in Compose, as well as pictures.
+- Tap a file path an agent printed, like `src/app.ts:42`, to read that file at that line. Only files inside the pane's project open.
+- Tap a web link in the terminal to open it in a new tab, including links a program embeds in its text.
+- Install with Nix: `nix profile install github:NoamCohen48/whistle`.
+- Herd rows say how long an agent has been in its state, such as "needs you · 4m". A finished agent you haven't opened on this phone is marked unseen; once you open it, it no longer counts as needing you.
+- Quick replies: phrases you keep in Settings, sent with one tap from Compose, like Send.
+- Save chords you use often to the top of Keys, and lock Ctrl, Alt or Shift on for a run of keys.
+- `whistle doctor` checks Herdr, the host, the address your phone opens, HTTPS and alerts, and says what to fix.
+- On tablets and desktops, the herd stays beside the open terminal.
+- Fixed: the herd list and actions failed with "AbortSignal.any is not a function" in Chrome before version 116.
+
 ## 0.2.0 (2026-10-31)
 
 - A cleaner phone screen: icon buttons in the header and dock, and status filter chips on the home screen.
