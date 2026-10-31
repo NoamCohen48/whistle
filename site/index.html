@@ -73,27 +73,23 @@
                 <div class="app-herd">
                   <div class="app-filters" aria-hidden="true">
                     <span class="app-filter is-current">All <span>3</span></span>
-                    <span class="app-filter">Needs you <span>1</span></span>
+                    <span class="app-filter is-alert">Needs you <span>1</span></span>
                     <span class="app-filter">Working <span>1</span></span>
                   </div>
-                  <p class="app-group is-strong" aria-hidden="true">Needs you <span>1</span></p>
+                  <p class="app-group" aria-hidden="true">shop <span>2</span></p>
                   <div class="app-list">
-                    <button type="button" class="app-row" data-demo-open>
+                    <span class="app-row" aria-hidden="true"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Moving handlers into routes/</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
+                    <button type="button" class="app-row is-marked" data-demo-open>
                       <i class="dot is-attention" aria-hidden="true"></i>
                       <span class="row-copy">
                         <strong>Checkout tests</strong>
-                        <small><span class="is-attention">needs you</span><span>pi</span><span>shop</span></small>
+                        <small><span class="is-attention">needs you</span><span>pi</span><span class="cwd">~/code/shop</span></small>
                         <span class="row-preview" aria-hidden="true">Commit the fix? (y/n)</span>
                       </span>
                       <svg class="i i-faint" aria-hidden="true"><use href="#i-pin" /></svg>
                     </button>
                   </div>
                   <div aria-hidden="true">
-                    <p class="app-group">shop <span>2</span></p>
-                    <div class="app-list">
-                      <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Moving handlers into routes/</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
-                      <span class="app-row"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you</span><span>pi</span><span class="cwd">~/code/shop</span></small><span class="row-preview">Commit the fix? (y/n)</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
-                    </div>
                     <p class="app-group">docs <span>1</span></p>
                     <div class="app-list">
                       <span class="app-row"><i class="dot"></i><span class="row-copy"><strong>Release notes</strong><small><span>idle</span><span>pi</span><span class="cwd">~/code/docs</span></small><span class="row-preview">Draft saved to CHANGELOG.md</span></span><svg class="i i-faint"><use href="#i-pin" /></svg></span>
@@ -153,7 +149,7 @@
               </div>
             </div>
           </div>
-          <p class="demo-note" role="status" data-demo-note>Your herd: every agent on your PC, with the one waiting on you first. Tap it to open.</p>
+          <p class="demo-note" role="status" data-demo-note>Your herd: every agent on your PC. The one waiting on you is marked where it is. Tap it to open.</p>
           <figcaption id="demo-caption">
             <span>Whistle on a phone, with sample data. Not a live terminal.</span>
             <button type="button" class="text-button" data-demo-drop hidden>Simulate a dropped connection</button>
@@ -168,18 +164,15 @@
           <div class="pillars">
             <article class="pillar">
               <div class="fragment app-ui" aria-hidden="true">
-                <p class="app-group is-strong">Needs you <span>1</span></p>
+                <p class="app-group">shop <span>3</span></p>
                 <div class="app-list">
-                  <span class="app-row"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you</span><span>pi</span><span>shop</span></small></span></span>
-                </div>
-                <p class="app-group">shop <span>2</span></p>
-                <div class="app-list">
-                  <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working</span><span>claude</span></small></span></span>
-                  <span class="app-row"><i class="dot is-done"></i><span class="row-copy"><strong>Lint fixes</strong><small><span class="is-done">finished</span><span>pi</span></small></span></span>
+                  <span class="app-row is-marked"><i class="dot is-attention"></i><span class="row-copy"><strong>Checkout tests</strong><small><span class="is-attention">needs you · 4m</span><span>pi</span></small></span></span>
+                  <span class="app-row"><i class="dot is-busy"></i><span class="row-copy"><strong>API refactor</strong><small><span>working · 12m</span><span>claude</span></small></span></span>
+                  <span class="app-row"><i class="dot is-done"></i><span class="row-copy"><strong>Lint fixes</strong><small><span class="is-done">unseen · 1m</span><span>pi</span></small></span></span>
                 </div>
               </div>
               <h3>See every agent at a glance</h3>
-              <p>Every pane in Herdr, grouped by workspace and worktree, with each agent's status and latest lines. The ones waiting on you come first.</p>
+              <p>Every pane in Herdr, grouped by workspace and worktree, with each agent's status, how long it has been that way, and its latest lines. The ones waiting on you are marked, and rows never jump around.</p>
             </article>
 
             <article class="pillar">
@@ -241,6 +234,7 @@
             <h3>While you're working</h3>
             <dl>
               <div><dt>Drafts per pane</dt><dd>Each pane keeps its own unsent draft. Switch between agents and every reply waits where you left it.</dd></div>
+              <div><dt>Quick replies</dt><dd>Keep the phrases you send most, like "Continue", and send one with a tap. Save the key chords you use often, too.</dd></div>
               <div><dt>Pictures</dt><dd>Attach a screenshot or photo while composing. The phone shrinks it and drops camera metadata before it goes to your PC.</dd></div>
               <div><dt>Review changes</dt><dd>See what an agent changed in its checkout since the last commit, file by file, with the diff.</dd></div>
               <div><dt>Terminal history</dt><dd>Swipe back through everything the pane printed, or copy it as plain text. Latest takes you back to the cursor.</dd></div>
@@ -321,6 +315,11 @@
               </tr>
             </tbody>
           </table>
+
+          <h3 class="packages-heading" id="managers-heading">Or use Nix</h3>
+          <dl class="managers" aria-labelledby="managers-heading">
+            <div><dt>With flakes</dt><dd><pre class="command"><code>nix run github:__WHISTLE_REPOSITORY__ -- install --host "$(tailscale ip -4)" --now</code></pre></dd></div>
+          </dl>
           <p class="download-more">
             <a href="https://github.com/__WHISTLE_REPOSITORY__/releases/latest">Release notes</a>
             <a href="https://github.com/__WHISTLE_REPOSITORY__/releases/latest/download/SHA256SUMS">Checksums</a>
@@ -356,7 +355,7 @@
             <pre class="command"><code>whistle pair</code></pre>
           </li>
         </ol>
-        <p class="setup-more">Alerts and installing Whistle as a phone app need HTTPS. The <a href="https://github.com/__WHISTLE_REPOSITORY__#https-with-tailscale-serve">README shows how</a> with Tailscale Serve, along with upgrades and safety notes.</p>
+        <p class="setup-more">Alerts and installing Whistle as a phone app need HTTPS. The <a href="https://github.com/__WHISTLE_REPOSITORY__#https-with-tailscale-serve">README shows how</a> with Tailscale Serve, along with upgrades and safety notes. If your phone can't connect, <code>whistle doctor</code> on the PC says what's missing.</p>
         <aside class="site-note"><strong>This website only describes Whistle.</strong> It has no login, no terminal connection and no access to your computer. Pair your phone with the Whistle on your own PC.</aside>
       </section>
     </main>

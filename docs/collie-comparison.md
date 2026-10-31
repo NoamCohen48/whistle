@@ -48,7 +48,7 @@ This one choice explains most of the other differences:
 
 ### Dashboard
 
-- A summary line: "1 needs you · 2 unseen · 5 working · 1 done · 1 idle". The **unseen** status, a finished result you haven't looked at yet, has no equivalent in Whistle.
+- A summary line: "1 needs you · 2 unseen · 5 working · 1 done · 1 idle". The **unseen** status means a finished result you haven't looked at yet. Whistle has had it since 0.3.0.
 - How long each pane has been in its state (2m, 26m, "cold").
 - Agent icons per row, a SHELL badge, workspace filter chips, and per-workspace counts.
 - Rows never move when their status changes (ADR 0063). Urgency is a mark on the row, not a new position. Whistle moves agents that need you to the top.
@@ -123,7 +123,7 @@ This one choice explains most of the other differences:
 | Pane screen | Header, then tab and pane pills, then the screen or chat, then the four-tab bar, then a reply field that's always visible | Header, then the terminal, then a dock that shows the hand button while you watch, and Compose, Keys, Esc and Enter while you control |
 | Input | Always offered. A message box is the main path | Hidden until you take control |
 | Density | A lot of UI at once: about 6 rows of controls under the terminal when Keys is open | Less on screen, so more terminal shows |
-| Customising | Very deep: themes, fonts, languages, hand, key layout | Little: font size, PC width |
+| Customising | Very deep: themes, fonts, languages, hand, key layout | Some: font size, PC width, hand, quick replies, saved chords |
 
 Collie's `DESIGN.md` is about 1,000 lines of strict rules, such as "no state may move content", "red marks harm, never emphasis", and "back goes up one level". Several are worth reading even without copying the UI.
 
@@ -138,6 +138,8 @@ These fit Whistle's principles, because none of them parse the agent's screen. I
 5. **A two-finger swipe between panes** and a **left-hand option** for the dock.
 6. **Duplicate-safe launches** (a request ID on New) and a **Report a problem** shortcut.
 7. **Text and code file attachments** in Compose.
+
+Whistle 0.3.0 adds all seven, along with a `whistle doctor` command and a layout for tablets and desktops that keeps the herd beside the terminal.
 
 Leave out the parsed prompt buttons, Chat view, crews, walky talky and durable agents. [Design principles](product.md) puts those deliberately out of scope, and they're the source of most of Collie's size and maintenance work.
 

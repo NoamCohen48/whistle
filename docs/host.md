@@ -23,8 +23,11 @@ whistle serve
 whistle pair
 whistle devices
 whistle revoke DEVICE_ID
+whistle doctor
 whistle version
 ```
+
+`doctor` only reads. It loads the configuration, asks Herdr for a snapshot, asks the running host (with the PC token) how many phones are paired, and checks the address a phone opens: with a public origin it fetches `/manifest.webmanifest` there from the PC; without one it checks that the bind address is one of this PC's and whether it is a Tailscale address (100.64.0.0/10 or fd7a:115c:a1e0::/48). Without HTTPS it warns that alerts and installing the app are unavailable. Each check prints `ok`, `warn` or `FAIL` with what to do; any failure sets exit status 1.
 
 `install` builds no files implicitly. The standalone executable already contains its frontend and runtime; source-mode installation requires `bun install` and `bun run build` first. It captures the selected bind address/port, Herdr socket and resolved Herdr executable in a private config file. Default bind is loopback; phone access needs an explicit existing tailnet IP. Wildcard listeners are rejected. No Tailscale, firewall, gateway, login-shell or lingering changes are performed.
 
@@ -114,6 +117,8 @@ Anything unexpected answers 500 with a generic message, and the details, which c
 
 ## Pane and worktree API
 
+`GET /api/panes` is Herdr's snapshot with two additions. Herdr says what each agent is doing but not since when, so the host looks at Herdr every 5 s (`status-clock.ts`) and adds `status_since` to a pane when it sees its status change, plus `now`, the host's clock when it answered; the phone turns these into an age on its own clock. A status already there when the host first looked has no `status_since`, so the phone shows no age rather than a wrong one.
+
 Paired-cookie only (the PC token is not accepted). `src/actions.ts` reduces each request to fixed, validated fields; the browser never supplies commands, agent arguments or environment variables.
 
 - `POST /api/actions` (exact Origin required) with `type`:
@@ -160,7 +165,7 @@ Request bodies: the server's limit is 10 MB for this route only. Every other rou
 - `server.ts` starts the host and wires the parts together. `state-files.ts` prepares the state directory and holds the files the host leaves there for the command: the PC access token and the server URL.
 - `routes.ts` is the HTTP API: one table where every route declares who may call it and whether it needs a same-origin request. `http.ts` holds response, cookie and error helpers, `http-error.ts` the error that carries a status, `auth.ts` the access-token check, and `assets.ts` serves the phone app's files.
 - `terminal-socket.ts` is the live terminal connection: watch and control, the serial input lane, and closing on revocation or shutdown.
-- `herdr.ts` talks to Herdr; `server.ts` tells it where Herdr is with `useHerdr()`. `actions.ts`, `previews.ts`, `folders.ts`, `pictures.ts`, `text-files.ts`, `changes.ts`, `uploads.ts` and `launches.ts` each serve one feature. `git.ts` runs read-only git for changes and pictures, `paths.ts` checks paths from the phone, and `picture-types.ts` recognises pictures by their bytes.
+- `herdr.ts` talks to Herdr; `server.ts` tells it where Herdr is with `useHerdr()`. `actions.ts`, `previews.ts`, `folders.ts`, `pictures.ts`, `text-files.ts`, `changes.ts`, `uploads.ts` and `launches.ts` each serve one feature. `status-clock.ts` dates status changes, and `doctor.ts` is `whistle doctor`. `git.ts` runs read-only git for changes and pictures, `paths.ts` checks paths from the phone, and `picture-types.ts` recognises pictures by their bytes.
 - `devices.ts` and `pairing-tickets.ts` are pairing. `alerts.ts` decides when to alert, `webpush.ts` delivers, and `push-store.ts` stores subscriptions. Both stores open their databases through `database.ts`.
 - `../shared/` is the contract between the host and the phone app: `api.ts` has the HTTP API's JSON shapes, `protocol.ts` the terminal WebSocket messages, and `keys.ts` the key-chord rules.
 

@@ -34,6 +34,12 @@ Download from the [latest release](https://github.com/NoamCohen48/whistle/releas
 | Arch Linux | `sudo pacman -U ./whistle-x86_64.pkg.tar.zst` |
 | Any Linux | `whistle-linux-x64.tar.gz` (archive), or `whistle-linux-x64` (single file) |
 
+Or use Nix:
+
+| System | Install |
+| --- | --- |
+| Nix, with flakes | `nix profile install github:NoamCohen48/whistle`, or try it with `nix run github:NoamCohen48/whistle -- --version` |
+
 Then start the service once, as your regular user:
 
 ```sh
@@ -86,14 +92,16 @@ Browsers share cookies between ports on the same host name. If another HTTPS sit
 
 ## Using Whistle
 
-- **Your herd.** The home screen lists every Herdr pane, grouped by workspace, with linked worktrees nested under their project. Agents waiting on you come first. Filter by status, search, pin panes, or collapse workspaces. Long-press a pane for its menu: rename, close, or start another agent beside it.
+- **Your herd.** The home screen lists every Herdr pane, grouped by workspace, with linked worktrees nested under their project. Agents waiting on you are marked where they are, so rows never move under your finger, and each row says how long it has been in its state ("needs you · 4m"). A finished agent you haven't opened on this phone is marked unseen; once you open it, it stops counting as needing you. Filter by status, search, pin panes, or collapse workspaces. Long-press a pane for its menu: rename, close, or start another agent beside it.
 - **Watch first.** Opening a pane only watches it. It never resizes or focuses the terminal on your desktop.
-- Tap the hand button to take control, then tap the terminal to type into it; the slashed hand at the top releases it. Herdr fits the width to your phone while you control it (switch to the PC's width from the ⋯ menu) and restores it when you release. **Keys** opens Esc, Tab, arrows, Ctrl, Alt and Shift, plus any chord, such as `ctrl+shift+p`.
-- **Compose** (while you are in control) is a local editor for longer prompts, dictation and pictures. **Send** pastes the text and presses Enter. Each pane keeps its own draft, and nothing is sent until you tap Send.
-- **History.** Swipe through everything the pane printed, use the drag handle to jump, and tap **Latest** to return to the cursor. **Terminal text** lets you search and copy output.
+- Swipe sideways with two fingers to move to the next or previous agent. Tap the hand button to take control, then tap the terminal to type into it; the slashed hand at the top releases it. Herdr fits the width to your phone while you control it (switch to the PC's width from the ⋯ menu) and restores it when you release. **Keys** opens Esc, Tab, arrows, Ctrl, Alt and Shift, plus any chord, such as `ctrl+shift+p`. Save the chords you use often to the top of Keys, and tap **Lock** to keep a modifier on for several keys in a row.
+- **Compose** (while you are in control) is a local editor for longer prompts and dictation. Attach pictures, or text and code files; the PC keeps them for three days and the draft gets their path. **Send** pastes the text and presses Enter. Each pane keeps its own draft, and nothing is sent until you tap Send. **Quick replies** above the draft, such as "Continue", send a phrase you keep in Settings with one tap.
+- **History.** Swipe through everything the pane printed, use the drag handle to jump, and tap **Latest** to return to the cursor. **Terminal text** lets you search and copy output. Tap a file path an agent printed, like `src/app.ts:42`, to read that file at that line. Only files inside the pane's project open. Web links open in a new tab, including links a program embeds in its text.
 - **New** starts an agent, a terminal, a workspace in a folder on your PC, or a Git worktree. The ⋯ menu renames, closes, reviews the pane's Git changes, or removes a worktree.
 - **Alerts** (with HTTPS) tell you when an agent needs an answer and, if you like, when one finishes. Quiet hours are supported.
-- **Reconnects are safe.** After a dropped connection, Whistle comes back in watch mode and never resends input.
+- **Reconnects are safe.** After a dropped connection, Whistle comes back in watch mode and never resends input. Tapping Start again after a lost reply opens the agent it already started, not a second one.
+- **Tablets and desktops** keep the herd beside the open terminal, so switching agents is one tap.
+- **Settings** has your quick replies, a left-hand layout for the dock and a **Report a problem** link that opens a GitHub issue filled in with your app and browser versions. You read it and submit it yourself.
 
 ## Commands
 
@@ -106,6 +114,7 @@ Browsers share cookies between ports on the same host name. If another HTTPS sit
 | `whistle revoke DEVICE_ID` | Unpair a phone and close its connections at once. |
 | `whistle uninstall` | Remove the service. Settings and pairings are kept. |
 | `whistle serve` | Run in the foreground instead of as a service. |
+| `whistle doctor` | Check Herdr, the host, the address your phone opens, HTTPS and alerts, and say what to fix. |
 | `whistle version` | Show the version. |
 
 Logs: `journalctl --user -u whistle.service`. Settings are saved in `~/.config/whistle/config.json`, and private state such as pairings and keys in `~/.local/state/whistle/`. See [host details](docs/host.md) for every path and environment variable.
