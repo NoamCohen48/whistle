@@ -54,14 +54,29 @@ const test = base.extend<{ phone: Page }>({
   },
 });
 
-// Where the page starts on screen, below the status bar and Chrome's toolbar. Measured while the
-// Android keyboard is down: the keyboard shrinks innerHeight, not the toolbar.
-const screens = new WeakMap<Page, { scale: number; top: number }>();
+// Where the page sits on screen, below the status bar and Chrome's toolbar. Chrome versions
+// report that differently, so it is measured: a real tap at the screen's centre, read back by a
+// layer over the page. Done while the Android keyboard is down, since it shrinks the page.
+const screens = new WeakMap<Page, { scale: number; left: number; top: number }>();
+async function measureScreen(page: Page) {
+  await page.evaluate(() => {
+    const layer = document.createElement('div');
+    layer.style.cssText = 'position:fixed;inset:0;z-index:2147483647';
+    layer.addEventListener('pointerdown', event => { document.body.dataset.tapped = `${event.clientX},${event.clientY}`; layer.remove(); }, { once: true });
+    document.body.append(layer);
+  });
+  const [width, height] = adb('shell', 'wm', 'size').trim().split('\n').at(-1)!.split(': ')[1].split('x').map(Number);
+  adb('shell', 'input', 'tap', String(width / 2), String(height / 2));
+  await page.waitForFunction(() => document.body.dataset.tapped);
+  const [x, y] = (await page.evaluate(() => document.body.dataset.tapped!)).split(',').map(Number);
+  const scale = await page.evaluate(() => devicePixelRatio);
+  screens.set(page, { scale, left: width / 2 / scale - x, top: height / 2 / scale - y });
+}
 // A real finger tap through Android's input system, at the element's centre on screen.
 async function tap(page: Page, locator: Locator) {
   const box = (await locator.boundingBox())!;
-  const { scale, top } = screens.get(page)!;
-  adb('shell', 'input', 'tap', String(Math.round((box.x + box.width / 2) * scale)), String(Math.round((box.y + box.height / 2 + top) * scale)));
+  const { scale, left, top } = screens.get(page)!;
+  adb('shell', 'input', 'tap', String(Math.round((box.x + box.width / 2 + left) * scale)), String(Math.round((box.y + box.height / 2 + top) * scale)));
 }
 const connection = (page: Page, text: string) => page.waitForFunction(text => document.querySelector('#connection')?.textContent === text, text, { timeout: 15_000 });
 async function open(page: Page) {
@@ -69,7 +84,7 @@ async function open(page: Page) {
   // The new tab slides in; taps and the screen offset are only right once it is on screen and still.
   await page.waitForFunction(() => document.visibilityState === 'visible' && document.hasFocus());
   await page.waitForTimeout(1000);
-  screens.set(page, await page.evaluate(() => ({ scale: devicePixelRatio, top: outerHeight - innerHeight })));
+  await measureScreen(page);
   await tap(page, page.locator('#agent-switcher [data-pane="w1:p1"]'));
   await connection(page, 'Watching');
 }
