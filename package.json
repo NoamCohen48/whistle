@@ -1,6 +1,6 @@
 {
   "name": "whistle",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Phone remote for the coding agents you run in Herdr",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/NoamCohen48/whistle.git" },
