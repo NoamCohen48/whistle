@@ -15,13 +15,18 @@ function hasDevice() { try { return adb('get-state').trim() === 'device'; } catc
 
 const test = base.extend<{ phone: Page }>({
   phone: async ({}, use) => {
-    test.skip(!hasDevice(), 'No Android device or emulator is connected');
+    // On CI the emulator job must actually test something, so a missing device fails there.
+    if (!hasDevice()) { if (process.env.CI) throw new Error('No Android emulator is connected'); test.skip(true, 'No Android device or emulator is connected'); }
     await fetch(`${fixture}/__test/reset`, { method: 'POST' });
     adb('shell', 'am', 'force-stop', 'com.android.chrome');
+    // A fresh device opens Chrome on its welcome screens. Chrome reads these flags when it is the
+    // debug app (until reboot) or the image is a userdebug build; a Play image ignores them.
+    adb('shell', `echo '_ --disable-fre --no-first-run --no-default-browser-check' > /data/local/tmp/chrome-command-line`);
+    adb('shell', 'am', 'set-debug-app', 'com.android.chrome');
     adb('reverse', `tcp:${new URL(fixture).port}`, `tcp:${new URL(fixture).port}`);
     adb('forward', `tcp:${devtools}`, 'localabstract:chrome_devtools_remote');
     adb('shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', 'about:blank', 'com.android.chrome');
-    await expect.poll(() => fetch(`http://127.0.0.1:${devtools}/json/version`).then(response => response.ok, () => false), { timeout: 20_000 }).toBe(true);
+    await expect.poll(() => fetch(`http://127.0.0.1:${devtools}/json/version`).then(response => response.ok, () => false), { timeout: 60_000 }).toBe(true);
     let browser: Browser | undefined;
     try {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${devtools}`);
@@ -32,6 +37,7 @@ const test = base.extend<{ phone: Page }>({
       await browser?.close();
       // A Chrome tab left on the fixture would keep talking to it after the run.
       adb('shell', 'am', 'force-stop', 'com.android.chrome');
+      adb('shell', 'am', 'clear-debug-app');
       adb('forward', '--remove', `tcp:${devtools}`);
       adb('reverse', '--remove', `tcp:${new URL(fixture).port}`);
     }
