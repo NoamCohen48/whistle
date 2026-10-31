@@ -13,8 +13,10 @@ const help = `Whistle — personal Herdr terminal remote
   whistle pair
   whistle devices
   whistle revoke DEVICE_ID
+  whistle doctor
   whistle version
 
+Doctor checks Herdr, the host, the address your phone opens, HTTPS and alerts.
 Install enables login startup; --now requests start, never restart.
 It never changes firewall rules, enables lingering, or stops Herdr/agents.
 Uninstall stops only Whistle; configuration, paired devices and releases remain.
@@ -50,6 +52,7 @@ export async function main(args = process.argv.slice(2)) {
     }
     case 'serve': await (await import('./server.ts')).startServer(); return;
     case 'pair': await showPairing(); return;
+    case 'doctor': await (await import('./doctor.ts')).runDoctor(); return;
     case 'devices': {
       const { devices } = await (await adminRequest('/api/devices')).json() as { devices: Device[] };
       if (!devices.length) console.log('No paired devices.');
