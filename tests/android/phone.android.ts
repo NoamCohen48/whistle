@@ -33,15 +33,18 @@ const test = base.extend<{ phone: Page }>({
     adb('shell', `am start -a android.intent.action.VIEW -d '${fixture.replace('127.0.0.1', 'localhost')}/?run=${marker}#pair=single-use-ticket' com.android.chrome`);
     await expect.poll(() => fetch(`http://127.0.0.1:${devtools}/json/version`).then(response => response.ok, () => false), { timeout: 60_000 }).toBe(true);
     let browser: Browser | undefined;
+    let ready = false;
     try {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${devtools}`);
       const context = browser.contexts()[0];
       let page: Page | undefined;
-      await expect.poll(() => (page = context.pages().find(item => item.url().includes(marker))) !== undefined, { timeout: 30_000 }).toBe(true);
+      await expect.poll(() => (page = context.pages().find(item => item.url().includes(marker))) !== undefined, { timeout: 30_000 }).toBe(true)
+        .catch(() => { throw new Error(`Chrome never showed this run's tab; its tabs are ${JSON.stringify(context.pages().map(item => item.url()))}`); });
+      ready = true;
       await use(page!);
       await page!.close();
     } finally {
-      if (testInfo.status !== testInfo.expectedStatus) {
+      if (!ready || testInfo.status !== testInfo.expectedStatus) {
         await testInfo.attach('phone screen', { body: execFileSync('adb', ['exec-out', 'screencap', '-p']), contentType: 'image/png' });
       }
       await browser?.close();
