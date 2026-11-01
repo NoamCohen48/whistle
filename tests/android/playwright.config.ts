@@ -8,6 +8,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
+  // On a freshly booted CI emulator Chrome's first tab sometimes never reaches DevTools; the
+  // next attempt finds Chrome warm. Playwright reports a test that passes on retry as flaky.
+  retries: process.env.CI ? 1 : 0,
   outputDir: '../../test-results/android',
   use: { trace: 'retain-on-failure' },
   // Its own port, so it never shares a fixture with the browser projects or a stray emulator tab.
