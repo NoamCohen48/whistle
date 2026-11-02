@@ -8,8 +8,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
-  // On a freshly booted CI emulator Chrome's first tab sometimes never reaches DevTools; the
-  // next attempt finds Chrome warm. Playwright reports a test that passes on retry as flaky.
+  // Chrome's first start after boot is slow, so it is opened once before the tests. A retry stays
+  // for any other surprise; Playwright reports a test that passes on retry as flaky.
+  globalSetup: './warm-chrome.ts',
   retries: process.env.CI ? 1 : 0,
   outputDir: '../../test-results/android',
   use: { trace: 'retain-on-failure' },
