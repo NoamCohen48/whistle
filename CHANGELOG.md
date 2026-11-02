@@ -2,6 +2,13 @@
 
 Whistle follows [semantic versioning](https://semver.org). Each release's notes on GitHub come from its section here.
 
+## Unreleased
+
+- Alerts say what the agent asks, and your quick replies are buttons on them: tap one to answer without opening Whistle. A reply is typed only while the agent still waits on the same thing and nobody is controlling the pane; otherwise the phone says it was not sent. Turn the buttons off in the alert settings.
+- An agent waiting on you shows what it asks in its row, rather than its last line.
+- While you were away: coming back to the herd after a few minutes starts with what each agent did meanwhile. Tap one to open it.
+- The app opens faster: the terminal loads when you first open a pane, and the PC sends the app compressed.
+
 ## 0.3.0 (2026-10-31)
 
 - Agents that need you are marked where they are on the home screen, so rows never move under your finger.
