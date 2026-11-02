@@ -75,3 +75,10 @@ export interface Device {
   expiresAt: number;
   lastSeenAt: number;
 }
+
+// What an agent did while nobody looked, by the host's clock: it asked for you, finished a
+// turn, or its pane opened or closed. `after` asks for events since then.
+export type ActivityKind = 'asked' | 'finished' | 'started' | 'closed';
+export interface Activity { at: number; kind: ActivityKind; pane_id: string; name: string; workspace?: string; agent?: string }
+export interface ActivityList { events: Activity[]; now: number }
+

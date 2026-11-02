@@ -10,6 +10,7 @@ import { TerminalTextSheet } from './components/TerminalText.tsx';
 import { Icon } from './components/Icon.tsx';
 import { AgentSwitcher, Inventory, needsYou, paneName, statusTone, workspaceName } from './components/Inventory.tsx';
 import { Pairing } from './components/Pairing.tsx';
+import { AwaySummary, useAway } from './components/AwaySummary.tsx';
 import { TerminalPanel } from './components/TerminalPanel.tsx';
 import type { TerminalSession } from './terminal/session.ts';
 import { INITIAL_SESSION } from './terminal/state.ts';
@@ -312,6 +313,11 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       catch (cause) { if (!(cause instanceof PairingRequired)) setError(`Pairing saved. ${errorMessage(cause)}`); }
     } catch (cause) { setError((cause as Error).message); }
   };
+  const [away, dismissAway] = useAway(paired, snapshot);
+  const openAway = (paneId: string) => {
+    const pane = snapshot?.panes.find(item => item.pane_id === paneId);
+    if (pane) { dismissAway(); select(pane); } else setError('That agent is no longer open.');
+  };
   const draftKey = selected?.pane_id || '';
   const message = error || session.error || inventoryError;
   useEffect(() => { if (message) setLastMessage(message); }, [message]);
@@ -351,7 +357,8 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       </header>
       <AgentSwitcher snapshot={snapshot} selected={selected} onSelect={select} seen={seen} />
       <Inventory snapshot={snapshot} hidden={Boolean(selected) && !wide} onSelect={select} seen={seen} selected={selected?.pane_id}
-        onMenu={pane => { setMenuPaneId(pane.pane_id); setMenuOpen(true); }} banner={selected ? null : banner} recent={recent}
+        onMenu={pane => { setMenuPaneId(pane.pane_id); setMenuOpen(true); }} recent={recent}
+        banner={selected ? null : <>{banner}<AwaySummary away={away} onOpen={openAway} onDismiss={dismissAway} /></>}
         lastUpdated={lastUpdated} stale={inventoryStale} refreshing={refreshing} onCreate={() => setCreateRequest({ kind: 'workspace' })} />
       <TerminalPanel pane={selected} state={session} onState={setSession} engine={engine} onEngine={setEngine}
         banner={selected ? banner : null} onText={showText} onPath={openPath} fontOpen={fontOpen} onFontOpen={setFontOpen}

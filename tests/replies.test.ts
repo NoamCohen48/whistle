@@ -43,7 +43,7 @@ test('alert replies are checked before anything is typed', () => {
   }
 });
 
-test('the reply route types the text, then Enter, into the pane the alert was about', async () => {
+test('the reply route types the text, then Enter, into the pane the alert was about, and the change is logged', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'whistle-replies-'));
   const socketPath = join(dir, 'herdr.sock');
   const calls: [string, unknown][] = [];
@@ -69,6 +69,13 @@ test('the reply route types the text, then Enter, into the pane the alert was ab
     status = 'blocked';
     const since = (await panes()).status_since;
     expect(typeof since).toBe('number');
+    // The same change is in the activity log the phone reads after being away.
+    const activity = async (after: string) => host.request(`/api/activity?after=${after}`, { headers: { Cookie: cookie } });
+    const { events, now } = await (await activity('0')).json();
+    expect(events).toEqual([{ at: since, kind: 'asked', pane_id: 'w1:p1', name: 'claude', agent: 'claude' }]);
+    expect(now).toBeGreaterThanOrEqual(since);
+    expect((await (await activity(String(since))).json()).events).toEqual([]);
+    expect((await activity('soon')).status).toBe(400);
     const reply = (headers: Record<string, string> = {}) => host.request('/api/reply', { method: 'POST', headers: { Cookie: cookie, ...headers },
       body: JSON.stringify({ paneId: 'w1:p1', since, text: 'Continue' }) });
     expect((await reply({ Origin: 'https://evil.invalid' })).status).toBe(403);

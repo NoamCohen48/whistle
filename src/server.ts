@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { ActivityLog } from './activity.ts';
 import { AgentWatcher, alertSender } from './alerts.ts';
 import { AccessTokenGuard } from './auth.ts';
 import { pairCommand } from './build-info.ts';
@@ -29,14 +30,15 @@ export async function startServer() {
   const sendAlert = alertSender(deviceId => pushStore.get(deviceId), webPushSender(vapid));
   const sockets = new TerminalSockets(deviceId => devices.isActive(deviceId));
   const uploadDir = join(paths.stateDir, 'uploads');
-  const clock = new StatusClock();
+  const activity = new ActivityLog();
+  const clock = new StatusClock(Date.now, activity);
   const panes = async () => clock.stamp(await snapshot());
 
   const server = Bun.serve<Peer>({
     hostname: config.host,
     port: config.port,
     maxRequestBodySize: MAX_UPLOAD_BYTES,
-    fetch: createRequestHandler({ config, devices, tickets: new PairingTickets(), tokens, pushStore, vapid, sendAlert, sockets, uploadDir, panes }),
+    fetch: createRequestHandler({ config, devices, tickets: new PairingTickets(), tokens, pushStore, vapid, sendAlert, sockets, uploadDir, panes, activity }),
     websocket: sockets.handlers,
   });
 

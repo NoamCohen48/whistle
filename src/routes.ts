@@ -1,4 +1,5 @@
 import type { Server } from 'bun';
+import type { ActivityLog } from './activity.ts';
 import { agentKinds, isId, parseAction, runAction, worktrees } from './actions.ts';
 import { parseReplies, parseSettings, type AlertSender } from './alerts.ts';
 import { assetResponse } from './assets.ts';
@@ -36,8 +37,9 @@ export interface Services {
   sendAlert: AlertSender;
   sockets: TerminalSockets;
   uploadDir: string;
-  // Herdr's snapshot with each status's start time; tests may leave it out.
+  // Herdr's snapshot with each status's start time, and what agents did; tests may leave them out.
   panes?: () => Promise<Snapshot>;
+  activity?: ActivityLog;
 }
 
 // Who may call a route: anyone (pairing itself), the whistle command on the PC with the access
@@ -113,6 +115,13 @@ export function createRequestHandler(services: Services) {
 
     // Herdr.
     { method: 'GET', path: '/api/panes', access: 'device', sameOrigin: false, handle: async () => json(await (services.panes ?? snapshot)()) },
+    { method: 'GET', path: '/api/activity', access: 'device', sameOrigin: false, handle: async ({ url }) => {
+      const after = Number(url.searchParams.get('after'));
+      if (!Number.isSafeInteger(after) || after < 0) throw new HttpError('Invalid time');
+      // Looks at Herdr first, so changes since the last look are in the log.
+      await (services.panes ?? snapshot)();
+      return json({ events: services.activity?.since(after) ?? [], now: Date.now() });
+    } },
     { method: 'GET', path: '/api/previews', access: 'device', sameOrigin: false, handle: async () => json(await panePreviews((await snapshot()).panes)) },
     { method: 'GET', path: '/api/agents', access: 'device', sameOrigin: false, handle: async () => json({ kinds: await agentKinds() }) },
     { method: 'GET', path: '/api/worktrees', access: 'device', sameOrigin: false, handle: async ({ url }) => {
