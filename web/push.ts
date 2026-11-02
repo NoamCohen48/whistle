@@ -54,6 +54,11 @@ export async function saveAlertSettings(settings: AlertSettings) {
   await request('PUT', '/api/push/settings', settings);
 }
 
+// The PC sends this phone's quick replies as buttons on its alerts, so it keeps a copy.
+export async function saveQuickReplies(replies: string[]) {
+  await request('PUT', '/api/push/replies', { replies });
+}
+
 export async function disableAlerts() {
   await request('DELETE');
   await (await (await navigator.serviceWorker.ready).pushManager.getSubscription())?.unsubscribe();

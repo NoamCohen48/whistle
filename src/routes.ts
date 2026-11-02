@@ -1,6 +1,6 @@
 import type { Server } from 'bun';
 import { agentKinds, isId, parseAction, runAction, worktrees } from './actions.ts';
-import { parseSettings, type AlertSender } from './alerts.ts';
+import { parseReplies, parseSettings, type AlertSender } from './alerts.ts';
 import { assetResponse } from './assets.ts';
 import type { AccessTokenGuard } from './auth.ts';
 import { pairCommand } from './build-info.ts';
@@ -18,6 +18,7 @@ import { requestPath } from './paths.ts';
 import { readPicture } from './pictures.ts';
 import { readTextFile } from './text-files.ts';
 import { panePreviews } from './previews.ts';
+import { AlertReplies, parseAlertReply, stampedPane } from './replies.ts';
 import type { PushStore } from './push-store.ts';
 import { TerminalSockets, type Peer } from './terminal-socket.ts';
 import { MAX_UPLOAD_BYTES, saveUpload } from './uploads.ts';
@@ -77,6 +78,7 @@ export function createRequestHandler(services: Services) {
   };
   const credentials = (value: unknown) => value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const launches = new Launches();
+  const alertReplies = new AlertReplies({ pane: stampedPane(services.panes ?? snapshot), isControlled: paneId => sockets.isControlled(paneId) });
 
   const routes: Route[] = [
     // Pairing.
@@ -169,6 +171,16 @@ export function createRequestHandler(services: Services) {
       const settings = await readJson(request, parseSettings);
       if (!pushStore.saveSettings(device.id, settings)) throw new HttpError('Turn on alerts first', 409);
       return json({ settings });
+    } },
+    { method: 'PUT', path: '/api/push/replies', access: 'device', sameOrigin: true, handle: async ({ request, device }) => {
+      const replies = await readJson(request, parseReplies);
+      if (!pushStore.saveReplies(device.id, replies)) throw new HttpError('Turn on alerts first', 409);
+      return json({ replies });
+    } },
+    // A button on an alert, tapped without opening Whistle.
+    { method: 'POST', path: '/api/reply', access: 'device', sameOrigin: true, handle: async ({ request }) => {
+      await alertReplies.send(await readJson(request, parseAlertReply));
+      return text('Sent');
     } },
     { method: 'POST', path: '/api/push/test', access: 'device', sameOrigin: true, handle: async ({ device }) => {
       if (!pushStore.get(device.id)) throw new HttpError('Turn on alerts first', 409);

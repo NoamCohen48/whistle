@@ -573,6 +573,8 @@ test('agents that need you are marked where they are, never moved, and open watc
   await expect(page.locator('#pane-list .pane-entry[data-tone="attention"]')).toHaveCount(1);
   // How long each has waited; a finished agent nobody here has opened is unseen.
   await expect(page.locator('#pane-list .pane-entry[data-tone="attention"] .state')).toHaveText('needs you · 4m');
+  // What it asks, a few lines long, rather than its last line.
+  await expect(page.locator('#pane-list .pane-entry[data-tone="attention"] .pane-preview')).toHaveText('bun run migrate --apply\nApply the migration now?\n1. Yes · 2. No');
   await expect(page.locator('#pane-list .pane-entry[data-tone="done"] .state')).toHaveText('unseen · now');
   await expect(page.locator('#pane-list .pane-entry[data-tone="done"]')).toHaveCount(1);
   expect(await order()).toEqual(before);

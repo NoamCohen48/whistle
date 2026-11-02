@@ -81,7 +81,8 @@ function PaneRow({ pane, detail, preview, onSelect, pinned, onPin }: { pane: Pan
       <small><span className="state" data-tone={statusTone(pane, seen)}>{statusText(pane, seen)}</span>
         <span>{pane.agent || 'terminal'}</span>
         {detail !== undefined ? <span>{detail}</span> : pane.cwd ? <span className="cwd" title={pane.cwd}>{shortPath(pane.cwd)}</span> : null}</small>
-      {preview ? <span className="pane-preview">{Array.from(preview).slice(0, 120).join('')}</span> : null}
+      {/* A waiting agent's preview is its question, a few lines long; others show one line. */}
+      {preview ? <span className="pane-preview">{statusTone(pane, seen) === 'attention' ? preview : Array.from(preview.split('\n').at(-1)!).slice(0, 120).join('')}</span> : null}
     </span>
   </button>{onPin ? <button type="button" className="pin-pane icon-button" aria-label={`${pinned ? 'Unpin' : 'Pin'} ${paneName(pane)}`} aria-pressed={Boolean(pinned)}
     title={pinned ? 'Unpin' : 'Pin to the top'} onClick={() => onPin(pane)}><Icon name="pin" size={18} /></button> : null}</div>;
@@ -149,7 +150,8 @@ export function Inventory({ snapshot, hidden, banner, onSelect, onMenu, recent =
     const visible = () => { void refresh(); };
     document.addEventListener('visibilitychange', visible);
     return () => { controller.abort(); clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
-  }, [hidden, Boolean(snapshot)]);
+    // Read again when any status changes, so a newly waiting agent shows its question at once.
+  }, [hidden, snapshot?.panes.map(pane => `${pane.pane_id}=${pane.agent_status}`).join(' ')]);
   const count = snapshot?.panes.length || 0;
   const [query, setQuery] = useState('');
   const words = useDeferredValue(query).toLowerCase().split(/\s+/).filter(Boolean);

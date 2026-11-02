@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite';
-import { parseSettings } from './alerts.ts';
+import { parseReplies, parseSettings } from './alerts.ts';
 import type { AlertSettings } from '../shared/api.ts';
 import { openPrivateDatabase } from './database.ts';
 import type { PushSubscription } from './webpush.ts';
@@ -17,6 +17,7 @@ export class PushStore {
         // Databases from before settings existed already have the table, without this column.
         const columns = db.query<{ name: string }, []>('PRAGMA table_info(subscriptions)').all().map(column => column.name);
         if (!columns.includes('settings')) db.exec(`ALTER TABLE subscriptions ADD COLUMN settings TEXT NOT NULL DEFAULT '{}'`);
+        if (!columns.includes('replies')) db.exec(`ALTER TABLE subscriptions ADD COLUMN replies TEXT NOT NULL DEFAULT '[]'`);
       },
     ]);
   }
@@ -34,6 +35,15 @@ export class PushStore {
   // Only for a subscribed device; returns false otherwise.
   saveSettings(deviceId: string, settings: AlertSettings) {
     return this.db.query('UPDATE subscriptions SET settings=? WHERE device_id=?').run(JSON.stringify(settings), deviceId).changes > 0;
+  }
+  // The phone's quick replies, offered as buttons on its alerts. Only for a subscribed device.
+  saveReplies(deviceId: string, replies: string[]) {
+    return this.db.query('UPDATE subscriptions SET replies=? WHERE device_id=?').run(JSON.stringify(replies), deviceId).changes > 0;
+  }
+  replies(deviceId: string): string[] {
+    const row = this.db.query<{ replies: string }, [string]>('SELECT replies FROM subscriptions WHERE device_id=?').get(deviceId);
+    try { return parseReplies({ replies: JSON.parse(row?.replies || '[]') }); }
+    catch { return []; }
   }
   get(deviceId: string): PushSubscription | undefined {
     const row = this.db.query<{ endpoint: string; p256dh: string; auth: string }, [string]>(

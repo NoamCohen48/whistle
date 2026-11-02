@@ -151,6 +151,12 @@ test('push API: paired devices only, same-origin writes, and revocation drops th
     expect((await settings(quiet, { Origin: 'https://evil.invalid' })).status).toBe(403);
     expect((await settings({ finished: 'no' })).status).toBe(400);
     expect((await settings(quiet)).status).toBe(200);
+    const replies = (body: unknown, cookie = phone) =>
+      host!.request('/api/push/replies', { method: 'PUT', headers: { Cookie: cookie }, body: JSON.stringify(body) });
+    expect((await replies({ replies: ['Continue', 'Yes, go ahead'] })).status).toBe(200);
+    expect((await replies({ replies: ['two\nlines'] })).status).toBe(400);
+    expect((await replies({ replies: Array(13).fill('Continue') })).status).toBe(400);
+    expect((await replies({ replies: ['Continue'] }, laptop)).status).toBe(409); // Alerts are off there.
     expect((await (await host.request('/api/push', { headers: { Cookie: phone } })).json()).settings).toEqual(quiet);
     expect((await (await host.request('/api/push', { headers: { Cookie: laptop } })).json()).settings).toEqual({ finished: true });
     expect((await (await host.request('/api/push', { headers: { Cookie: phone } })).json()).subscribed).toBe(true);
@@ -175,6 +181,10 @@ test('push API: paired devices only, same-origin writes, and revocation drops th
 
 test('alert settings: validation, overnight quiet hours in the phone time zone', () => {
   expect(parseSettings({ finished: false })).toEqual({ finished: false });
+  // Reply buttons are on by default, so only turning them off is stored.
+  expect(parseSettings({ finished: false, replies: true })).toEqual({ finished: false });
+  expect(parseSettings({ finished: false, replies: false })).toEqual({ finished: false, replies: false });
+  expect(() => parseSettings({ finished: false, replies: 'no' })).toThrow();
   const quiet = parseSettings({ finished: true, quiet: { start: '22:00', end: '07:30', timeZone: 'Asia/Jerusalem' }, extra: 1 });
   expect(quiet).toEqual({ finished: true, quiet: { start: '22:00', end: '07:30', timeZone: 'Asia/Jerusalem' } });
   for (const bad of [null, {}, { finished: 'yes' }, { finished: true, quiet: { start: '24:00', end: '07:00', timeZone: 'UTC' } },
@@ -207,6 +217,11 @@ test('settings survive re-subscribing, older databases are migrated, and the wat
     store.save('phone', { endpoint: 'https://fcm.googleapis.com/y', keys: { p256dh: 'k2', auth: 'a2' } });
     expect(store.settings('phone')).toEqual(settings);
     expect(store.get('phone')?.endpoint).toBe('https://fcm.googleapis.com/y');
+    expect(store.replies('phone')).toEqual([]);
+    expect(store.saveReplies('phone', ['Continue', 'Yes'])).toBe(true);
+    expect(store.saveReplies('stranger', ['Continue'])).toBe(false);
+    store.save('phone', { endpoint: 'https://fcm.googleapis.com/z', keys: { p256dh: 'k3', auth: 'a3' } });
+    expect(store.replies('phone')).toEqual(['Continue', 'Yes']);
 
     const panes = (status: string) => ({ workspaces: [{ workspace_id: 'w1', label: 'atlas' }], tabs: [], panes: [
       { pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'a', agent: 'claude', agent_status: status },
@@ -236,3 +251,34 @@ test('settings survive re-subscribing, older databases are migrated, and the wat
     store.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('alerts say what the agent asks, and carry the phone quick replies for that one wait', async () => {
+  const pane = (agent_status: string, status_since?: number) => ({ pane_id: 'w1:p1', terminal_id: 't1', workspace_id: 'w1', tab_id: 'a',
+    agent: 'claude', agent_status, ...(status_since === undefined ? {} : { status_since }) });
+  let state: Snapshot = { workspaces: [{ workspace_id: 'w1', label: 'atlas' }], tabs: [], panes: [pane('working', 1)] };
+  const sent: [string, Alert][] = [];
+  const asked: string[] = [];
+  const watcher = new AgentWatcher({
+    snapshot: async () => state, subscribers: () => ['phone', 'quiet-phone', 'no-replies'], send: async (deviceId, alert) => { sent.push([deviceId, alert]); },
+    isActive: () => true, isWatching: () => false, onGone: () => {},
+    question: async item => { asked.push(item.agent_status!); if (item.agent_status === 'done') throw new Error('unreadable'); return 'Run the migration?\n1. Yes · 2. No'; },
+    replies: deviceId => deviceId === 'no-replies' ? [] : ['Continue', 'Yes, go ahead'],
+    settings: deviceId => deviceId === 'quiet-phone' ? { finished: true, replies: false } : { finished: true },
+  });
+  await watcher.tick();
+  state = { ...state, panes: [pane('blocked', 5000)] };
+  await watcher.tick();
+  const asking = { title: 'claude needs you', body: 'Run the migration?\n1. Yes · 2. No\natlas · claude', paneId: 'w1:p1', since: 5000 };
+  expect(sent).toEqual([
+    ['phone', { ...asking, replies: ['Continue', 'Yes, go ahead'] }],
+    ['quiet-phone', asking], // Reply buttons turned off.
+    ['no-replies', asking],
+  ]);
+  // An agent that cannot be read still alerts, with where it is.
+  sent.length = 0;
+  state = { ...state, panes: [pane('done', 9000)] };
+  await watcher.tick();
+  expect(sent[0]).toEqual(['phone', { title: 'claude finished', body: 'atlas · claude', paneId: 'w1:p1', since: 9000, replies: ['Continue', 'Yes, go ahead'] }]);
+  expect(asked).toEqual(['blocked', 'done']); // Read once per change, not per phone.
+});
+

@@ -65,7 +65,8 @@ export interface FolderEntry { name: string; repo: boolean }
 export interface FolderList { path: string; folders: FolderEntry[]; truncated: boolean }
 
 // Per device. Quiet hours deliver alerts without sound or vibration, in the phone's own time zone.
-export interface AlertSettings { finished: boolean; quiet?: { start: string; end: string; timeZone: string } }
+// Alerts carry the phone's quick replies as buttons unless `replies` is false.
+export interface AlertSettings { finished: boolean; replies?: boolean; quiet?: { start: string; end: string; timeZone: string } }
 
 export interface Device {
   id: string;
