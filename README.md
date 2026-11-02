@@ -92,13 +92,14 @@ Browsers share cookies between ports on the same host name. If another HTTPS sit
 
 ## Using Whistle
 
-- **Your herd.** The home screen lists every Herdr pane, grouped by workspace, with linked worktrees nested under their project. Agents waiting on you are marked where they are, so rows never move under your finger, and each row says how long it has been in its state ("needs you · 4m"). A finished agent you haven't opened on this phone is marked unseen; once you open it, it stops counting as needing you. Filter by status, search, pin panes, or collapse workspaces. Long-press a pane for its menu: rename, close, or start another agent beside it.
+- **Your herd.** The home screen lists every Herdr pane, grouped by workspace, with linked worktrees nested under their project. Agents waiting on you are marked where they are, so rows never move under your finger, and each row says how long it has been in its state ("needs you · 4m"). A finished agent you haven't opened on this phone is marked unseen; once you open it, it stops counting as needing you. An agent waiting on you shows what it asks, in a few lines. Filter by status, search, pin panes, or collapse workspaces. Long-press a pane for its menu: rename, close, or start another agent beside it.
 - **Watch first.** Opening a pane only watches it. It never resizes or focuses the terminal on your desktop.
 - Swipe sideways with two fingers to move to the next or previous agent. Tap the hand button to take control, then tap the terminal to type into it; the slashed hand at the top releases it. Herdr fits the width to your phone while you control it (switch to the PC's width from the ⋯ menu) and restores it when you release. **Keys** opens Esc, Tab, arrows, Ctrl, Alt and Shift, plus any chord, such as `ctrl+shift+p`. Save the chords you use often to the top of Keys, and tap **Lock** to keep a modifier on for several keys in a row.
 - **Compose** (while you are in control) is a local editor for longer prompts and dictation. Attach pictures, or text and code files; the PC keeps them for three days and the draft gets their path. **Send** pastes the text and presses Enter. Each pane keeps its own draft, and nothing is sent until you tap Send. **Quick replies** above the draft, such as "Continue", send a phrase you keep in Settings with one tap.
 - **History.** Swipe through everything the pane printed, use the drag handle to jump, and tap **Latest** to return to the cursor. **Terminal text** lets you search and copy output. Tap a file path an agent printed, like `src/app.ts:42`, to read that file at that line. Only files inside the pane's project open. Web links open in a new tab, including links a program embeds in its text.
 - **New** starts an agent, a terminal, a workspace in a folder on your PC, or a Git worktree. The ⋯ menu renames, closes, reviews the pane's Git changes, or removes a worktree.
-- **Alerts** (with HTTPS) tell you when an agent needs an answer and, if you like, when one finishes. Quiet hours are supported.
+- **Alerts** (with HTTPS) tell you when an agent needs an answer and, if you like, when one finishes, with what it asks. Your quick replies are buttons on the alert: tap one to answer without opening Whistle. It is typed only if the agent still waits on the same thing and nobody is controlling the pane. Quiet hours are supported.
+- **While you were away.** Come back after a few minutes and the herd starts with what each agent did meanwhile: needed you, finished, started or closed. Tap one to open it.
 - **Reconnects are safe.** After a dropped connection, Whistle comes back in watch mode and never resends input. Tapping Start again after a lost reply opens the agent it already started, not a second one.
 - **Tablets and desktops** keep the herd beside the open terminal, so switching agents is one tap.
 - **Settings** has your quick replies, a left-hand layout for the dock and a **Report a problem** link that opens a GitHub issue filled in with your app and browser versions. You read it and submit it yourself.
@@ -130,7 +131,7 @@ Whistle gives a paired phone the same shell access as your user account. It is b
 - It refuses to listen on all addresses. Bind it to your Tailscale address, or to `127.0.0.1` behind Tailscale Serve.
 - Phones pair with single-use, five-minute QR codes. Only hashes of their credentials are stored, and you can revoke any phone at once.
 - Requests from other sites are rejected by exact origin checks, and responses are never cached.
-- Whistle does not log terminal contents. Alerts carry only the pane name, and are end-to-end encrypted to your phone.
+- Whistle does not log terminal contents. Alerts carry the pane name and a few lines of what the agent asks, end-to-end encrypted to your phone. Your phone may show them on the lock screen; Android's notification settings can hide alert text there.
 
 Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
 
