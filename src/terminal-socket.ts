@@ -3,7 +3,7 @@ import { HerdrError, rpc, terminalStream } from './herdr.ts';
 import { parseCommand, type ClientCommand, type ServerMessage } from '../shared/protocol.ts';
 
 // Pause between a pasted draft and its Enter, so the program has taken the paste in first.
-const SUBMIT_DELAY_MS = 250;
+export const SUBMIT_DELAY_MS = 250;
 const MAX_PENDING = 100;
 
 export interface Peer {

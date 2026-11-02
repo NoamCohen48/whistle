@@ -3,7 +3,7 @@ import { createServer } from 'node:net';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { panePreviews, previewLine } from '../src/previews.ts';
+import { panePreview, panePreviews, previewLine, questionText } from '../src/previews.ts';
 import type { Pane } from '../shared/api.ts';
 import { startHost, testToken } from './helpers/host.ts';
 
@@ -12,6 +12,30 @@ test('preview uses the last nonempty plain line and limits Unicode characters', 
   expect(previewLine('\x1b]0;title\x07\n😀'.repeat(140))).toBe('😀');
   expect(Array.from(previewLine('😀'.repeat(140)))).toHaveLength(120);
   expect(previewLine('\r\n  ')).toBe('');
+});
+
+test('a waiting agent shows its question without the frame, key hints or one line per choice', async () => {
+  const prompt = [
+    '● I need to run a command.',
+    '╭──────────────────────────────────────╮',
+    '│ Bash command                         │',
+    '│   rm -rf build && bun run build      │',
+    '│ Do you want to proceed?              │',
+    '│ ❯ 1. Yes                             │',
+    '│   2. Yes, and don’t ask again        │',
+    '│   3. No, and tell Claude what to do  │',
+    '╰──────────────────────────────────────╯',
+    '  Esc to cancel · Tab to amend',
+  ].join('\n');
+  expect(questionText(prompt)).toBe('rm -rf build && bun run build\nDo you want to proceed?\n1. Yes · 2. Yes, and don’t ask again · 3. No, and tell Claude what to do');
+  expect(questionText('Continue with the refactor? (y/n)\n\n')).toBe('Continue with the refactor? (y/n)');
+  expect(Array.from(questionText('x'.repeat(400)))).toHaveLength(160);
+  // A waiting agent reads more lines than a preview, since its question sits above the choices.
+  const reads: unknown[] = [];
+  const read = async <T>(_method: string, params: Record<string, unknown> = {}) => { reads.push(params.lines); return { text: prompt } as T; };
+  expect(await panePreview({ pane_id: 'p1', agent: 'claude', agent_status: 'blocked' } as Pane, read)).toContain('Do you want to proceed?');
+  expect(await panePreview({ pane_id: 'p1', agent: 'claude', agent_status: 'working' } as Pane, read)).toBe('Esc to cancel · Tab to amend');
+  expect(reads).toEqual([24, 6]);
 });
 
 test('previews use only bounded read-only RPCs; failures are omitted', async () => {

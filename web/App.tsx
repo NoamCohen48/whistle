@@ -14,7 +14,8 @@ import { TerminalPanel } from './components/TerminalPanel.tsx';
 import type { TerminalSession } from './terminal/session.ts';
 import { INITIAL_SESSION } from './terminal/state.ts';
 import { readDrafts, saveDraft, flushDrafts } from './drafts.ts';
-import { alertState, disableAlerts, enableAlerts, type AlertState } from './push.ts';
+import { alertState, disableAlerts, enableAlerts, saveQuickReplies, type AlertState } from './push.ts';
+import { onShortcutsChanged, readQuickReplies } from './shortcuts.ts';
 import { SettingsSheet } from './components/Settings.tsx';
 import { readPreference, writePreference } from './preferences.ts';
 import { markSeen, readSeen } from './seen.ts';
@@ -175,6 +176,13 @@ export function App({ startup }: { startup: Promise<Startup> }) {
       setAlerts(await alertState().catch(() => alerts)); setAlertsBusy(false);
     }
   };
+  // While alerts are on, the PC keeps this phone's quick replies for the buttons on its alerts.
+  useEffect(() => {
+    if (alerts !== 'on') return;
+    const sync = () => { void saveQuickReplies(readQuickReplies()).catch(() => { /* Sent again on the next change or visit. */ }); };
+    sync();
+    return onShortcutsChanged(sync);
+  }, [alerts]);
   // Tapping an alert while Whistle is open: the worker asks this page to show the pane (watch-only).
   const openFromAlert = useEffectEvent((paneId: string) => {
     const pane = snapshot?.panes.find(item => item.pane_id === paneId);

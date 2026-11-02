@@ -6,6 +6,7 @@ import { loadHostConfig, resolvePaths } from './config.ts';
 import { DeviceStore } from './devices.ts';
 import { HerdrUnavailable, snapshot, useHerdr } from './herdr.ts';
 import { PairingTickets } from './pairing-tickets.ts';
+import { panePreview } from './previews.ts';
 import { PushStore } from './push-store.ts';
 import { createRequestHandler } from './routes.ts';
 import { StatusClock } from './status-clock.ts';
@@ -51,7 +52,7 @@ export async function startServer() {
   statusTimer.unref();
   // Polls Herdr only while at least one device has alerts on.
   const watcher = new AgentWatcher({
-    snapshot, subscribers: () => pushStore.all(), send: sendAlert,
+    snapshot: panes, question: pane => panePreview(pane), replies: deviceId => pushStore.replies(deviceId), subscribers: () => pushStore.all(), send: sendAlert,
     isActive: deviceId => devices.isActive(deviceId),
     isWatching: (deviceId, paneId) => sockets.isWatching(deviceId, paneId),
     onGone: deviceId => pushStore.remove(deviceId),

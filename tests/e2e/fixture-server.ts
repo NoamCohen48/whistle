@@ -191,10 +191,12 @@ const server = Bun.serve<Peer>({
       return new Response('Refused', { status: 403 });
     }
     if (path === '/api/previews' || path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
-      || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/uploads'
+      || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/push/replies' || path === '/api/reply' || path === '/api/uploads'
       || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/file' || path === '/api/folders') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
-      if (path === '/api/previews') return Response.json(Object.fromEntries(inventory.panes.map(pane => [pane.pane_id, `${pane.label || pane.pane_id}: checking the fixture`])), { headers: { 'Cache-Control': 'no-store' } });
+      // A waiting agent's preview is its question, as the host folds it.
+      if (path === '/api/previews') return Response.json(Object.fromEntries(inventory.panes.map(pane => [pane.pane_id, pane.agent_status === 'blocked'
+        ? 'bun run migrate --apply\nApply the migration now?\n1. Yes · 2. No' : `${pane.label || pane.pane_id}: checking the fixture`])), { headers: { 'Cache-Control': 'no-store' } });
       if (path === '/api/panes') return Response.json({ ...inventory, now: Date.now() });
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
       if (path === '/api/worktrees') return Response.json({ worktrees: [
@@ -207,6 +209,16 @@ const server = Bun.serve<Peer>({
         pushSettings = await request.json();
         messages.push({ type: 'push-settings', settings: pushSettings });
         return Response.json({ settings: pushSettings });
+      }
+      if (path === '/api/push/replies' || path === '/api/reply') {
+        if (request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });
+        const body = await request.json();
+        if (path === '/api/push/replies') { messages.push({ type: 'push-replies', replies: body.replies }); return Response.json(body); }
+        const pane = inventory.panes.find(item => item.pane_id === body.paneId);
+        if (!pane) return new Response('This agent is no longer open. Nothing was sent.', { status: 404 });
+        if (pane.agent_status !== 'blocked' && pane.agent_status !== 'done') return new Response('The agent moved on since this alert. Nothing was sent.', { status: 409 });
+        messages.push({ type: 'reply', paneId: body.paneId, since: body.since, text: body.text });
+        return new Response('Sent');
       }
       if (path.startsWith('/api/push')) {
         if (request.headers.get('origin') !== url.origin) return new Response('Origin rejected', { status: 403 });

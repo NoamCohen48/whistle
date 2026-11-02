@@ -13,6 +13,9 @@ async function pair(page: Page) {
 test.use({ channel: 'chromium' });
 test.beforeEach(async ({ request }) => { await request.post(fixtureUrl('/__test/reset')); });
 test.skip(({ baseURL }) => baseURL?.includes(':5174') ?? false, 'Alerts need the production service worker');
+// What the tests use of the service worker's global scope, which the page's types do not describe.
+type Shown = { title: string; body: string; data: unknown; actions: { action: string; title: string }[]; close(): void };
+type WorkerScope = { dispatchEvent(event: Event): boolean; registration: { getNotifications(filter?: { tag: string }): Promise<Shown[]> } };
 async function fakePush(page: Page) {
   await page.context().grantPermissions(['notifications']);
   await page.addInitScript(() => {
@@ -107,4 +110,61 @@ test('the worker shows a pushed alert as a notification tagged by pane', async (
   // Real notifications reach the desktop running the tests; close them rather than leave them behind.
   await page.evaluate(async () => { for (const item of await (await navigator.serviceWorker.ready).getNotifications()) item.close(); });
   await cdp.detach();
+});
+
+test('alerts carry quick replies as buttons that answer the agent without opening it', async ({ page, context, request }) => {
+  await fakePush(page);
+  await pair(page);
+  const sent = async (type: string) => (await (await page.request.get(fixtureUrl('/__test/messages'))).json() as Record<string, unknown>[])
+    .filter(message => message.type === type);
+  // Turning alerts on gives the PC this phone's quick replies, and every change after that.
+  await page.locator('#alerts').click();
+  await expect(page.locator('#alerts')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(async () => (await sent('push-replies')).at(-1)?.replies).toEqual(['Continue', 'Yes, go ahead', 'Run the tests and fix any failures']);
+  await page.locator('#settings').click();
+  await page.locator('#new-reply').fill('Ship it');
+  await page.locator('#reply-form button[type=submit]').click();
+  await expect.poll(async () => (await sent('push-replies')).at(-1)?.replies).toContain('Ship it');
+  await page.locator('#settings-sheet').getByRole('button', { name: 'Close' }).click();
+
+  // The buttons can be turned off; "off" is the only thing stored.
+  await page.locator('#alerts').click();
+  const sheet = page.locator('#alerts-sheet');
+  await expect(sheet.locator('#alert-replies')).toBeChecked();
+  await sheet.locator('#alert-replies').uncheck();
+  await expect.poll(async () => (await sent('push-settings')).at(-1)?.settings).toEqual({ finished: true, replies: false });
+  await sheet.locator('#alert-quiet').check();
+  await expect.poll(async () => ((await sent('push-settings')).at(-1)?.settings as { replies?: boolean }).replies).toBe(false);
+  await sheet.locator('#alert-replies').check();
+  await expect.poll(async () => ((await sent('push-settings')).at(-1)?.settings as { replies?: boolean }).replies).toBeUndefined();
+  await sheet.getByRole('button', { name: 'Close' }).click();
+
+  // The worker shows the replies as buttons, and a tapped one is sent for that wait only.
+  await request.get(fixtureUrl('/__test/status?pane=w1:p1&status=blocked'));
+  const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+  const push = { title: 'Reviewer needs you', body: 'Apply the migration now?\natlas · claude', paneId: 'w1:p1', since: 5000, replies: ['Continue', 'Yes, go ahead', 'Ship it'] };
+  const notification = await worker.evaluate(async alert => {
+    const target = self as unknown as WorkerScope;
+    // A push as the browser delivers it, with waitUntil telling when the alert is shown.
+    await new Promise<void>(resolve => {
+      target.dispatchEvent(Object.assign(new Event('push'), { data: { json: () => alert }, waitUntil: (promise: Promise<unknown>) => { void promise.then(() => resolve()); } }));
+    });
+    const [shown] = await target.registration.getNotifications({ tag: 'pane:w1:p1' });
+    return { actions: shown.actions.map(action => [action.action, action.title]), data: shown.data };
+  }, push);
+  expect(notification.actions).toEqual([['reply:0', 'Continue'], ['reply:1', 'Yes, go ahead']]);
+  expect(notification.data).toEqual({ paneId: 'w1:p1', since: 5000, replies: ['Continue', 'Yes, go ahead'] });
+  const tap = (data: unknown, action: string) => worker.evaluate(({ data, action }) =>
+    (self as unknown as { clicked(data: unknown, action: string): Promise<void> }).clicked(data, action), { data, action });
+  await tap(notification.data, 'reply:1');
+  expect(await sent('reply')).toEqual([{ type: 'reply', paneId: 'w1:p1', since: 5000, text: 'Yes, go ahead' }]);
+
+  // Once the agent moved on, the PC refuses, and the phone says nothing was sent.
+  await request.get(fixtureUrl('/__test/status?pane=w1:p1&status=working'));
+  await tap(notification.data, 'reply:0');
+  const refused = await worker.evaluate(async () => (await (self as unknown as WorkerScope).registration.getNotifications({ tag: 'pane:w1:p1' }))
+    .map(item => ({ title: item.title, body: item.body, data: item.data })));
+  expect(refused).toEqual([{ title: 'Not sent: Continue', body: 'The agent moved on since this alert. Nothing was sent. Tap to open the agent.', data: { paneId: 'w1:p1' } }]);
+  expect(await sent('reply')).toHaveLength(1);
+  await worker.evaluate(async () => { for (const item of await (self as unknown as WorkerScope).registration.getNotifications()) item.close(); });
 });
