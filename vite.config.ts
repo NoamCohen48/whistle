@@ -33,6 +33,8 @@ export default defineConfig({
     // Keep the existing host's explicit static-asset allowlist; no broad file serving.
     rolldownOptions: { output: {
       entryFileNames: 'app.js',
+      // The terminal, loaded when a pane opens. One fixed name, since the host serves a fixed list.
+      chunkFileNames: 'terminal.js',
       assetFileNames: asset => asset.names.some(name => name.endsWith('.css')) ? 'app.css' : 'assets/[name]-[hash][extname]',
     } },
   },

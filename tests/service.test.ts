@@ -72,6 +72,14 @@ test('device CLI lists and revokes against the real host from outside its checko
     host = await startHost(home);
     expect(await (await host.request('/')).text()).toContain('id="root"');
     expect((await host.request('/app.js')).status).toBe(200);
+    // The phone app goes out compressed, and only the terminal waits for a pane to open.
+    for (const encoding of ['br', 'gzip']) {
+      const app = await host.request('/app.js', { headers: { 'Accept-Encoding': encoding } });
+      expect(app.headers.get('content-encoding')).toBe(encoding); expect(app.headers.get('vary')).toBe('Accept-Encoding');
+      expect(await app.text()).toBe(await readFile(join(projectRoot, 'dist/app.js'), 'utf8'));
+    }
+    expect((await host.request('/terminal.js', { headers: { 'Accept-Encoding': 'identity' } })).headers.get('content-encoding')).toBeNull();
+    expect((await host.request('/icon-192.png', { headers: { 'Accept-Encoding': 'br' } })).headers.get('content-encoding')).toBeNull();
     const login = await host.request('/api/login', { method: 'POST', body: JSON.stringify({ token: testToken, deviceName: 'CLI test phone' }) });
     const cookie = login.headers.get('set-cookie')!.split(';')[0];
     const listing = await cli(home, ['devices'], { WHISTLE_TOKEN: testToken });

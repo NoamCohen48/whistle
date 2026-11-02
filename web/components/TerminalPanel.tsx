@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import type { Pane } from '../../shared/api.ts';
 import { modifierOrder, namedKeys } from '../../shared/keys.ts';
-import { TerminalSession, type SessionState } from '../terminal/session.ts';
+import type { TerminalSession } from '../terminal/session.ts';
+import type { SessionState } from '../terminal/state.ts';
 import { Icon } from './Icon.tsx';
 import { attachFile, attachPicture, attachedName, attachedPaths, previewFor } from '../attach.ts';
 import { clearPrompts, draftStatus, readPrompts, rememberPrompt } from '../drafts.ts';
@@ -215,11 +216,22 @@ export function TerminalPanel({ pane, state, onState, engine, onEngine, draft, o
   const replies = useShortcutList(readQuickReplies);
   useBackCloses(keysOpen, () => setKeysOpen(false));
   useBackCloses(compose, () => setCompose(false));
+  // The terminal (xterm) loads with the first pane opened, so the herd list shows sooner.
+  const [wanted, setWanted] = useState(false);
+  if (pane && !wanted) setWanted(true);
   useEffect(() => {
-    const session = new TerminalSession(viewport.current!, host.current!, onState);
-    onEngine(session);
-    return () => { session.dispose(); onEngine(undefined); };
-  }, [onState, onEngine]);
+    if (!wanted) return;
+    let session: TerminalSession | undefined;
+    let active = true;
+    void import('../terminal/session.ts').then(({ TerminalSession }) => {
+      if (!active) return;
+      session = new TerminalSession(viewport.current!, host.current!, onState);
+      onEngine(session);
+    }, () => {
+      if (active) onState(previous => ({ ...previous, phase: 'disconnected', error: 'The terminal could not load. Check the connection, then refresh.' }));
+    });
+    return () => { active = false; session?.dispose(); onEngine(undefined); };
+  }, [wanted, onState, onEngine]);
   // Inventory polls replace metadata objects. Only identity changes may reconnect the terminal.
   const paneId = pane?.pane_id;
   const terminalId = pane?.terminal_id;

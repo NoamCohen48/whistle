@@ -212,7 +212,7 @@ export function createRequestHandler(services: Services) {
       const atPath = routes.filter(route => typeof route.path === 'string' ? route.path === url.pathname : route.path.test(url.pathname));
       if (!atPath.length) {
         // Everything else is the phone app's own files.
-        return (request.method === 'GET' && assetResponse(url.pathname, securityHeaders)) || text('Not found', 404);
+        return (request.method === 'GET' && assetResponse(url.pathname, securityHeaders, request.headers.get('accept-encoding'))) || text('Not found', 404);
       }
       const route = atPath.find(item => item.method === request.method);
       if (!route) return text('Method not allowed', 405);
