@@ -6,19 +6,9 @@ import type { ClientCommand, ServerMessage } from '../../shared/protocol.ts';
 import { controlSize, inputScrollTop, pageScroll } from './viewport.ts';
 import { readPreference, writePreference } from '../preferences.ts';
 import { findLinks, openUrl, type PathMatch } from '../paths.ts';
+import { INITIAL_SESSION, type SessionState } from './state.ts';
 
-export type Phase = 'idle' | 'connecting' | 'requesting-control' | 'watching' | 'controlling' | 'disconnected' | 'paused';
-export interface SessionState {
-  phase: Phase;
-  fitWidth: boolean;
-  fontSize: number;
-  modifiers: Modifier[];
-  // Locked modifiers stay armed after each key, for a run of chords such as Ctrl+N, Ctrl+N.
-  modifiersLocked: boolean;
-  error: string;
-}
-export const INITIAL_SESSION: SessionState = { phase: 'idle', fitWidth: true, fontSize: 13, modifiers: [], modifiersLocked: false, error: '' };
-
+export type { Phase, SessionState } from './state.ts';
 // This class owns all high-frequency terminal state. React receives only UI transitions,
 // never terminal frames, cursor positions, scroll offsets, pending ACKs or typed bytes.
 export class TerminalSession {

@@ -1,7 +1,7 @@
 /// <reference types="bun" />
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assetSpecs } from '../src/assets.ts';
 import { projectRoot } from '../src/config.ts';
@@ -28,6 +28,10 @@ try {
   const assets: Record<string, string> = {};
   for (const [path, asset] of Object.entries(assetSpecs)) assets[path] = (await readFile(join(projectRoot, 'dist', asset.file))).toString(asset.encoding || 'utf8');
   if (!assets['/'].includes('src="/app.js"') || !assets['/'].includes('href="/app.css"')) throw new Error('Build the Vite frontend before packaging');
+  // The host serves a fixed list of files, so a script Vite split off under another name would be missing.
+  const served = new Set(Object.values(assetSpecs).map(asset => asset.file));
+  const extra = (await readdir(join(projectRoot, 'dist'), { recursive: true })).filter(file => file.endsWith('.js') && !served.has(file));
+  if (extra.length) throw new Error(`The build has scripts the host does not serve: ${extra.join(', ')}. Add them to src/assets.ts.`);
   const pkg = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as { version: string };
   const info: EmbeddedBuild = { version: pkg.version, revision: await revision(), target, assets };
   const bundle = await Bun.build({
