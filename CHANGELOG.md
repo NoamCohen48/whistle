@@ -2,7 +2,7 @@
 
 Whistle follows [semantic versioning](https://semver.org). Each release's notes on GitHub come from its section here.
 
-## Unreleased
+## 0.4.0 (2026-11-02)
 
 - Alerts say what the agent asks, and your quick replies are buttons on them: tap one to answer without opening Whistle. A reply is typed only while the agent still waits on the same thing and nobody is controlling the pane; otherwise the phone says it was not sent. Turn the buttons off in the alert settings.
 - An agent waiting on you shows what it asks in its row, rather than its last line.
