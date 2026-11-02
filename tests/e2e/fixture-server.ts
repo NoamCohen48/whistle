@@ -53,6 +53,7 @@ let bracketedFrames = true;
 let pushSubscribed = false;
 let failPushTest = false;
 let pushSettings: Record<string, unknown> = { finished: true };
+let activity: { at: number; kind: string; pane_id: string; name: string; workspace?: string; agent?: string }[] = [];
 const pushKey = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 9)]).toString('base64url');
 let created = 0;
 let uploads = 0;
@@ -132,7 +133,7 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/health') return new Response('ok');
     if (path === '/__test/reset') {
       for (const peer of peers) peer.close();
-      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; agentFails = false; launches = new Map(); loseReply = false; bracketedFrames = true; created = 0; uploads = 0;
+      inventory = structuredClone(initial); devices = structuredClone(initialDevices); messages = []; pushSubscribed = false; failPushTest = false; pushSettings = { finished: true }; activity = []; pairings = 0; acknowledge = true; workerRevision = 1; failNextAction = ''; agentFails = false; launches = new Map(); loseReply = false; bracketedFrames = true; created = 0; uploads = 0;
       return new Response('reset');
     }
     if (path === '/__test/worker-update') { workerRevision++; return new Response('updated'); }
@@ -157,7 +158,13 @@ const server = Bun.serve<Peer>({
     if (path === '/__test/status') {
       const pane = inventory.panes.find(item => item.pane_id === url.searchParams.get('pane'));
       // ?ago=SECONDS dates the change in the past, as if the host saw it then.
-      if (pane) { pane.agent_status = url.searchParams.get('status') || 'idle'; pane.status_since = Date.now() - Number(url.searchParams.get('ago') || 0) * 1000; }
+      if (pane) {
+        pane.agent_status = url.searchParams.get('status') || 'idle'; pane.status_since = Date.now() - Number(url.searchParams.get('ago') || 0) * 1000;
+        // The host logs an agent asking or finishing, for the phone's summary after time away.
+        const kind = pane.agent_status === 'blocked' ? 'asked' : pane.agent_status === 'done' ? 'finished' : undefined;
+        const workspace = inventory.workspaces.find(item => item.workspace_id === pane.workspace_id);
+        if (kind) activity.push({ at: pane.status_since, kind, pane_id: pane.pane_id, name: pane.label || pane.pane_id, workspace: workspace?.label, agent: pane.agent });
+      }
       return new Response(pane ? 'updated' : 'missing', { status: pane ? 200 : 404 });
     }
     if (path === '/__test/add-panes') {
@@ -190,7 +197,7 @@ const server = Bun.serve<Peer>({
       }
       return new Response('Refused', { status: 403 });
     }
-    if (path === '/api/previews' || path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
+    if (path === '/api/activity' || path === '/api/previews' || path === '/api/panes' || path === '/terminal' || path === '/api/agents' || path === '/api/worktrees' || path === '/api/actions'
       || path === '/api/push' || path === '/api/push/test' || path === '/api/push/settings' || path === '/api/push/replies' || path === '/api/reply' || path === '/api/uploads'
       || path === '/api/changes' || path === '/api/changes/file' || path === '/api/picture' || path === '/api/file' || path === '/api/folders') {
       if (!request.headers.get('cookie')?.includes('whistle_session=fixture')) return new Response('Pair first', { status: 401 });
@@ -198,6 +205,11 @@ const server = Bun.serve<Peer>({
       if (path === '/api/previews') return Response.json(Object.fromEntries(inventory.panes.map(pane => [pane.pane_id, pane.agent_status === 'blocked'
         ? 'bun run migrate --apply\nApply the migration now?\n1. Yes · 2. No' : `${pane.label || pane.pane_id}: checking the fixture`])), { headers: { 'Cache-Control': 'no-store' } });
       if (path === '/api/panes') return Response.json({ ...inventory, now: Date.now() });
+      if (path === '/api/activity') {
+        const after = Number(url.searchParams.get('after'));
+        messages.push({ type: 'activity', after });
+        return Response.json({ events: activity.filter(event => event.at > after), now: Date.now() });
+      }
       if (path === '/api/agents') return Response.json({ kinds: ['pi', 'claude', 'codex'] });
       if (path === '/api/worktrees') return Response.json({ worktrees: [
         { path: '/atlas-worktrees/docs', label: 'docs', branch: 'docs' },

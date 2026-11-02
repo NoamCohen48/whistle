@@ -1336,3 +1336,33 @@ test('wide screens keep the herd beside the open terminal', async ({ page }) => 
   await expect(page.locator('#panes')).toBeHidden();
   await expect(page.locator('#agent-switcher')).toBeVisible();
 });
+
+test('coming back after a while shows what agents did meanwhile, and opens them from there', async ({ page, request }) => {
+  await pair(page);
+  // A short glance away shows nothing.
+  await request.post(fixtureUrl('/__test/status?pane=w1:p1&status=done'));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Your herd' })).toBeAttached();
+  await expect(page.locator('#away')).toHaveCount(0);
+  // Twenty minutes away, as this phone remembers its last look.
+  await page.evaluate(() => {
+    const look = JSON.parse(localStorage.getItem('whistle:last-look')!);
+    localStorage.setItem('whistle:last-look', JSON.stringify({ hostNow: look.hostNow - 20 * 60_000, localAt: look.localAt - 20 * 60_000 }));
+  });
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=blocked&ago=600'));
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=done&ago=300'));
+  await request.post(fixtureUrl('/__test/status?pane=w2:p1&status=blocked&ago=60'));
+  await page.reload();
+  const away = page.locator('#away');
+  await expect(away.locator('h2')).toHaveText('While you were away20m');
+  // Newest first, one row per agent, repeats counted.
+  await expect(away.locator('.away-row')).toHaveText([
+    'First agentatlasfinishedjust now',
+    'Second agentatlas-searchneeded you 2×, finished1m ago',
+  ]);
+  await away.locator('.away-row[data-pane="w2:p1"]').click();
+  await expect(page.locator('#connection')).toHaveText('Watching');
+  await page.locator('#back').click();
+  await expect(page.locator('#away')).toHaveCount(0);
+});
+
